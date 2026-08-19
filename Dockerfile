@@ -50,8 +50,11 @@ COPY . .
 
 # Narrow this to the target architecture for a faster build and a smaller
 # binary; the default is wide so an unmodified image runs on most cards.
-ARG CUDA_ARCHITECTURES="75;80;86;89;90"
-ENV TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0"
+# Starts at 80: the BF16 kernels need compute capability 8.0, and below it
+# bfloat16 is emulated rather than unsupported — slower than the FP16 path it
+# replaces, which is worse than a build failure because nothing reports it.
+ARG CUDA_ARCHITECTURES="80;86;89;90"
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0"
 
 RUN cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \

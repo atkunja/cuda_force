@@ -94,7 +94,7 @@ Each stage decouples a rate mismatch. Details in
 - Two-stage block reductions (2 barriers, not log N)
 - Kernel fusion for the LoRA adapter path
 - Numerically stable softmax and FP32 accumulators
-- FP16 *and* BF16 paths from one templated kernel body
+- FP16 *and* BF16 paths from one templated kernel body (BF16 needs SM 8.0+)
 - Explicit autograd guard: no silently wrong gradients
 - CUDA streams and events; **zero** `cudaDeviceSynchronize`
 - Pinned host memory for genuine async copies

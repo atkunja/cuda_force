@@ -467,6 +467,14 @@ formats are therefore storage-only here, with every reduction in FP32. That
 costs nothing on a bandwidth-bound kernel, where the bytes moved — not the width
 of the adder — set the time.
 
+### Hardware requirement
+
+BF16 needs **compute capability 8.0 or later**. Below that it is emulated, which
+would make the BF16 path slower than the FP16 one it is meant to replace — a
+silent regression, not a build failure. The default `CMAKE_CUDA_ARCHITECTURES`
+therefore starts at 80, and CMake warns if it is lowered. On Turing and earlier,
+use the FP16 entry points.
+
 ### One kernel, two instantiations
 
 `reduced_precision.cuh` provides conversion traits, and each kernel is templated

@@ -227,6 +227,9 @@ Real ones, not hedges:
    output says so, in the results file.
 8. **Two `type: ignore` comments** in `runners.py`, both for inconsistencies in
    the transformers 5.x stubs, both documented at the site.
+9. **BF16 needs compute capability 8.0.** Below it bfloat16 is emulated, so the
+   BF16 path would be slower than the FP16 one it replaces. The default
+   architecture list starts at 80 and CMake warns if it is lowered.
 
 ## Recommended GPU validation
 

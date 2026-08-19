@@ -2,10 +2,23 @@
 # an NVIDIA GPU to be useful; nothing in cpp/ depends on this target.
 
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  # 75 = Turing, 80 = Ampere, 86 = Ampere consumer, 89 = Ada, 90 = Hopper.
-  # Wide by default so a clone builds on whatever is available; narrow this to
-  # the target architecture for faster builds and smaller binaries.
-  set(CMAKE_CUDA_ARCHITECTURES 75 80 86 89 90)
+  # 80 = Ampere, 86 = Ampere consumer, 89 = Ada, 90 = Hopper.
+  #
+  # Turing (75) is deliberately excluded from the default. The BF16 paths need
+  # compute capability 8.0: bfloat16 is emulated below it, so a Turing build
+  # either fails or produces something markedly slower than the FP16 path it
+  # would silently be worse than. Anyone targeting Turing should set this
+  # explicitly and use the FP16 entry points.
+  #
+  # Wide by default so a clone builds on whatever modern card is available;
+  # narrow it to the target for faster builds and smaller binaries.
+  set(CMAKE_CUDA_ARCHITECTURES 80 86 89 90)
+endif()
+
+if(CMAKE_CUDA_ARCHITECTURES MATCHES "7[0-5]")
+  message(WARNING
+    "Compute capability < 8.0 requested: the BF16 kernels require 8.0. "
+    "Use the FP16 entry points on Turing and earlier.")
 endif()
 
 add_library(cudaforge_kernels
