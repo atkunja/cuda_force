@@ -63,7 +63,10 @@ def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
 
     try:
         return InferenceEngine(config=config, runner=TransformersRunner(config))
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
+        # Any model-loading failure should degrade to the deterministic runner
+        # rather than prevent the server starting; a crash here gives no signal
+        # about which part failed.
         _LOG.warning(
             "falling back to the deterministic runner; could not load %s: %s",
             config.model_name,

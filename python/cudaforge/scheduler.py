@@ -242,8 +242,8 @@ class DynamicBatcher:
 
             try:
                 self._handler(batch)
-            except Exception:
-                # Otherwise one bad batch stalls every subsequent request until
+            except Exception:  # noqa: BLE001
+                # The handler is caller-supplied. Otherwise one bad batch stalls every subsequent request until
                 # shutdown. The failure is counted and the loop continues.
                 self._metrics.record_failed()
 
@@ -255,7 +255,9 @@ class DynamicBatcher:
         if self._on_expired is not None:
             try:
                 self._on_expired(request)
-            except Exception:  # noqa: BLE001 - a bad callback must not stop the batcher
+            except Exception:  # noqa: BLE001
+                # on_expired is caller-supplied; a throwing callback must not
+                # stop the only thread that drains the queue.
                 self._metrics.record_failed()
         return True
 
