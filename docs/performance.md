@@ -61,6 +61,32 @@ caches. The number that transfers is the call count: on the device backend each
 avoided call is a `cudaMalloc` that would have synchronised the device. That
 part is **not measured**.
 
+### Paged versus contiguous KV cache occupancy
+
+| Field | |
+| --- | --- |
+| Baseline | one contiguous reservation of `max_sequence_length` per sequence |
+| Bottleneck | the reservation is sized for the longest *permitted* sequence, not the actual one, and concurrency is cache-bound |
+| Change | fixed-size blocks allocated as the sequence grows, with a per-sequence block table |
+| Expected | waste falls to under one block per sequence |
+| **Measured** | **13.2× more concurrent sequences** on a chat-shaped workload; waste 93.0% → 4.8% |
+
+Full results, 1M-token cache with a 2048-token limit:
+
+| Workload | Mean length | Contiguous | Paged (block 16) | Concurrency ratio |
+| --- | --- | --- | --- | --- |
+| Short prompts (16–128) | 72 | 512 seqs, 96.5% wasted | 13,230 seqs, 9.3% wasted | **25.8×** |
+| Chat, log-normal | 148 | 512 seqs, 93.0% wasted | 6,752 seqs, 4.8% wasted | **13.2×** |
+| Uniform over the range | 1,028 | 512 seqs, 49.0% wasted | 1,006 seqs, 0.7% wasted | **2.0×** |
+| Every sequence at the limit | 2,048 | 512 seqs, 0% wasted | 512 seqs, 0% wasted | 1.0× |
+
+The last row matters as much as the first: when every sequence reaches the
+maximum, paging buys nothing. The gain is entirely the gap between the permitted
+maximum and the actual distribution.
+
+Allocator throughput: 163–180M operations/second, so the per-token block check
+is free relative to anything else on the decode path.
+
 ### Latency histogram accuracy
 
 | Field | |

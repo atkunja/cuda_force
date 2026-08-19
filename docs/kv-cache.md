@@ -64,6 +64,30 @@ writable.** Appending to it would corrupt the other referent, so the caller must
 copy the block first and swap it into its own table — copy-on-write, at block
 granularity. `is_writable` reports this, and `replace_block` performs the swap.
 
+## Measured
+
+A 1M-token cache with a 2048-token maximum sequence length, 20,000 candidate
+sequences offered until the cache is full. This is bookkeeping arithmetic, so it
+runs on the development host — no device memory is allocated and no attention
+kernel reads the blocks.
+
+| Workload | Mean length | Contiguous | Paged (block 16) | Concurrency ratio |
+| --- | --- | --- | --- | --- |
+| Short prompts (16–128) | 72 | 512 seqs, 96.5% wasted | 13,230 seqs, 9.3% wasted | **25.8×** |
+| Chat, log-normal | 148 | 512 seqs, 93.0% wasted | 6,752 seqs, 4.8% wasted | **13.2×** |
+| Uniform over the range | 1,028 | 512 seqs, 49.0% wasted | 1,006 seqs, 0.7% wasted | **2.0×** |
+| Every sequence at the limit | 2,048 | 512 seqs, 0% wasted | 512 seqs, 0% wasted | 1.0× |
+
+The last row is the point of including it: when every sequence really does reach
+the maximum, paging buys nothing, because there was no waste to recover. The
+gain is entirely a function of how far the *actual* length distribution sits
+below the *permitted* maximum — which in practice is very far.
+
+Allocator throughput is 163–180M operations per second, so a per-token block
+check on the decode path costs nothing that matters.
+
+Reproduce with `./build/benchmarks/bench_kv_cache`.
+
 ## Choosing the block size
 
 A genuine tradeoff, not a tuning constant:
@@ -76,6 +100,11 @@ A genuine tradeoff, not a tuning constant:
 
 16 is the common choice, and is what the tests use. The waste is bounded by
 `block_size - 1` tokens per sequence either way.
+
+The measured effect on the chat workload is small across the useful range —
+13.5× at block 8, 13.2× at 16, 12.6× at 32, 11.5× at 64 — so the choice is not
+delicate. It only starts to matter once the block size approaches the mean
+sequence length.
 
 ## Failure is expected, not exceptional
 

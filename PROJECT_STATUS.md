@@ -112,6 +112,8 @@ throughput.
 | Batching, 1 client, `max_batch_size` 1 → 16 | 112 → 87 req/s — the latency cost when there is nothing to batch |
 | Memory pool | 2,020 allocations, 5 backend calls, reuse rate 0.9975 |
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, 0 failures; client p99 279 ms against server p99 1.03 ms |
+| Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
+| Block allocator throughput | 163–180M operations/second |
 | Latency histogram | worst error **4.95%** against a documented 6.25% bound, over four distributions |
 | Histogram record rate | 76–120M samples/second |
 

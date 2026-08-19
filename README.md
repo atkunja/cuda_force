@@ -332,6 +332,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
 | Latency histogram | worst error **4.95%** vs its documented 6.25% bound, at 76–120M records/s |
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, client p99 279 ms vs server p99 1.03 ms |
+| Paged KV cache | **13.2× more concurrent sequences** than contiguous on chat-shaped traffic; waste 93% → 4.8% |
 | C++ suite | 160 cases, 49,866 assertions, clean under TSan / ASan / UBSan |
 | Python suite | 361 tests |
 
