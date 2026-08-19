@@ -490,10 +490,23 @@ The development host cannot compile or run any of this. Three things still hold
 the code accountable:
 
 1. **Structural checks.** `scripts/check_cuda_sources.py` runs without nvcc and
-   rejects unchecked launches, discarded statuses, `cudaDeviceSynchronize`,
-   maskless shuffles, and conditionally-reached `__syncthreads()`. It parses
-   logical statements rather than physical lines, so a call the formatter split
-   across lines is still matched.
+   enforces seven rules:
+
+   | Rule | Catches |
+   | --- | --- |
+   | `unchecked-launch` | a launch whose errors are never checked |
+   | `unchecked-status` | a discarded CUDA status |
+   | `device-sync` | `cudaDeviceSynchronize`, which serialises every stream |
+   | `maskless-shuffle` | a warp shuffle without an explicit participation mask |
+   | `divergent-barrier` | `__syncthreads()` reached conditionally |
+   | `unbarriered-reduction-return` | a block reduction returning straight from shared memory |
+   | `narrow-index-arithmetic` | `blockIdx.x * blockDim.x` computed in 32-bit |
+
+   It parses logical statements rather than physical lines, so a call the
+   formatter split across lines is still matched. Each rule is tested in both
+   directions — it fires on the bad shape and stays quiet on the good one —
+   because a linter that silently stops detecting anything looks exactly like a
+   clean codebase.
 
 2. **Reference implementations.** Every kernel has a PyTorch or host equivalent
    that defines its semantics, and those references are tested exhaustively on
