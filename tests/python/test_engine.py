@@ -274,3 +274,102 @@ def test_submitting_without_a_deadline_is_unchanged():
         response = engine.submit("hello").result(timeout=10)
     assert response.ok
     assert engine.snapshot().requests_expired == 0
+
+
+def test_batch_formation_continues_while_a_batch_executes():
+    # If the batcher executed inline, no batch could form during execution and
+    # arrival-time batching would collapse into strict serialisation. Handing
+    # execution to the pool is what keeps formation concurrent — this asserts
+    # the consequence rather than the implementation.
+    runner = EchoRunner(fixed_overhead=0.05)
+    config = EngineConfig(
+        max_batch_size=4,
+        max_wait_us=2_000,
+        queue_capacity=256,
+        worker_threads=4,
+        warmup_iterations=0,
+    )
+    with InferenceEngine(config=config, runner=runner) as engine:
+        started = time.monotonic()
+        responses = engine.generate_many([f"p{i}" for i in range(16)], timeout=60)
+        elapsed = time.monotonic() - started
+
+    assert all(response.ok for response in responses)
+    # Four batches at 50 ms each is 200 ms serialised. With four workers running
+    # them concurrently it should be far below that.
+    assert elapsed < 0.18, f"batches appear to be serialised: {elapsed:.3f}s"
+
+
+def test_worker_count_bounds_concurrent_execution():
+    # One worker means batches run one at a time regardless of how quickly the
+    # batcher forms them.
+    concurrent = 0
+    peak = 0
+    lock = threading.Lock()
+
+    class Counting:
+        def warmup(self, iterations: int) -> None:
+            return None
+
+        def generate(self, prompts, settings):
+            nonlocal concurrent, peak
+            with lock:
+                concurrent += 1
+                peak = max(peak, concurrent)
+            time.sleep(0.02)
+            with lock:
+                concurrent -= 1
+            return [
+                GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts
+            ]
+
+        @property
+        def description(self) -> str:
+            return "Counting"
+
+    config = EngineConfig(
+        max_batch_size=1,
+        max_wait_us=500,
+        queue_capacity=64,
+        worker_threads=1,
+        warmup_iterations=0,
+    )
+    with InferenceEngine(config=config, runner=Counting()) as engine:
+        engine.generate_many([f"p{i}" for i in range(8)], timeout=30)
+
+    assert peak == 1
+
+
+def test_metrics_survive_a_mix_of_success_and_failure():
+    class Flaky:
+        calls = 0
+
+        def warmup(self, iterations: int) -> None:
+            return None
+
+        def generate(self, prompts, settings):
+            Flaky.calls += 1
+            if Flaky.calls % 2 == 0:
+                raise RuntimeError("intermittent")
+            return [
+                GenerationResult(text=p, prompt_tokens=1, generated_tokens=3) for p in prompts
+            ]
+
+        @property
+        def description(self) -> str:
+            return "Flaky"
+
+    config = EngineConfig(
+        max_batch_size=1, max_wait_us=500, queue_capacity=64, warmup_iterations=0
+    )
+    with InferenceEngine(config=config, runner=Flaky()) as engine:
+        results = [engine.submit(f"p{i}").result(timeout=20) for i in range(10)]
+
+    snapshot = engine.snapshot()
+    succeeded = sum(1 for r in results if r.ok)
+    failed = sum(1 for r in results if not r.ok)
+
+    assert succeeded + failed == 10
+    assert snapshot.requests_completed == succeeded
+    assert snapshot.requests_failed == failed
+    assert snapshot.tokens_generated == succeeded * 3
