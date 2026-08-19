@@ -203,8 +203,9 @@ void launch_softmax(const float* input, float* output, int rows, int cols, Softm
                               static_cast<std::size_t>(kWarpSize) * sizeof(float);
         if (required > static_cast<std::size_t>(max_shared_memory_per_block())) {
             // Falling back keeps the call correct for long rows rather than
-            // failing the launch. The online variant is the right fallback
-            // because it has no capacity limit at all.
+            // failing the launch. Online is the right fallback: it caches
+            // nothing, so it has no capacity limit at all, and it reads the row
+            // twice rather than three times like the naive variant.
             selected = SoftmaxKernel::Online;
         }
     }
