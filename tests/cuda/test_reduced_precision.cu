@@ -53,8 +53,8 @@ TEST_CASE("bf16 rmsnorm matches the host reference", "[cuda][bf16]") {
     DeviceBuffer<__nv_bfloat16> device_out(host_in.size());
     device_in.copy_from_host(host_in.data(), host_in.size(), stream);
     device_weight.copy_from_host(host_weight.data(), host_weight.size(), stream);
-    launch_rmsnorm_bf16(device_in.data(), device_weight.data(), device_out.data(), kRows,
-                        kCols, kEps, stream);
+    launch_rmsnorm_bf16(device_in.data(), device_weight.data(), device_out.data(), kRows, kCols,
+                        kEps, stream);
 
     std::vector<__nv_bfloat16> host_out(host_in.size());
     device_out.copy_to_host(host_out.data(), host_out.size(), stream);
@@ -62,8 +62,7 @@ TEST_CASE("bf16 rmsnorm matches the host reference", "[cuda][bf16]") {
 
     for (std::size_t i = 0; i < host_out.size(); ++i) {
         INFO("element " << i);
-        REQUIRE(close(__bfloat162float(host_out[i]), expected[i], kBf16Relative,
-                      kBf16Absolute));
+        REQUIRE(close(__bfloat162float(host_out[i]), expected[i], kBf16Relative, kBf16Absolute));
     }
 }
 
@@ -89,8 +88,8 @@ TEST_CASE("bf16 rmsnorm handles magnitudes that overflow fp16", "[cuda][bf16]") 
     DeviceBuffer<__nv_bfloat16> device_out(host_in.size());
     device_in.copy_from_host(host_in.data(), host_in.size(), stream);
     device_weight.copy_from_host(host_weight.data(), host_weight.size(), stream);
-    launch_rmsnorm_bf16(device_in.data(), device_weight.data(), device_out.data(), kRows,
-                        kCols, 1e-6F, stream);
+    launch_rmsnorm_bf16(device_in.data(), device_weight.data(), device_out.data(), kRows, kCols,
+                        1e-6F, stream);
 
     std::vector<__nv_bfloat16> host_out(host_in.size());
     device_out.copy_to_host(host_out.data(), host_out.size(), stream);
@@ -175,8 +174,7 @@ TEST_CASE("bf16 swiglu matches the host reference", "[cuda][bf16]") {
     DeviceBuffer<__nv_bfloat16> device_out(host_gate.size());
     device_gate.copy_from_host(host_gate.data(), host_gate.size(), stream);
     device_up.copy_from_host(host_up.data(), host_up.size(), stream);
-    launch_swiglu_bf16(device_gate.data(), device_up.data(), device_out.data(), kCount,
-                       stream);
+    launch_swiglu_bf16(device_gate.data(), device_up.data(), device_out.data(), kCount, stream);
 
     std::vector<__nv_bfloat16> host_out(host_gate.size());
     device_out.copy_to_host(host_out.data(), host_out.size(), stream);
@@ -212,8 +210,7 @@ TEST_CASE("bf16 preserves the negative tail of the activation", "[cuda][bf16]") 
     DeviceBuffer<__nv_bfloat16> device_out(gate.size());
     device_gate.copy_from_host(gate.data(), gate.size(), stream);
     device_up.copy_from_host(up.data(), up.size(), stream);
-    launch_swiglu_bf16(device_gate.data(), device_up.data(), device_out.data(), kCount,
-                       stream);
+    launch_swiglu_bf16(device_gate.data(), device_up.data(), device_out.data(), kCount, stream);
 
     std::vector<__nv_bfloat16> host_out(gate.size());
     device_out.copy_to_host(host_out.data(), host_out.size(), stream);
