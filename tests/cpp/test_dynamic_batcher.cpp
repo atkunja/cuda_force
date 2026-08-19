@@ -13,6 +13,7 @@
 #include <vector>
 
 using cudaforge::Batch;
+using cudaforge::Clock;
 using cudaforge::BatchTrigger;
 using cudaforge::DynamicBatcher;
 using cudaforge::Metrics;
