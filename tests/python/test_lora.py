@@ -140,3 +140,80 @@ def test_lora_config_validation():
     ]:
         with pytest.raises(ValueError, match=message):
             LoRAConfig(**kwargs)
+
+
+# --- PEFT integration ------------------------------------------------------
+
+
+def test_attach_lora_wires_up_peft():
+    # attach_lora is the path a real run takes; the from-scratch LoRALinear is
+    # the reference it is checked against, not a replacement for it.
+    peft = pytest.importorskip("peft")
+    assert peft is not None
+
+    model = nn.Sequential()
+    model.add_module("proj", nn.Linear(32, 32, bias=False))
+
+    from training.config import LoRAConfig
+    from training.lora import attach_lora, count_parameters
+
+    adapted = attach_lora(model, LoRAConfig(rank=4, alpha=8, target_modules=["proj"]))
+    trainable, total = count_parameters(adapted)
+
+    assert trainable > 0
+    assert trainable < total
+    # 2 * 4 * 32 = 256 adapter parameters against 1024 base parameters.
+    assert trainable == 2 * 4 * 32
+
+
+def test_attach_lora_freezes_the_base_weights():
+    pytest.importorskip("peft")
+
+    from training.config import LoRAConfig
+    from training.lora import attach_lora
+
+    model = nn.Sequential()
+    model.add_module("proj", nn.Linear(32, 32, bias=False))
+    adapted = attach_lora(model, LoRAConfig(rank=4, target_modules=["proj"]))
+
+    for name, parameter in adapted.named_parameters():
+        if "lora" not in name:
+            assert not parameter.requires_grad, name
+
+
+def test_attach_lora_rejects_unmatched_target_modules():
+    # A target that matches nothing produces a model with no adapters — a run
+    # that looks successful and updates nothing.
+    pytest.importorskip("peft")
+
+    from training.config import LoRAConfig
+    from training.lora import attach_lora
+
+    model = nn.Sequential()
+    model.add_module("proj", nn.Linear(32, 32))
+    with pytest.raises(ValueError):
+        attach_lora(model, LoRAConfig(rank=4, target_modules=["not_a_module"]))
+
+
+def test_the_layer_repr_names_its_shape_and_scale():
+    layer = LoRALinear(64, 32, rank=8, alpha=16)
+    text = repr(layer)
+    assert "in_features=64" in text
+    assert "rank=8" in text
+    assert "scaling=2.000" in text
+
+
+def test_merge_preserves_the_bias():
+    layer = LoRALinear(16, 8, rank=4, bias=True)
+    with torch.no_grad():
+        layer.base.bias.normal_()
+        layer.lora_b.normal_()
+
+    merged = layer.merge()
+    assert merged.bias is not None
+    torch.testing.assert_close(merged.bias, layer.base.bias)
+
+
+def test_merge_of_a_bias_free_layer_has_no_bias():
+    merged = LoRALinear(16, 8, rank=4, bias=False).merge()
+    assert merged.bias is None
