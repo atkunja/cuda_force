@@ -234,6 +234,35 @@ def check_syncthreads_not_divergent(path: Path, lines: list[str]) -> list[Findin
     return findings
 
 
+def check_index_arithmetic_is_widened(path: Path, lines: list[str]) -> list[Finding]:
+    """`blockIdx.x * blockDim.x` must be widened before the multiply.
+
+    The product is computed in 32-bit. For an element count near INT_MAX it
+    exceeds INT_MAX, and assigning it to a signed index is undefined — the
+    kernel reads the wrong element rather than faulting, so the symptom is wrong
+    numbers far from the cause.
+
+    The safe form widens one operand first:
+
+        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x
+    """
+    findings: list[Finding] = []
+    pattern = re.compile(r"blockIdx\.\w\s*\*\s*blockDim\.\w")
+
+    for index, line in enumerate(lines):
+        if pattern.search(line):
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "narrow-index-arithmetic",
+                    "widen an operand before multiplying: "
+                    "blockIdx.x * static_cast<std::size_t>(blockDim.x)",
+                )
+            )
+    return findings
+
+
 def check_block_reductions_end_with_a_barrier(path: Path, lines: list[str]) -> list[Finding]:
     """A block reduction must not return a value read straight from shared memory.
 
@@ -290,6 +319,7 @@ CHECKS = (
     check_shuffle_has_mask,
     check_syncthreads_not_divergent,
     check_block_reductions_end_with_a_barrier,
+    check_index_arithmetic_is_widened,
 )
 
 
