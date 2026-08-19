@@ -2,6 +2,7 @@
 # Anything added here must keep building on a host with no NVIDIA hardware.
 
 add_library(cudaforge_runtime
+  src/kv_cache.cpp
   src/metrics.cpp
   src/dynamic_batcher.cpp
 )
