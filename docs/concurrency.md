@@ -174,6 +174,20 @@ arrival-time batching would collapse into strict serialisation — every batch
 would be a full one assembled from the backlog that accumulated during the
 previous execution, regardless of the configured wait.
 
+### Latency does not always rise with batch size
+
+"Batching trades latency for throughput" describes an **unsaturated** queue,
+where a request waits for company that has not arrived yet.
+
+Under saturation the company is already queued, and a larger batch drains the
+backlog faster. Measured on the C++ scheduler with 8 saturating producers,
+raising `max_batch_size` from 1 to 32 gave 10.9× the throughput *and* cut p99
+queue delay from 671 ms to 65 ms.
+
+The tradeoff is real — a single client loses throughput to the wait, because
+there is nobody to batch with — but which direction it points depends on the
+regime. `timeout_closure_fraction` is what tells you which one you are in.
+
 ### Reading the trigger counters
 
 `batches_closed_by_size` and `batches_closed_by_timeout` are reported separately

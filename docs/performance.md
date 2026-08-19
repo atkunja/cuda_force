@@ -32,6 +32,39 @@ throughput (112 → 87 req/s) because it pays the full `max_wait` with nobody to
 batch with. Both directions are real, and which one you get depends entirely on
 arrival concurrency.
 
+### Batching under saturation, C++ scheduler
+
+| Field | |
+| --- | --- |
+| Baseline | `max_batch_size = 1` |
+| Bottleneck | a fixed per-batch cost paid once per request |
+| Change | aggregate up to 32 |
+| Expected | higher throughput, and higher latency |
+| **Measured** | **10.9× throughput — and p99 queue delay falling from 671 ms to 65 ms** |
+
+8 producers, 500 requests each, `max_wait_us` 5000, simulated 400 µs fixed cost
+plus 25 µs per request:
+
+| `max_batch_size` | req/s | Avg batch | p99 queue delay |
+| --- | --- | --- | --- |
+| 1 | 1,542 | 1.00 | 671.09 ms |
+| 4 | 5,224 | 4.00 | 209.72 ms |
+| 16 | 12,763 | 16.00 | 88.08 ms |
+| 32 | 16,844 | 32.00 | 65.01 ms |
+
+Latency falling alongside throughput looks wrong and is not. The usual framing —
+batching trades latency for throughput — describes an *unsaturated* queue, where
+a request waits for company that has not arrived. Under saturation the company
+is already queued: a larger batch drains the backlog faster, so every request
+spends less time waiting.
+
+The tradeoff is real, but it appears in the other direction, and this project
+measured both. A single client loses throughput to the wait (112 → 87 req/s,
+above) because there is nobody to batch with. Which regime you are in is what
+`timeout_closure_fraction` tells you.
+
+Reproduce with `./build/benchmarks/bench_scheduler`.
+
 ### Batching under a fixed client count
 
 From `benchmarks/benchmark_batching.py`, 8 concurrent clients:

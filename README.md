@@ -330,6 +330,8 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Measurement | Result |
 | --- | --- |
 | Batching, 16 clients, batch 1 → 16 | **3.52× throughput at unchanged p50 and p99** |
+| Batching under saturation, batch 1 → 32 | **10.9× throughput**, and p99 queue delay 671 ms → 65 ms |
+| Bounded queue | 2.39M items/s at 1×1, 774k at 8×8 — where the single mutex binds |
 | Batching, 8 clients, batch 1 → 16 | 499 → 722 req/s, p99 12.9 → 7.9 ms |
 | Batching, 1 client, batch 1 → 16 | 112 → 87 req/s — the latency cost, shown honestly |
 | Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
