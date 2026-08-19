@@ -35,6 +35,9 @@ Ordered by the question someone would actually ask.
 | What is p99 and how is it computed? | [`latency_histogram.hpp`](../cpp/include/cudaforge/latency_histogram.hpp) | [testing.md](testing.md) |
 | Why bucket latencies instead of storing them? | O(1) memory under sustained load | class comment |
 | How is load shed? | `try_submit`, and the server's `block_when_full=False` | [concurrency.md](concurrency.md#backpressure) |
+| What happens to a request nobody is waiting for? | `Request.expired`, `_drop_if_expired` | [concurrency.md](concurrency.md#deadline-aware-admission) |
+| Why check the deadline twice? | `DynamicBatcher._collect` and `InferenceEngine._execute` | [concurrency.md](concurrency.md#checked-twice-and-why) |
+| Rejected vs expired vs failed? | three separate counters | [concurrency.md](concurrency.md#three-counters-three-different-problems) |
 
 ## CUDA execution
 

@@ -179,6 +179,55 @@ because average batch size alone cannot distinguish two very different states:
 | Nearly all size closures, queue depth rising | saturated | raise `max_batch_size`, or add capacity |
 | Mixed, batch size near the limit | well matched | leave it alone |
 
+## Deadline-aware admission
+
+Backpressure decides whether to *accept* a request. Deadlines decide whether an
+already-accepted request is still worth *running*.
+
+Under overload the queue deepens until requests spend longer waiting than their
+clients are willing to wait. Executing them anyway is worse than useless: the
+result is discarded, and the capacity it consumed was needed by requests someone
+is still waiting for. That deepens the backlog that caused the timeouts, so the
+system degrades faster the harder it is pushed.
+
+A request may therefore carry a deadline:
+
+```python
+engine.submit(prompt, deadline_seconds=2.0)   # or deadline_seconds in the HTTP body
+```
+
+Expired requests are dropped, counted as `requests_expired`, and their futures
+are **failed with a stated reason** — never left hanging, which would reproduce
+the very timeout the deadline exists to avoid.
+
+### Checked twice, and why
+
+The check happens at two points, because the wait happens at two points:
+
+| Site | Catches |
+| --- | --- |
+| Batcher dequeue | backlog in the request queue |
+| Immediately before execution | backlog in the **executor** queue |
+
+The second is the one that usually fires. The batcher forms batches far faster
+than they execute, so it drains the request queue promptly and the real backlog
+accumulates behind the worker pool. A request can therefore be dequeued well
+within its deadline and still be long past it by the time a worker picks it up.
+
+This was not obvious from the design and was found by a test: an
+executor-saturating workload dropped nothing until the second check was added.
+
+### Three counters, three different problems
+
+| Counter | Cause | Remedy |
+| --- | --- | --- |
+| `requests_rejected` | queue was full at admission | raise `queue_capacity`, if latency allows |
+| `requests_expired` | queue is deeper than clients will wait for | shed earlier, or add capacity |
+| `requests_failed` | execution raised | a bug, or a bad request |
+
+Collapsing these into one "errors" number would hide the distinction that
+determines what to actually do.
+
 ## The thread pool
 
 A fixed set of workers over a bounded task queue. Two details are load-bearing.
