@@ -166,3 +166,34 @@ def test_the_repository_documentation_names_only_real_paths():
         check=False,
     )
     assert result.returncode == 0, result.stdout
+
+
+# --- the API reference -----------------------------------------------------
+
+
+def test_every_exported_operator_appears_in_the_api_reference():
+    # The reference drifted behind the package once already: silu, gelu, swiglu
+    # and fused_residual_rmsnorm were added and not documented. A reference that
+    # silently omits half the surface is worse than none.
+    import cudaforge
+
+    reference = (REPO_ROOT / "docs" / "api.md").read_text(encoding="utf-8")
+    missing = [
+        name for name in cudaforge.__all__ if not name.startswith("__") and name not in reference
+    ]
+    assert missing == [], f"undocumented exports: {missing}"
+
+
+def test_the_api_reference_does_not_name_removed_exports():
+    # The other direction: a reference describing something that no longer
+    # exists sends a reader looking for it.
+    import re
+
+    import cudaforge
+
+    reference = (REPO_ROOT / "docs" / "api.md").read_text(encoding="utf-8")
+    documented = set(re.findall(r"^### `(\w+)", reference, re.MULTILINE))
+    exported = set(cudaforge.__all__)
+
+    stale = documented - exported
+    assert stale == set(), f"documented but not exported: {sorted(stale)}"
