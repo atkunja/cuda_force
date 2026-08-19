@@ -144,3 +144,53 @@ counter and asserting on the main thread after joining.
 | Change | the same size-class pool, with a device backend |
 | Expected | allocator-induced synchronisations fall to near zero after warmup |
 | **Measured** | **not measured** — the host-backend reuse rate above is the closest available proxy |
+
+## Techniques and where each is used
+
+| Technique | Where | Why it applies |
+| --- | --- | --- |
+| Memory coalescing | every row-wise kernel | rows are contiguous; adjacent threads read adjacent floats |
+| Shared-memory tiling | `matmul_tiled`, `softmax_shared` | reuse a loaded tile `kTile` times instead of re-reading |
+| Bank-conflict padding | `tile_b[kTile][kTile + 1]` | breaks the power-of-two stride on column reads |
+| Warp primitives | all block reductions | last 5 steps in registers; no shared memory, no barrier |
+| Reduced synchronisation | two-stage block reduction | 2 barriers instead of log2(blockDim) |
+| Kernel fusion | fused LoRA | removes an intermediate round trip and two launches |
+| Vectorised access | `rmsnorm_vectorised` | 128-bit transactions instead of 32-bit |
+| Occupancy tuning | 256-thread default | four warps per block without register spills |
+| Launch overhead | grid-stride loops | fixed grid instead of one block per tile |
+| Asynchronous execution | `GpuScheduler` | copies overlap compute on separate hardware |
+| Pinned memory | `PinnedBuffer` | the precondition for a copy to overlap at all |
+| Memory reuse | `MemoryPool` | avoids the device synchronisation `cudaMalloc` forces |
+| Avoiding copies | move semantics through the queue | requests are moved, never copied |
+| Batching | `DynamicBatcher` | amortises fixed per-batch cost |
+| Lock contention | relaxed atomics for counters | avoids serialising workers that never interact |
+| Cache locality | `std::deque` ring in the queue | contiguous chunks rather than per-node allocation |
+| Backpressure | bounded queue | converts overload into rejection rather than unbounded latency |
+
+## False sharing
+
+Not observed, and not preemptively worked around.
+
+The counters in `ThreadPool` and `Metrics` are adjacent atomics and are
+therefore candidates: if two land on the same 64-byte cache line, the line
+ping-pongs between cores and throughput *falls* as threads are added. Padding
+each to its own line would fix it, at a cost in memory and clarity.
+
+That change has not been made, because the queue benchmark shows no negative
+scaling on this host. Adding padding on suspicion would be an unmeasured
+optimisation, which is the thing this document exists to avoid. `perf c2c` is
+the tool if the symptom appears; the diagnosis procedure is in
+[profiling.md](profiling.md).
+
+## Optimisations deliberately not made
+
+| Not done | Why |
+| --- | --- |
+| Lock-free queue | the queue is crossed once per request, not once per kernel; the mutex is not on a hot path, and blocked producers still need somewhere to wait |
+| Tensor cores in the matmul | cuBLAS already does this far better; the tiled kernel exists to demonstrate the shared-memory argument |
+| Splitting and coalescing in the pool | `cudaMallocAsync` and PyTorch's allocator solve it; duplicating them would add risk without insight |
+| Persistent kernels | large complexity increase, and the batching layer already addresses launch overhead |
+| Custom attention | FlashAttention exists and is better than anything written here would be |
+
+Each of these is a real technique that would help some workload. None was
+adopted, because the cost is certain and the benefit here is not.
