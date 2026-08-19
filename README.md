@@ -108,7 +108,7 @@ Each stage decouples a rate mismatch. Details in
 - Predicate waits — no bare `wait`, no spurious-wakeup bugs
 - Thread pool with futures and graceful drain
 - Relaxed atomics for hot-path counters
-- Backpressure, and explicit load shedding
+- Backpressure, load shedding, and deadline-aware dropping
 - Idempotent shutdown that never loses accepted work
 - Fixed-memory log-linear latency histogram
 - Clean under TSan, ASan and UBSan
@@ -211,6 +211,11 @@ curl -s localhost:8000/generate \
   "batch_size": 7
 }
 ```
+
+Pass `deadline_seconds` to have the runtime drop the request instead of
+executing it if it is still queued past that point — under load, work nobody is
+waiting for displaces work someone is. Dropped requests return 503, and are
+counted separately from rejections and failures.
 
 Queue time and inference time are reported separately because they point at
 different problems: high queue time means the runtime is saturated or the wait
