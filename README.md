@@ -105,6 +105,7 @@ Each stage decouples a rate mismatch. Details in
 
 **C++20 / systems**
 
+- Paged KV cache block allocator with refcounted prefix sharing
 - Bounded MPMC queue: mutex + condition variables
 - Predicate waits — no bare `wait`, no spurious-wakeup bugs
 - Thread pool with futures and graceful drain
@@ -331,7 +332,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
 | Latency histogram | worst error **4.95%** vs its documented 6.25% bound, at 76–120M records/s |
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, client p99 279 ms vs server p99 1.03 ms |
-| C++ suite | 140 cases, 49,230 assertions, clean under TSan / ASan / UBSan |
+| C++ suite | 160 cases, 49,866 assertions, clean under TSan / ASan / UBSan |
 | Python suite | 361 tests |
 
 These measure the **scheduler**, not model throughput — execution is simulated
@@ -378,6 +379,7 @@ warp shuffles, and conditionally-reached `__syncthreads()`.
 | [benchmarking.md](docs/benchmarking.md) | method, what to measure, how to read each suite |
 | [profiling.md](docs/profiling.md) | Nsight Systems and Compute, what each counter means |
 | [performance.md](docs/performance.md) | every optimisation as baseline → bottleneck → change → measured |
+| [kv-cache.md](docs/kv-cache.md) | why contiguous caches waste memory, and what paging changes |
 | [testing.md](docs/testing.md) | what each suite asserts and why |
 | [deployment.md](docs/deployment.md) | containers, probes, graceful shutdown, sizing, alerts |
 | [troubleshooting.md](docs/troubleshooting.md) | symptoms, diagnoses and fixes |
@@ -402,8 +404,13 @@ docs/      the reasoning behind all of the above
 
 Honest about what is not here:
 
-- [ ] **Paged KV cache.** The engine currently re-runs prompts rather than
-      caching attention state; this is the largest single win available.
+- [x] **Paged KV cache — block allocator.** Reference-counted blocks, per-sequence
+      block tables, copy-on-write for shared prefixes. Host-side and fully
+      tested; see [kv-cache.md](docs/kv-cache.md).
+- [ ] **Paged KV cache — attention gather.** The allocator is done; the kernel
+      that reads through the block table is not, so nothing uses it yet.
+- [ ] **Preemption policy.** The allocator supports evicting a sequence; nothing
+      decides which one.
 - [ ] **Continuous batching.** Batches are static once formed. Admitting new
       requests mid-generation would raise utilisation substantially.
 - [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and

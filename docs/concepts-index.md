@@ -17,7 +17,7 @@ Ordered by the question someone would actually ask.
 | What happens on shutdown? | `shutdown()`, and the drain rule in `pop` | [concurrency.md](concurrency.md#shutdown) |
 | How does backpressure work? | `push` blocks; `try_push` returns `Full` | [concurrency.md](concurrency.md#backpressure) |
 | Where are atomics used, and why relaxed? | [`thread_pool.hpp`](../cpp/include/cudaforge/thread_pool.hpp), [`metrics.hpp`](../cpp/include/cudaforge/metrics.hpp) | [architecture.md](architecture.md#threading-model-summary) |
-| How do you know there are no races? | TSan-clean across 140 cases | [testing.md](testing.md) |
+| How do you know there are no races? | TSan-clean across 160 cases | [testing.md](testing.md) |
 | What if a task throws? | `ThreadPool::run` catch block | [architecture.md](architecture.md#failure-isolation) |
 | How do futures get their values? | `submit_with_result`, `packaged_task` behind a `shared_ptr` | — |
 
@@ -93,6 +93,10 @@ Ordered by the question someone would actually ask.
 | What does the pool *not* do? | — | [memory-management.md](memory-management.md#what-this-is-not) |
 | How does it compare to `cudaMallocAsync`? | — | same |
 | Why is it templated on a backend? | `AllocatorBackend` concept | [memory-management.md](memory-management.md#testing-without-a-gpu) |
+| Why is a contiguous KV cache wasteful? | [`kv_cache.hpp`](../cpp/include/cudaforge/kv_cache.hpp) | [kv-cache.md](kv-cache.md#why-a-contiguous-cache-is-the-problem) |
+| How does paging bound fragmentation? | `SequenceBlockTable::slack` | [kv-cache.md](kv-cache.md#what-paging-changes) |
+| How do two requests share a system prompt? | reference counting in `BlockAllocator` | [kv-cache.md](kv-cache.md#reference-counting-and-prefix-sharing) |
+| Why is a shared block not writable? | `is_writable`, `replace_block` | same |
 | What metrics matter? | `PoolStats` | [memory-management.md](memory-management.md#metrics-worth-watching) |
 
 ## Machine learning

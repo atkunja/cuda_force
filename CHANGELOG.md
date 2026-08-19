@@ -48,6 +48,8 @@ development host has no NVIDIA GPU.
 - `LatencyHistogram`: fixed-memory log-linear buckets, measured worst-case error
   of 4.95% against a documented 6.25% bound.
 - `Metrics`: counters plus queue-delay and latency percentiles, JSON output.
+- Paged KV cache block allocator: reference-counted blocks, per-sequence block
+  tables, copy-on-write for shared prefixes.
 
 ### Added — Python
 

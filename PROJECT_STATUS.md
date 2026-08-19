@@ -22,6 +22,7 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | `MemoryPool<Backend>` | Size-class caching allocator, concept-constrained backend, allocation accounting, `trim()`, foreign-pointer rejection. |
 | `LatencyHistogram` | Fixed-memory log-linear buckets, 16 sub-buckets per magnitude, bounded 6.25% relative error, exact mean. |
 | `Metrics` | Counters plus queue-delay and latency percentiles, JSON serialisation. |
+| `BlockAllocator` / `SequenceBlockTable` | Paged KV cache bookkeeping: reference-counted blocks, per-sequence block tables, copy-on-write for shared prefixes, exhaustion as a value rather than an exception. |
 | `RuntimeConfig` | Validation at construction, including the queue-smaller-than-batch trap. |
 
 ### CUDA — `cuda/`
@@ -80,7 +81,7 @@ Makefile, and 14 documents.
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **140 cases, 49,230 assertions — pass** |
+| C++ test suite | **160 cases, 49,866 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
@@ -193,8 +194,10 @@ Real ones, not hedges:
    not.
 3. **The INT8 kernel is not NF4.** It is uniform symmetric INT8. The QLoRA path
    calls bitsandbytes directly.
-4. **No KV cache.** Each request re-runs its prompt. This is the largest
-   available performance win and is not implemented.
+4. **No KV cache in the serving path.** The paged block allocator is built and
+   tested, but nothing reads through it: the attention gather that would make
+   it useful is not written, and no preemption policy decides which sequence to
+   evict. Each request still re-runs its prompt.
 5. **Batches are static once formed.** No continuous batching, so a batch runs
    until its longest member finishes.
 6. **Single-device serving.** DDP covers training only.
