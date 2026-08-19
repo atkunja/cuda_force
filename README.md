@@ -200,7 +200,16 @@ worth checking before drawing any conclusion from a timing.
 
 ```bash
 cudaforge-serve --model gpt2 --max-batch-size 16 --max-wait-us 5000
+
+# Or from a config, with flags overriding individual values
+cudaforge-serve --config inference/configs/balanced.yaml
 ```
+
+| Config | Shape |
+| --- | --- |
+| [`latency.yaml`](inference/configs/latency.yaml) | small batch, short wait — interactive traffic where p99 is what users feel |
+| [`throughput.yaml`](inference/configs/throughput.yaml) | large batch, generous wait — batch traffic where tokens/second is what matters |
+| [`balanced.yaml`](inference/configs/balanced.yaml) | where to start before measuring |
 
 ```bash
 curl -s localhost:8000/generate \

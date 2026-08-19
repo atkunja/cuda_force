@@ -120,6 +120,22 @@ capacity problem and gets solved by adding instances.
 
 ## Configuration
 
+Three shipped configs, as starting points rather than answers:
+
+| Config | `max_batch_size` | `max_wait_us` | For |
+| --- | --- | --- | --- |
+| `latency.yaml` | 4 | 1,000 | interactive traffic |
+| `balanced.yaml` | 16 | 5,000 | before you have measured |
+| `throughput.yaml` | 64 | 20,000 | batch and offline traffic |
+
+```bash
+cudaforge-serve --config inference/configs/balanced.yaml
+```
+
+Individual flags override the file, so a config can be adjusted without editing
+it. Run `benchmarks/benchmark_batching.py` against your model before settling on
+values — the right ones depend on the service time, which depends on the model.
+
 Environment variables read at startup:
 
 | Variable | Default | Effect |
