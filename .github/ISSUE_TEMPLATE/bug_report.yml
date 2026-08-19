@@ -1,0 +1,66 @@
+name: Bug report
+description: Something behaves incorrectly
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: run the command below and paste its output into the
+        environment field. Most reports about performance turn out to be a
+        silent fallback to the reference implementations, which this reveals
+        immediately.
+
+        ```
+        python -c "from cudaforge.ops import backend_report; print(backend_report())"
+        ```
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what occurred instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: The smallest sequence of commands or code that shows the problem.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Output of `backend_report()`, plus OS, Python version, PyTorch version,
+        and — if relevant — `nvidia-smi` and `nvcc --version`.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CUDA kernels
+        - C++ concurrency runtime
+        - Python operators / dispatch
+        - Inference engine or server
+        - Training pipeline
+        - Build, CI or tooling
+        - Documentation
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I ran `./scripts/test.sh` and included any failures above
+        - label: This is reproducible, not a one-off
