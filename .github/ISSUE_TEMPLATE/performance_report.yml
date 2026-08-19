@@ -1,0 +1,49 @@
+name: Performance report
+description: Something is slower than expected
+labels: [performance]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A performance report without a measurement cannot be acted on. Please
+        include the harness output rather than a description — `./scripts/benchmark.sh`
+        writes JSON to `benchmarks/results/`.
+
+        Check `backend.using_custom_kernels` first: if it is false, the
+        measurement is of the PyTorch reference path, not of any kernel here.
+
+  - type: textarea
+    id: measurement
+    attributes:
+      label: Measurement
+      description: The benchmark JSON, or the exact command and its output.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: |
+        A comparison point helps: another implementation, a theoretical bound,
+        or a previous version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: GPU model, driver, CUDA version, CPU, core count.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: profile
+    attributes:
+      label: Profile (optional)
+      description: |
+        `./scripts/profile.sh` output, or the relevant Nsight Compute sections.
+        This usually turns a report into a diagnosis.
