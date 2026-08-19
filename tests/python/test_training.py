@@ -316,7 +316,6 @@ def test_two_seeded_runs_produce_the_same_result(tmp_path, loader):
 
 def test_main_applies_flag_overrides_on_top_of_a_config(tmp_path, monkeypatch):
     import yaml
-
     from training import train as train_module
 
     config_path = tmp_path / "run.yaml"
@@ -334,10 +333,7 @@ def test_main_applies_flag_overrides_on_top_of_a_config(tmp_path, monkeypatch):
     monkeypatch.setattr(train_module, "train", capture)
 
     assert (
-        train_module.main(
-            ["--config", str(config_path), "--epochs", "2", "--lora-rank", "16"]
-        )
-        == 0
+        train_module.main(["--config", str(config_path), "--epochs", "2", "--lora-rank", "16"]) == 0
     )
 
     config = captured["config"]
