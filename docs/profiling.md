@@ -130,3 +130,65 @@ condition is the strided-modulo form rather than `index < half`.
 | High shared-memory bank conflicts | power-of-two stride | pad the array, as `tile_b[kTile][kTile + 1]` does |
 | Memory throughput near peak | done | stop; further work needs an algorithmic change |
 | High register spills | too much per-thread state | reduce block size or unrolling |
+
+## Profiling the CPU side
+
+The concurrency runtime has its own failure modes, and no GPU profiler will show
+them.
+
+**Lock contention.** `perf` on Linux:
+
+```bash
+perf record -g ./build/benchmarks/bench_queue
+perf report --sort=symbol
+```
+
+Time in `__lll_lock_wait` or `pthread_cond_wait` is threads blocked, not
+working. Some is expected — that is what a bounded queue does under load — but
+if it dominates while throughput is flat, the queue's single mutex is the
+bottleneck and the answer is sharding.
+
+**False sharing.** Two atomics on the same 64-byte cache line cause the line to
+ping-pong between cores, and the symptom is throughput that *falls* as threads
+are added. `perf c2c record` identifies it directly. The counters in `ThreadPool`
+and `Metrics` are candidates if the queue benchmark ever shows negative scaling.
+
+**ThreadSanitizer.** Not a profiler, but it belongs in the same workflow: it
+reports races even when the interleaving that would expose them did not occur
+during the run.
+
+```bash
+./scripts/build.sh --sanitizer thread
+./build-thread/tests/cpp/cudaforge_tests
+```
+
+## A workflow that converges
+
+1. **Benchmark.** Establish a baseline number and confirm it is reproducible.
+2. **`nsys`.** Find where the time actually goes. Frequently it is not the
+   kernel anyone suspected.
+3. **`ncu` on the top kernel.** Determine whether it is memory-bound,
+   compute-bound or latency-bound. That answer selects the fix; guessing does
+   not.
+4. **Change one thing.** Two simultaneous changes make the measurement
+   uninterpretable.
+5. **Re-benchmark.** If the improvement is smaller than run-to-run variance, it
+   is not an improvement.
+6. **Record it.** Baseline, bottleneck, change, expected effect, measured
+   effect. An optimisation whose measured effect was not recorded will be
+   re-litigated later.
+
+## Recording optimisation work
+
+Every optimisation in this project is documented in that shape. For example:
+
+> **Reduction, naive to warp-shuffle.**
+> *Baseline:* one `atomicAdd` per element.
+> *Bottleneck:* every thread contends on one address; the memory subsystem
+> serialises conflicting atomics.
+> *Change:* grid-stride loads, warp-shuffle reduction, one atomic per block.
+> *Expected:* global atomics fall from N to N/blockDim, roughly 256x fewer.
+> *Measured:* **not measured — no NVIDIA GPU on the development host.**
+
+The last line is the important one. It is what the whole project says wherever a
+number would otherwise go.
