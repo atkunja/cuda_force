@@ -72,3 +72,75 @@ ASan surfaced a real defect during development: concurrency tests were calling
 Catch2's `REQUIRE` from worker threads, which is not thread-safe and aborted
 non-deterministically. Fixed by routing worker-thread checks through an atomic
 counter and asserting on the main thread after joining.
+
+## Implemented, not measured — requires an NVIDIA GPU
+
+### Reduction: atomics → shared memory → warp shuffle
+
+| Field | |
+| --- | --- |
+| Baseline | one `atomicAdd` to global memory per element |
+| Bottleneck | every thread targets one address; the memory subsystem serialises conflicting atomics, so the grid degenerates to sequential updates |
+| Change | grid-stride loads, warp-shuffle reduction, one atomic per block |
+| Expected | global atomics fall from N to N/blockDim — about 256x fewer at the default block size; barriers fall from log2(blockDim) to 2 |
+| **Measured** | **not measured** |
+
+### Softmax: three passes → online
+
+| Field | |
+| --- | --- |
+| Baseline | separate max, sum and normalise passes, each reading global memory |
+| Bottleneck | 3 reads + 1 write, three times the minimum traffic on a bandwidth-bound kernel |
+| Change | online (max, sum) recurrence; 2 reads + 1 write, no capacity limit |
+| Expected | approaching a 1.5x reduction in traffic versus naive |
+| **Measured** | **not measured** |
+
+### RMSNorm: scalar → `float4`
+
+| Field | |
+| --- | --- |
+| Baseline | one 32-bit load and store per element |
+| Bottleneck | four times more memory instructions than necessary for the same bytes |
+| Change | `float4` loads and stores, with an alignment check and scalar fallback |
+| Expected | a quarter of the memory instructions; sectors-per-request should drop correspondingly in Nsight Compute |
+| **Measured** | **not measured** |
+
+### LoRA: unfused → fused
+
+| Field | |
+| --- | --- |
+| Baseline | three launches — `XW`, `XA`, then `(XA)B` accumulated |
+| Bottleneck | the `batch x rank` intermediate makes a round trip through global memory, and `X` is re-read for the adapter path |
+| Change | one kernel holding `XA` in shared memory and consuming it immediately |
+| Expected | two fewer launches, one fewer global write and read, one fewer read of `X` |
+| **Measured** | **not measured** |
+
+### Matmul: naive → shared-memory tiles
+
+| Field | |
+| --- | --- |
+| Baseline | each element of A re-read `n` times from global memory |
+| Bottleneck | global traffic proportional to the output size times K |
+| Change | 16x16 shared-memory tiles, with `[kTile][kTile + 1]` padding to break bank conflicts |
+| Expected | global traffic falls by roughly `kTile`; the padding removes a 16-way conflict on the column reads |
+| **Measured** | **not measured** — and note this is not competitive with cuBLAS by design |
+
+### Stream overlap
+
+| Field | |
+| --- | --- |
+| Baseline | copy, compute, copy issued to one stream |
+| Bottleneck | copies sit on the critical path; the copy engines and SMs never work simultaneously |
+| Change | K streams, pinned staging buffers, event-based cross-stream ordering, zero device-wide synchronisation |
+| Expected | throughput approaching the ratio of total work to compute-only work |
+| **Measured** | **not measured** — this one is best verified with an Nsight Systems timeline rather than a throughput number |
+
+### Device allocation
+
+| Field | |
+| --- | --- |
+| Baseline | `cudaMalloc`/`cudaFree` per batch |
+| Bottleneck | both synchronise the device, so every allocation drains the pipeline the stream scheduler works to fill |
+| Change | the same size-class pool, with a device backend |
+| Expected | allocator-induced synchronisations fall to near zero after warmup |
+| **Measured** | **not measured** — the host-backend reuse rate above is the closest available proxy |
