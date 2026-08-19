@@ -50,11 +50,10 @@ std::vector<Workload> build_workloads(std::size_t count, std::size_t max_length)
         std::lognormal_distribution<double> lognormal(4.6, 0.9);  // median ~100
         std::vector<std::size_t> lengths(count);
         for (auto& length : lengths) {
-            length = std::clamp(static_cast<std::size_t>(lognormal(engine)),
-                                std::size_t{1}, max_length);
+            length =
+                std::clamp(static_cast<std::size_t>(lognormal(engine)), std::size_t{1}, max_length);
         }
-        workloads.push_back({"chat_lognormal", "short turns with a long tail",
-                             std::move(lengths)});
+        workloads.push_back({"chat_lognormal", "short turns with a long tail", std::move(lengths)});
     }
 
     {
@@ -64,8 +63,7 @@ std::vector<Workload> build_workloads(std::size_t count, std::size_t max_length)
         for (auto& length : lengths) {
             length = uniform(engine);
         }
-        workloads.push_back({"uniform", "uniform over the accepted range",
-                             std::move(lengths)});
+        workloads.push_back({"uniform", "uniform over the accepted range", std::move(lengths)});
     }
 
     {
@@ -96,17 +94,15 @@ struct Occupancy {
 
 /// Contiguous: one reservation of `max_length` per sequence, regardless of how
 /// long the sequence turns out to be.
-Occupancy contiguous_occupancy(const std::vector<std::size_t>& lengths,
-                               std::size_t cache_tokens, std::size_t max_length) {
+Occupancy contiguous_occupancy(const std::vector<std::size_t>& lengths, std::size_t cache_tokens,
+                               std::size_t max_length) {
     const std::size_t slots = cache_tokens / max_length;
     const std::size_t admitted = std::min(slots, lengths.size());
-    const std::size_t tokens =
-        std::accumulate(lengths.begin(), lengths.begin() + static_cast<long>(admitted),
-                        std::size_t{0});
+    const std::size_t tokens = std::accumulate(
+        lengths.begin(), lengths.begin() + static_cast<long>(admitted), std::size_t{0});
     const std::size_t reserved = admitted * max_length;
     return {admitted, tokens,
-            reserved > 0 ? 1.0 - static_cast<double>(tokens) / static_cast<double>(reserved)
-                         : 0.0};
+            reserved > 0 ? 1.0 - static_cast<double>(tokens) / static_cast<double>(reserved) : 0.0};
 }
 
 /// Paged: blocks are taken one at a time as the sequence grows, so only the
@@ -147,8 +143,7 @@ Occupancy paged_occupancy(const std::vector<std::size_t>& lengths, std::size_t c
     }
 
     return {admitted, tokens,
-            reserved > 0 ? 1.0 - static_cast<double>(tokens) / static_cast<double>(reserved)
-                         : 0.0};
+            reserved > 0 ? 1.0 - static_cast<double>(tokens) / static_cast<double>(reserved) : 0.0};
 }
 
 }  // namespace
@@ -162,9 +157,8 @@ int main(int argc, char** argv) {
     JsonWriter writer(std::cout);
     writer.begin_object();
     writer.field("benchmark", std::string("kv_cache_occupancy"));
-    writer.field("note",
-                 std::string("bookkeeping only; no device memory is allocated and no "
-                             "attention kernel reads these blocks"));
+    writer.field("note", std::string("bookkeeping only; no device memory is allocated and no "
+                                     "attention kernel reads these blocks"));
     writer.field("cache_tokens", static_cast<std::uint64_t>(cache_tokens));
     writer.field("max_sequence_length", static_cast<std::uint64_t>(kMaxLength));
     writer.begin_array("workloads");
@@ -178,8 +172,7 @@ int main(int argc, char** argv) {
         writer.field("description", workload.description);
         writer.field("mean_length",
                      static_cast<double>(std::accumulate(workload.lengths.begin(),
-                                                         workload.lengths.end(),
-                                                         std::size_t{0})) /
+                                                         workload.lengths.end(), std::size_t{0})) /
                          static_cast<double>(workload.lengths.size()));
         writer.field("contiguous_sequences",
                      static_cast<std::uint64_t>(contiguous.sequences_admitted));
@@ -187,8 +180,7 @@ int main(int argc, char** argv) {
 
         writer.begin_array("paged");
         for (std::size_t block_size : {8U, 16U, 32U, 64U}) {
-            const Occupancy paged =
-                paged_occupancy(workload.lengths, cache_tokens, block_size);
+            const Occupancy paged = paged_occupancy(workload.lengths, cache_tokens, block_size);
 
             writer.array_element_begin();
             writer.field("block_size", static_cast<std::uint64_t>(block_size));
@@ -231,9 +223,9 @@ int main(int argc, char** argv) {
 
         writer.array_element_begin();
         writer.field("pool_blocks", static_cast<std::uint64_t>(blocks));
-        writer.field("operations_per_second",
-                     static_cast<double>(kRounds) * static_cast<double>(blocks) * 2.0 /
-                         std::max(seconds, 1e-12));
+        writer.field("operations_per_second", static_cast<double>(kRounds) *
+                                                  static_cast<double>(blocks) * 2.0 /
+                                                  std::max(seconds, 1e-12));
         writer.array_element_end();
     }
     writer.end_array();
