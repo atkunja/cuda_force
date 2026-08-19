@@ -15,9 +15,9 @@ def test_every_exported_name_exists():
     assert missing == []
 
 
-def test_exports_are_sorted():
-    # Keeps diffs on __all__ readable and makes duplicates obvious.
-    assert cudaforge.__all__ == sorted(cudaforge.__all__)
+# Ordering of __all__ is enforced by ruff's RUF022 rule rather than asserted
+# here: two sources of truth for the same convention is one too many, and the
+# linter's definition is the one that gates CI.
 
 
 def test_no_duplicate_exports():
@@ -77,6 +77,6 @@ def test_importing_the_package_does_not_pull_in_optional_dependencies():
 
 def test_star_import_is_safe():
     namespace: dict[str, object] = {}
-    exec("from cudaforge import *", namespace)  # noqa: S102
+    exec("from cudaforge import *", namespace)
     for name in cudaforge.__all__:
         assert name in namespace
