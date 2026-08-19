@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Run everything this machine is capable of running.
+#
+# Each stage reports whether it ran or was skipped and why. A suite that
+# silently skips is worse than one that fails, because it looks like a pass.
+
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+FAILURES=0
+run_stage() {
+  local name="$1"; shift
+  echo
+  echo "=============================================================="
+  echo "  $name"
+  echo "=============================================================="
+  if "$@"; then
+    echo "  [PASS] $name"
+  else
+    echo "  [FAIL] $name"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+skip_stage() {
+  echo
+  echo "  [SKIP] $1 — $2"
+}
+
+PYTHON="${PYTHON:-python}"
+[[ -x .venv/bin/python ]] && PYTHON=".venv/bin/python"
+
+# --- C++ -------------------------------------------------------------------
+if command -v cmake >/dev/null 2>&1; then
+  run_stage "C++ build" ./scripts/build.sh
+  run_stage "C++ tests" ./build/tests/cpp/cudaforge_tests
+
+  # Sanitizers are mutually exclusive at the ABI level, so each needs its own
+  # build directory and its own run.
+  for sanitizer in address undefined thread; do
+    run_stage "C++ tests (${sanitizer}sanitizer)" bash -c \
+      "./scripts/build.sh --sanitizer $sanitizer >/dev/null && \
+       ./build-${sanitizer}/tests/cpp/cudaforge_tests"
+  done
+else
+  skip_stage "C++ tests" "cmake not found"
+fi
+
+# --- CUDA ------------------------------------------------------------------
+run_stage "CUDA structural checks" "$PYTHON" scripts/check_cuda_sources.py cuda tests/cuda
+
+if command -v nvcc >/dev/null 2>&1 && command -v nvidia-smi >/dev/null 2>&1; then
+  run_stage "CUDA build" ./scripts/build.sh --cuda
+  run_stage "CUDA tests" ./build-cuda/tests/cuda/cudaforge_cuda_tests
+else
+  skip_stage "CUDA build and tests" "no nvcc or no NVIDIA GPU on this host"
+fi
+
+# --- Python ----------------------------------------------------------------
+run_stage "Python tests" "$PYTHON" -m pytest tests/python -q
+
+if "$PYTHON" -c "import ruff" >/dev/null 2>&1 || command -v ruff >/dev/null 2>&1; then
+  run_stage "ruff check" "$PYTHON" -m ruff check .
+  run_stage "ruff format check" "$PYTHON" -m ruff format --check .
+else
+  skip_stage "ruff" "not installed"
+fi
+
+if "$PYTHON" -c "import mypy" >/dev/null 2>&1; then
+  run_stage "mypy" "$PYTHON" -m mypy
+else
+  skip_stage "mypy" "not installed"
+fi
+
+echo
+if [[ $FAILURES -eq 0 ]]; then
+  echo "all executed stages passed"
+else
+  echo "$FAILURES stage(s) failed"
+fi
+exit $FAILURES
