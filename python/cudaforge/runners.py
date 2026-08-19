@@ -164,7 +164,7 @@ class TransformersRunner:
         # or a plain tensor. With `return_dict_in_generate` left at its default
         # it is always the tensor, so the union is narrowed once here rather
         # than at every use below.
-        generated_ids: torch.Tensor = self._model.generate(  # type: ignore[misc,assignment]
+        generated_ids: torch.Tensor = self._model.generate(  # type: ignore[misc]
             **encoded,
             max_new_tokens=max_new,
             do_sample=not first.greedy,
