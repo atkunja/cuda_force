@@ -113,11 +113,12 @@ assembled from the backlog that accumulated while the previous one ran.
 
 Three, each deliberate:
 
-* **`inference/engine.py` and `inference/batching.py` do not exist.** The engine
-  and batcher live in `python/cudaforge/`, because they are library code that
-  the CLI, the examples and the benchmarks all import. Re-exporting them from
-  `inference/` would have been two files of indirection. `inference/` holds only
-  the HTTP adapter: `server.py` and `schemas.py`.
+* **The engine and batcher are not under `inference/`.** They live in
+  `python/cudaforge/` because they are library code that the CLI, the examples
+  and the benchmarks all import; re-exporting them from the serving layer would
+  have been two files of pure indirection. `inference/` holds only the HTTP
+  adapter — [`server.py`](../inference/server.py),
+  [`schemas.py`](../inference/schemas.py) — and the serving configs.
 
 * **Headers sit under `cpp/include/cudaforge/` rather than `cpp/include/`.**
   Include paths read `#include "cudaforge/thread_pool.hpp"`, which prevents
