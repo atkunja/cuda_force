@@ -18,7 +18,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
-import check_cuda_sources as checker  # noqa: E402
+# The checker lives in scripts/, which is not a package; the sys.path insert
+# above is what makes this import work.
+import check_cuda_sources as checker
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
