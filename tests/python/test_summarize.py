@@ -151,3 +151,30 @@ def test_malformed_json_is_skipped_with_a_message(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "skipping" in captured.err
     assert "### x" in captured.out
+
+
+# --- the http load generator's pure helpers --------------------------------
+
+
+def test_the_http_percentile_helper_matches_the_summariser():
+    # The two tools compute percentiles independently; if they disagreed, the
+    # client-vs-server comparison the HTTP benchmark exists for would be
+    # comparing different statistics.
+    import benchmark_server
+
+    samples = [float(i) for i in range(1, 101)]
+    assert benchmark_server.percentile(samples, 0.0) == 1.0
+    assert benchmark_server.percentile(samples, 1.0) == 100.0
+    assert benchmark_server.percentile(samples, 0.5) == 50.0
+
+
+def test_the_http_percentile_helper_handles_an_empty_sample_set():
+    import benchmark_server
+
+    assert benchmark_server.percentile([], 0.99) == 0.0
+
+
+def test_the_http_percentile_helper_sorts_its_input():
+    import benchmark_server
+
+    assert benchmark_server.percentile([5.0, 1.0, 3.0, 2.0, 4.0], 0.5) == 3.0
