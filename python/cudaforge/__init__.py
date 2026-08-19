@@ -27,9 +27,9 @@ from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
 __version__ = "0.1.0"
 
 __all__ = [
-    "CUDA_KERNELS_AVAILABLE",
     "Batch",
     "BatchTrigger",
+    "CUDA_KERNELS_AVAILABLE",
     "DynamicBatcher",
     "EchoRunner",
     "EngineClosedError",
