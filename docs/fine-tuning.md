@@ -156,3 +156,77 @@ Passing the frozen parameters would allocate Adam state for them — two fp32
 tensors per parameter — and give away most of LoRA's memory advantage. The loop
 raises if the list is empty, because silently training a model with no adapters
 attached produces a run that looks successful and updates nothing.
+
+## QLoRA
+
+`load_in_4bit` quantises the frozen base weights to 4-bit NF4 via bitsandbytes,
+while the adapters stay in bf16:
+
+```yaml
+load_in_4bit: true
+gradient_checkpointing: true
+```
+
+**The 4-bit path is bitsandbytes' NF4, not the INT8 kernel in
+`cuda/src/quantization.cu`.** They are different schemes: NF4 uses a non-uniform
+4-bit grid derived from the normal distribution's quantiles plus double
+quantisation of the scales, while the custom kernel is uniform symmetric INT8.
+The custom kernel is not used in the training path and nothing here claims it
+reproduces NF4.
+
+QLoRA requires CUDA. bitsandbytes has no CPU or MPS backend, so the run refuses
+to start elsewhere rather than silently falling back to a dtype that does not
+fit the memory budget it was configured for.
+
+Gradient checkpointing pairs naturally with 4-bit weights: once the weights are
+small, activations become the binding constraint. Checkpointing discards
+activations on the forward pass and recomputes them during the backward pass —
+roughly a 30% step-time cost for a large reduction in activation memory.
+
+## Configurations
+
+| Config | Hardware | Purpose |
+| --- | --- | --- |
+| [`tiny.yaml`](../training/configs/tiny.yaml) | any, CPU included | runs in under a minute with no dataset download; what CI executes |
+| [`lora_gpt2.yaml`](../training/configs/lora_gpt2.yaml) | one 16 GB GPU | GPT-2 on WikiText-2 |
+| [`qlora_7b.yaml`](../training/configs/qlora_7b.yaml) | one 24 GB GPU | 4-bit Mistral-7B on Alpaca |
+
+```bash
+python -m training.train --config training/configs/tiny.yaml
+python examples/fine_tune.py
+```
+
+The tiny config exists so the pipeline is executable and testable anywhere. A
+training script that cannot run without downloading a dataset cannot be tested,
+and an untested training script is where silent correctness bugs live.
+
+## Reproducibility
+
+`set_seed` seeds Python's `random`, NumPy, PyTorch CPU and all CUDA devices.
+Missing one is the usual reason two runs with identical configs diverge.
+
+cuDNN's autotuner is deliberately left enabled: making it deterministic costs
+real throughput and does not affect data order or initialisation.
+
+The resolved config is written to `training_config.json` in the output
+directory, so a run is reproducible from its artefacts alone.
+
+## Checkpoints
+
+Only adapter tensors are saved. The frozen base weights already exist wherever
+the base model came from; writing them again would make every checkpoint the
+size of the full model for no benefit. A LoRA checkpoint is megabytes rather
+than gigabytes.
+
+Each checkpoint directory carries a `state.json` with step, epoch, tokens seen,
+best loss and eval loss, so a run can be attributed after the fact.
+
+## Distributed
+
+See [`examples/distributed_train.py`](../examples/distributed_train.py) for
+DDP + NCCL data parallelism. The relevant interaction with LoRA: only trainable
+parameters participate in the AllReduce, so gradient traffic per step falls by
+the same factor as the parameter count — which is what makes multi-node LoRA
+practical on interconnects that would choke on full fine-tuning.
+
+That example has not been executed; the development host has no NVIDIA GPUs.
