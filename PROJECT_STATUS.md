@@ -153,7 +153,18 @@ Recorded because each was found by a test that was written to look for it:
     the server by writing `CUDAFORGE_*` variables, and those leaked into later
     tests; the failure appeared only when the whole suite ran, not when the
     test did.
-14. **The sanitizer was not applied to the benchmark targets**, so they linked
+14. **A shared-memory race in the block reductions.** `block_reduce_max`
+    returned `shared[0]` directly, so a caller reusing the array for a second
+    reduction — softmax does exactly that, max then sum — could have one warp
+    overwrite the slot while another had not yet read it. Found by re-reading
+    the CUDA sources, not by a test: the code cannot be compiled on this host,
+    and the symptom would have been a silently wrong row rather than a crash.
+    Fixed by reading into a register with a trailing barrier, and guarded by a
+    new structural rule.
+15. **Shared-memory capacity checks ignored the static scratch array**, so a
+    launch could be accepted at exactly the row width where the dynamic request
+    alone just fit.
+16. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run

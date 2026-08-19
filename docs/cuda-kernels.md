@@ -68,6 +68,27 @@ for (unsigned half = blockDim.x / 2; half > 0; half >>= 1) {
 * Consecutive threads touch consecutive shared-memory addresses at every step,
   so there are no bank conflicts.
 
+### The barrier that is easy to miss
+
+A block reduction that ends `return shared[0];` is a race waiting for a caller
+that reduces twice over the same array — which softmax does, max then sum. One
+warp can overwrite `shared[0]` while another has not yet read it, and the
+symptom is a silently wrong row rather than a crash.
+
+The primitives therefore read into a register and bar every thread from leaving
+until all have read:
+
+```cuda
+__syncthreads();
+const T result = shared[0];
+__syncthreads();          // nobody leaves until everyone has read
+return result;
+```
+
+This was found by re-reading the sources rather than by a test — the code cannot
+be compiled on the development host — and is now enforced by a structural rule,
+checked at the primitive's definition rather than at its call sites.
+
 ### Warp shuffle: the last five steps in registers
 
 `__shfl_down_sync` reads another lane's register directly. The final five
