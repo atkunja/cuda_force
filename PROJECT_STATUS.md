@@ -74,7 +74,7 @@ custom CUDA structural linter, 3 CI workflows, multi-stage CUDA Dockerfile with
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **87 cases, 4,409 assertions — pass** |
+| C++ test suite | **102 cases, 28,545 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
