@@ -234,42 +234,51 @@ def check_syncthreads_not_divergent(path: Path, lines: list[str]) -> list[Findin
     return findings
 
 
-def check_shared_reuse_is_barriered(path: Path, lines: list[str]) -> list[Finding]:
-    """Two block reductions over the same shared array need a barrier between.
+def check_block_reductions_end_with_a_barrier(path: Path, lines: list[str]) -> list[Finding]:
+    """A block reduction must not return a value read straight from shared memory.
 
-    `block_reduce_max(x, scratch)` followed by `block_reduce_sum(y, scratch)`
-    lets one warp overwrite `scratch[0]` while another has not yet read it. The
-    result is a silently wrong row, not a crash — which is why this is worth a
-    rule rather than a code review.
+    `return shared[0];` lets a caller that reuses the array for a following
+    reduction — softmax does exactly that, max then sum — overwrite `shared[0]`
+    from one warp while another has not yet read it. The result is a silently
+    wrong row, not a crash, which is why it is worth a rule.
 
-    The reductions in cuda_utils.cuh now end with a trailing barrier, so this
-    guards against a future reduction being written without one.
+    The safe form reads into a register and then bars every thread from leaving
+    until all have read:
+
+        __syncthreads();
+        const T result = shared[0];
+        __syncthreads();
+        return result;
+
+    Checked at the primitive rather than at the call sites: guarding the
+    definition is exact, whereas guarding callers cannot tell a safe reuse from
+    an unsafe one.
     """
     findings: list[Finding] = []
-    reduction = re.compile(r"block_reduce_(sum|max)\s*\(\s*[^,]+,\s*(\w+)")
+    in_reduction = False
 
-    previous_array: str | None = None
-    previous_line = 0
     for index, line in enumerate(lines):
-        match = reduction.search(line)
-        if match is None:
-            if "__syncthreads()" in line:
-                previous_array = None
+        if re.search(r"\bblock_reduce_(sum|max)\s*\(", line) and "__device__" in "".join(
+            lines[max(0, index - 3) : index + 1]
+        ):
+            in_reduction = True
             continue
-
-        array = match.group(2)
-        if previous_array == array:
+        if not in_reduction:
+            continue
+        if line.startswith("}"):
+            in_reduction = False
+            continue
+        if re.search(r"return\s+shared\s*\[", line):
             findings.append(
                 Finding(
                     path,
                     index + 1,
-                    "unbarriered-shared-reuse",
-                    f"'{array}' is reused by a second block reduction with no "
-                    f"__syncthreads() since line {previous_line}",
+                    "unbarriered-reduction-return",
+                    "block reduction returns straight from shared memory; read "
+                    "into a register and __syncthreads() so the array can be reused",
                 )
             )
-        previous_array = array
-        previous_line = index + 1
+            in_reduction = False
 
     return findings
 
@@ -280,7 +289,7 @@ CHECKS = (
     check_status_is_used,
     check_shuffle_has_mask,
     check_syncthreads_not_divergent,
-    check_shared_reuse_is_barriered,
+    check_block_reductions_end_with_a_barrier,
 )
 
 
