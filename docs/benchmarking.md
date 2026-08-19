@@ -172,6 +172,22 @@ almost all of that is HTTP and client-side contention. That is worth knowing
 before attributing a latency number to the batcher, and it is why the two tools
 exist separately rather than one reporting a single figure.
 
+### What the numbers looked like here
+
+Every figure below was produced on the development host and is reproducible with
+`./scripts/benchmark.sh`. None involved a GPU.
+
+| Measurement | Result |
+| --- | --- |
+| Batching, saturated, batch 1 → 32 | 10.9× throughput, p99 queue delay 671 → 65 ms |
+| Batching, 16 clients, batch 1 → 16 | 3.52× throughput at unchanged p50/p99 |
+| Batching, 1 client, batch 1 → 16 | 112 → 87 req/s — the cost when there is nobody to batch with |
+| Queue, 1×1 → 8×8 | 2.39M → 774k items/s |
+| Memory pool | 2,020 allocations, 5 backend calls |
+| KV cache, chat-shaped | 13.2× more concurrent sequences than contiguous |
+| Latency histogram | 4.95% worst error against a 6.25% bound |
+| Metrics overhead | 1.76 µs per record at the default window |
+
 ### Memory (`bench_memory`)
 
 On the host backend the wall-clock saving is modest, because `malloc` already

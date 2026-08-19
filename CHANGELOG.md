@@ -91,7 +91,10 @@ development host has no NVIDIA GPU.
 
 No GPU was involved in any of these:
 
-- Dynamic batching: 3.52x throughput at unchanged p50/p99 (16 clients).
+- Dynamic batching: 3.52x throughput at unchanged p50/p99 (16 clients); 10.9x
+  throughput under saturation with p99 queue delay falling 671 ms to 65 ms.
+- Bounded queue: 2.39M items/s at one producer and consumer, 774k at eight of
+  each — where the single mutex becomes the bottleneck.
 - Paged KV cache: 13.2x more concurrent sequences than a contiguous cache on
   chat-shaped traffic; 25.8x on short prompts; 1.0x when every sequence reaches
   the limit.
