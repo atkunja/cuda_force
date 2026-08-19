@@ -353,6 +353,44 @@ numerical difference suggests, since the weights were fitted against this
 particular curve. `tests/python/test_ops.py` asserts that the two forms differ
 measurably — so the choice cannot be silently reverted.
 
+## Kernel G — Fused residual add + RMSNorm
+
+The highest-frequency fusion opportunity in transformer inference, because it
+occurs twice per layer, at every layer, for every token.
+
+Every block is
+
+```
+x = x + attention(norm(x))
+x = x + mlp(norm(x))
+```
+
+so a residual add is *always* immediately followed by the next sublayer's
+normalisation. Unfused, that sequence writes the sum, reads it back to compute
+the sum of squares, and reads it a third time to scale.
+
+| Form | Global traffic per element |
+| --- | --- |
+| Separate add, then RMSNorm | 2 reads + 1 write, then 2 reads + 1 write |
+| Fused | 2 reads + 2 writes |
+
+The kernel computes the sum once, keeps it in registers for the reduction, and
+writes it while the row is still resident.
+
+### Two outputs, both required
+
+`out` feeds the next sublayer; `residual_out` is the value the *following*
+residual connection adds to. Returning only the normalised result would force
+the caller to recompute the sum — and, worse, is an easy mistake to make that
+silently changes the model rather than failing.
+`tests/cuda/test_fused_norm.cu` asserts that `residual_out` is the plain sum.
+
+### Why the second pass re-reads rather than recomputes
+
+The normalisation loop reads back from `residual_out` instead of redoing
+`input[col] + residual[col]`. By that point the row is in L2, so one read beats
+two reads plus an add.
+
 ## Autograd
 
 The kernels are **inference-only**. No backward kernels exist for them.

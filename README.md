@@ -137,6 +137,7 @@ shapes, and a benchmark harness.
 | **RMSNorm** | scalar · `float4` · FP16 | 128-bit transactions, plus alignment checks with a real fallback |
 | **LoRA linear** | unfused · fused | keeping the `batch × rank` intermediate out of global memory |
 | **Activations** | SiLU · GELU · SwiGLU, scalar and `float4` | fusing `silu(gate) * up` to the minimum possible memory traffic |
+| **Residual + RMSNorm** | fused | the highest-frequency fusion in inference — twice per layer, every layer |
 | **Quantise** | block-wise INT8 | round-trip error provably under `scale / 2` |
 
 Full reasoning in [docs/cuda-kernels.md](docs/cuda-kernels.md).

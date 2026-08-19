@@ -80,6 +80,7 @@ Ordered by the question someone would actually ask.
 | How is grid size chosen? | `reduction_grid_size` | [gpu-execution.md](gpu-execution.md#grid-size) |
 | What is SwiGLU and why fuse it? | [`activations.cu`](../cuda/src/activations.cu) | [cuda-kernels.md](cuda-kernels.md#swiglu-and-why-it-is-a-kernel-at-all) |
 | Why tanh GELU rather than erf? | `gelu_tanh` | [cuda-kernels.md](cuda-kernels.md#gelu-tanh-not-erf) |
+| Which fusion pays most in inference? | [`fused_norm.cu`](../cuda/src/fused_norm.cu) | [cuda-kernels.md](cuda-kernels.md#kernel-g--fused-residual-add--rmsnorm) |
 | Can you backprop through these kernels? | the Autograd registration in [`bindings.cpp`](../cpp/src/bindings.cpp) | [cuda-kernels.md](cuda-kernels.md#autograd) |
 
 ## Memory

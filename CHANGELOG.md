@@ -25,6 +25,8 @@ development host has no NVIDIA GPU.
   adapter paths.
 - Activations: SiLU, GELU (tanh form) and fused SwiGLU, in scalar, `float4`
   and FP16 paths.
+- Fused residual add + RMSNorm, emitting both the normalised output and the
+  carried residual in one pass.
 - Block-wise symmetric INT8 quantise, dequantise and fake-quantise.
 - `GpuScheduler`: round-robin stream leases, event-based cross-stream chaining,
   asynchronous copies, per-stream accounting.
