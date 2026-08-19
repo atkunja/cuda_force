@@ -422,6 +422,8 @@ Honest about what is not here:
       requests mid-generation would raise utilisation substantially.
 - [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and
       is not competitive with cuBLAS, by design.
+- [ ] **FP8.** Hopper and later. The `ReducedPrecision` traits are the seam a
+      third format would slot into.
 - [ ] **Stream-ordered allocation.** The pool frees immediately; adopting
       `cudaMallocAsync` semantics would remove the "do not free in-flight
       buffers" constraint.
