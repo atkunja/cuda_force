@@ -305,3 +305,81 @@ These measure the **scheduler**, not model throughput — execution is simulated
 so the variable under study is isolated and the benchmark runs without a GPU.
 **No CUDA kernel number exists**; the harness is complete and runs unchanged on
 NVIDIA hardware. See [docs/benchmarking.md](docs/benchmarking.md).
+
+## Testing
+
+```bash
+./scripts/test.sh
+```
+
+| Suite | Scope |
+| --- | --- |
+| `tests/cpp` | queue, pool, batcher, metrics, histogram, config — including stress and shutdown |
+| `tests/cpp` under 3 sanitizers | TSan, ASan, UBSan — all clean |
+| `tests/python` | operators, batching, engine, HTTP, LoRA, dataset, training |
+| `tests/cuda` | kernel parity against double-precision references (needs a GPU) |
+| `scripts/check_cuda_sources.py` | structural CUDA rules, no toolkit required |
+
+A few of these exist to pin down properties that would otherwise regress
+silently: that RMSNorm survives FP16 magnitudes which overflow when squared,
+that an INT8 outlier degrades only its own block, that merging a LoRA layer is
+*exact*, and that gradient accumulation produces the same gradient as one large
+step. More in [docs/testing.md](docs/testing.md).
+
+Since a machine without a GPU cannot compile the kernels,
+`scripts/check_cuda_sources.py` enforces what can be checked statically:
+unchecked launches, discarded CUDA statuses, `cudaDeviceSynchronize`, maskless
+warp shuffles, and conditionally-reached `__syncthreads()`.
+
+## Documentation
+
+| Document | Covers |
+| --- | --- |
+| [architecture.md](docs/architecture.md) | layering, request lifecycle, failure isolation, threading model |
+| [concurrency.md](docs/concurrency.md) | mutexes vs atomics, condvars vs polling, backpressure, batching policy |
+| [cuda-kernels.md](docs/cuda-kernels.md) | every kernel, its variants, and what each optimisation removes |
+| [gpu-execution.md](docs/gpu-execution.md) | streams, events, the three conditions for overlap, warp execution |
+| [memory-management.md](docs/memory-management.md) | why `cudaMalloc` stalls, size classes, pinned memory, allocator comparison |
+| [fine-tuning.md](docs/fine-tuning.md) | LoRA memory arithmetic, packing, mixed precision, QLoRA scope |
+| [benchmarking.md](docs/benchmarking.md) | method, what to measure, how to read each suite |
+| [profiling.md](docs/profiling.md) | Nsight Systems and Compute, what each counter means |
+| [performance.md](docs/performance.md) | every optimisation as baseline → bottleneck → change → measured |
+| [testing.md](docs/testing.md) | what each suite asserts and why |
+| [environment.md](docs/environment.md) | the development host and exactly what it could not run |
+
+## Repository layout
+
+```
+cpp/       portable C++20 runtime — queue, pool, batcher, metrics, memory pool
+cuda/      kernels, stream scheduler, device allocator backends
+python/    cudaforge package — ops dispatch, engine, batcher, metrics, CLI
+training/  LoRA/QLoRA pipeline, configs, from-scratch reference layer
+inference/ FastAPI server and request schemas
+tests/     cpp · python · cuda
+benchmarks/ C++ and Python harnesses; results are generated, never committed
+scripts/   setup · build · test · benchmark · profile · lint · CUDA checks
+docs/      the reasoning behind all of the above
+```
+
+## Roadmap
+
+Honest about what is not here:
+
+- [ ] **Paged KV cache.** The engine currently re-runs prompts rather than
+      caching attention state; this is the largest single win available.
+- [ ] **Continuous batching.** Batches are static once formed. Admitting new
+      requests mid-generation would raise utilisation substantially.
+- [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and
+      is not competitive with cuBLAS, by design.
+- [ ] **Stream-ordered allocation.** The pool frees immediately; adopting
+      `cudaMallocAsync` semantics would remove the "do not free in-flight
+      buffers" constraint.
+- [ ] **Speculative decoding.**
+- [ ] **Multi-GPU inference.** Training has a DDP example; serving is
+      single-device.
+- [ ] **GPU-measured benchmarks.** Everything is in place; only hardware is
+      missing.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
