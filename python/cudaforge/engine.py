@@ -26,7 +26,7 @@ from typing import Any
 
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.metrics import MetricsRegistry, MetricsSnapshot
-from cudaforge.runners import EchoRunner, ModelRunner
+from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
 
 _LOG = logging.getLogger(__name__)
@@ -226,27 +226,25 @@ class InferenceEngine:
             results = self._runner.generate(
                 batch.prompts, [request.generation for request in batch.requests]
             )
-        except Exception as error:  # noqa: BLE001 - the failure belongs to the requests
-            # One bad batch must not take the engine down. Every request in it
-            # is failed individually so each caller learns what happened.
-            _LOG.exception("batch execution failed")
-            elapsed = time.monotonic() - started
-            for request in batch.requests:
-                self._metrics.record_failed()
-                self._complete(
-                    request.request_id,
-                    Response(
-                        request_id=request.request_id,
-                        text="",
-                        queue_time=request.queue_delay,
-                        inference_time=elapsed,
-                        batch_size=len(batch),
-                        error=f"{type(error).__name__}: {error}",
-                    ),
+            # Checked explicitly rather than left to zip(strict=True) below,
+            # because the check has to happen inside this guard. A mismatch
+            # raised after it would escape into the executor, where nothing
+            # completes the futures and every caller blocks until its timeout.
+            if len(results) != len(batch.requests):
+                raise RuntimeError(
+                    f"runner returned {len(results)} results for a batch of "
+                    f"{len(batch.requests)} requests"
                 )
-            return
+            self._complete_batch(batch, results, time.monotonic() - started)
+        except Exception as error:  # noqa: BLE001 - the failure belongs to the requests
+            # One bad batch must not take the engine down, and every request in
+            # it must be settled so no caller is left waiting.
+            _LOG.exception("batch execution failed")
+            self._fail_batch(batch, error, time.monotonic() - started)
 
-        elapsed = time.monotonic() - started
+    def _complete_batch(
+        self, batch: Batch, results: list[GenerationResult], elapsed: float
+    ) -> None:
         for request, result in zip(batch.requests, results, strict=True):
             response = Response(
                 request_id=request.request_id,
@@ -260,6 +258,21 @@ class InferenceEngine:
             )
             self._metrics.record_completion(response.total_latency, result.generated_tokens)
             self._complete(request.request_id, response)
+
+    def _fail_batch(self, batch: Batch, error: BaseException, elapsed: float) -> None:
+        for request in batch.requests:
+            self._metrics.record_failed()
+            self._complete(
+                request.request_id,
+                Response(
+                    request_id=request.request_id,
+                    text="",
+                    queue_time=request.queue_delay,
+                    inference_time=elapsed,
+                    batch_size=len(batch),
+                    error=f"{type(error).__name__}: {error}",
+                ),
+            )
 
     def _complete(self, request_id: str, response: Response) -> None:
         with self._futures_lock:
