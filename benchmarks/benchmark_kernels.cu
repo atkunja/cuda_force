@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "bench_common.hpp"
+#include "cudaforge/activations.cuh"
 #include "cudaforge/cuda_raii.cuh"
 #include "cudaforge/lora_linear.cuh"
 #include "cudaforge/quantization.cuh"
@@ -228,6 +229,36 @@ void benchmark_lora(JsonWriter& writer, cudaStream_t stream) {
     }
 }
 
+void benchmark_activations(JsonWriter& writer, cudaStream_t stream) {
+    for (int count : {1 << 20, 1 << 24}) {
+        DeviceBuffer<float> gate(static_cast<std::size_t>(count));
+        DeviceBuffer<float> up(static_cast<std::size_t>(count));
+        DeviceBuffer<float> output(static_cast<std::size_t>(count));
+        gate.fill_zero(stream);
+        up.fill_zero(stream);
+
+        const Timing silu = time_kernel(stream, [&] {
+            launch_silu(gate.data(), output.data(), count, stream);
+        });
+        // One read and one write.
+        emit(writer, "silu", "scalar", std::to_string(count), silu,
+             effective_bandwidth(2 * static_cast<std::size_t>(count) * sizeof(float),
+                                 silu.median_ms));
+
+        for (const auto& [variant, name] : {std::pair{SwiGLUKernel::Scalar, "scalar"},
+                                            std::pair{SwiGLUKernel::Vectorised, "float4"}}) {
+            const Timing timing = time_kernel(stream, [&] {
+                launch_swiglu(gate.data(), up.data(), output.data(), count, variant, stream);
+            });
+            // Two reads and one write: the minimum possible for this operation,
+            // which is what makes the fused form worth writing.
+            emit(writer, "swiglu", name, std::to_string(count), timing,
+                 effective_bandwidth(3 * static_cast<std::size_t>(count) * sizeof(float),
+                                     timing.median_ms));
+        }
+    }
+}
+
 void benchmark_quantization(JsonWriter& writer, cudaStream_t stream) {
     for (int count : {1 << 20, 1 << 24}) {
         DeviceBuffer<float> input(static_cast<std::size_t>(count));
@@ -286,6 +317,7 @@ int main() {
         benchmark_softmax(writer, stream);
         benchmark_rmsnorm(writer, stream);
         benchmark_lora(writer, stream);
+        benchmark_activations(writer, stream);
         benchmark_quantization(writer, stream);
 
         writer.end_array();
