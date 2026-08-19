@@ -164,7 +164,14 @@ Recorded because each was found by a test that was written to look for it:
 15. **Shared-memory capacity checks ignored the static scratch array**, so a
     launch could be accepted at exactly the row width where the dynamic request
     alone just fit.
-16. **The sanitizer was not applied to the benchmark targets**, so they linked
+16. **A 32-bit index overflow in the elementwise kernels.** The index was
+    computed as `blockIdx.x * blockDim.x + threadIdx.x` and cast to `int`; near
+    `INT_MAX` elements the product exceeds `INT_MAX` and the cast is undefined.
+    Now computed in `size_t` throughout.
+17. **Unbounded device buffer copies.** `copy_from_host` took a count and did
+    not check it against the allocation. A device-side overrun does not fault
+    at the copy — it corrupts the next allocation and surfaces elsewhere.
+18. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run

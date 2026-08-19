@@ -412,6 +412,32 @@ The normalisation loop reads back from `residual_out` instead of redoing
 `input[col] + residual[col]`. By that point the row is in L2, so one read beats
 two reads plus an add.
 
+## Indexing and bounds
+
+Two classes of defect that a GPU-less host cannot catch by running anything, and
+that both surface far from their cause:
+
+**32-bit index overflow.** `blockIdx.x * blockDim.x + threadIdx.x` is computed
+in 32-bit arithmetic. For an `int` element count near `INT_MAX` the product
+exceeds `INT_MAX`, and casting it to `int` is undefined — the kernel reads the
+wrong element rather than faulting. Every index in this project is computed in
+`std::size_t`:
+
+```cuda
+const std::size_t index =
+    blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+if (index < static_cast<std::size_t>(count)) { ... }
+```
+
+**Unchecked copy lengths.** A `cudaMemcpyAsync` past the end of a device
+allocation does not fault at the copy. It corrupts whatever allocation follows,
+and the damage appears later as wrong numbers or an illegal access in an
+unrelated kernel. `DeviceBuffer` therefore checks the count against its own
+size and throws.
+
+Both were found by reading rather than by running, which is the only tool
+available for CUDA on this host — and is the reason the structural checks exist.
+
 ## Autograd
 
 The kernels are **inference-only**. No backward kernels exist for them.
