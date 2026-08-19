@@ -36,10 +36,12 @@ runs/
 *.bin
 !tests/**/*.bin
 
-# Benchmark output (results are generated, not committed)
+# Benchmark output. Results are generated on the machine that runs them;
+# committing them would ship someone else's numbers. The README explaining that
+# is tracked, so the directory survives a clean checkout.
 benchmarks/results/*.json
 benchmarks/results/*.csv
-!benchmarks/results/.gitkeep
+!benchmarks/results/README.md
 
 # Profiling output
 *.nsys-rep
