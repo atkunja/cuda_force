@@ -76,3 +76,83 @@ Not an approximation. Once merged, the adapter costs nothing at inference —
 which is the property that distinguishes LoRA from adapter methods that add
 layers. `test_merging_is_exact` checks that the merged `nn.Linear` and the
 adapted module produce identical outputs.
+
+## Data packing
+
+Examples are concatenated with EOS separators and cut into fixed-length blocks:
+
+```
+[doc1 tokens] EOS [doc2 tokens] EOS [doc3 tokens] EOS ...
+└──── block 0 ────┘└──── block 1 ────┘└─ remainder, dropped ─┘
+```
+
+No padding is used, because padding is compute the GPU performs and then
+discards. The trailing remainder is dropped rather than padded: a single short
+block contributes little and complicates every downstream shape assumption.
+
+The EOS between documents is what teaches the model where a document ends.
+Without it, packing silently trains the model to continue from one document
+straight into an unrelated one.
+
+`labels` is a *clone* of `input_ids`, not an alias. The trainer may mask label
+positions in place, and shared storage would corrupt the inputs — a bug that
+would show up as mysteriously poor convergence rather than as an error.
+`test_labels_do_not_alias_the_inputs` pins this down.
+
+The shift between input and target is applied inside the model's loss, not in
+the dataset. Doing it in both places would shift twice and train the model to
+skip a token.
+
+## The training loop
+
+### Gradient accumulation
+
+`k` micro-batches are run and their gradients summed before one optimiser step,
+giving the convergence behaviour of a `k`-times larger batch at the memory cost
+of the small one. The loss is divided by `k` so the effective gradient magnitude
+is independent of how the batch was split.
+
+`test_gradient_accumulation_matches_a_single_large_step` verifies this
+numerically: four accumulated quarter-batches produce the same gradient as one
+whole batch, to within float tolerance. Without that division, the effective
+learning rate would silently depend on the accumulation setting.
+
+The scheduler steps per **optimiser** step, not per micro-batch. Stepping per
+micro-batch would advance the schedule `k` times too fast.
+
+### Mixed precision
+
+```python
+use_fp16 = mixed_precision and cuda and not torch.cuda.is_bf16_supported()
+scaler = torch.amp.GradScaler("cuda", enabled=use_fp16)
+```
+
+Loss scaling is a **float16 concern only**. Gradients in fp16 underflow to zero
+below about 6e-8; scaling the loss up before the backward pass moves them into
+range, and the scaler unscales before the optimiser step. bfloat16 has float32's
+exponent range and needs none of this, which is why bf16 is preferred wherever
+the hardware supports it.
+
+Order matters around clipping:
+
+```python
+scaler.unscale_(optimizer)                        # 1. remove the scale factor
+torch.nn.utils.clip_grad_norm_(trainable, 1.0)    # 2. then clip
+scaler.step(optimizer)
+```
+
+Clipping a still-scaled gradient would clip at the wrong threshold, off by
+exactly the scale factor — which drifts during training, so the effective
+clipping threshold would drift too.
+
+### Only adapters reach the optimiser
+
+```python
+trainable = [p for p in model.parameters() if p.requires_grad]
+optimizer = torch.optim.AdamW(trainable, ...)
+```
+
+Passing the frozen parameters would allocate Adam state for them — two fp32
+tensors per parameter — and give away most of LoRA's memory advantage. The loop
+raises if the list is empty, because silently training a model with no adapters
+attached produces a run that looks successful and updates nothing.
