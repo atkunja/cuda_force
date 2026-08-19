@@ -209,10 +209,15 @@ def test_the_loop_only_updates_trainable_parameters(tmp_path, stub_model, loader
     )
     train(config, model=stub_model, loader=loader)
 
+    # Compared on CPU: train() moves the model to whatever device is available,
+    # which on this host is MPS.
+    frozen_after = stub_model.embed.weight.detach().cpu()
+    trainable_after = stub_model.head.weight.detach().cpu()
+
     # Passing frozen parameters to the optimiser would allocate Adam state for
     # them and give away most of LoRA's memory advantage — and would move them.
-    torch.testing.assert_close(stub_model.embed.weight, frozen_before)
-    assert not torch.allclose(stub_model.head.weight, trainable_before)
+    torch.testing.assert_close(frozen_after, frozen_before)
+    assert not torch.allclose(trainable_after, trainable_before)
 
 
 def test_a_model_with_no_trainable_parameters_is_rejected(tmp_path, loader):
