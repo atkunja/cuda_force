@@ -28,10 +28,10 @@ jobs:
           - { os: macos-latest, compiler: appleclang, cc: clang, cxx: clang++ }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
+        uses: seanmiddleditch/gha-setup-ninja@v6
 
       - name: Configure
         env:
@@ -59,9 +59,9 @@ jobs:
         sanitizer: [address, undefined, thread]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
+        uses: seanmiddleditch/gha-setup-ninja@v6
 
       - name: Build and run
         env:
@@ -81,8 +81,8 @@ jobs:
     name: cuda structural checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: python scripts/check_cuda_sources.py cuda tests/cuda
@@ -94,17 +94,17 @@ jobs:
     name: cuda compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install CUDA toolkit
-        uses: Jimver/cuda-toolkit@v0.2.19
+        uses: Jimver/cuda-toolkit@v0.2.36
         with:
           cuda: "12.4.1"
           method: network
           sub-packages: '["nvcc", "cudart-dev"]'
 
       - name: Install ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
+        uses: seanmiddleditch/gha-setup-ninja@v6
 
       - name: Configure and build
         run: |
@@ -123,7 +123,7 @@ jobs:
     runs-on: [self-hosted, linux, gpu]
     if: ${{ github.event_name == 'workflow_dispatch' || vars.HAS_GPU_RUNNER == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: nvidia-smi
       - name: Build with CUDA
         run: ./scripts/build.sh --cuda
