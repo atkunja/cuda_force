@@ -1,0 +1,49 @@
+# Fast checks only. A pre-commit hook that takes 30 seconds gets bypassed with
+# --no-verify, which is worse than not having it: CI is where the slow suites
+# belong (builds, sanitizers, the CUDA compile).
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # Model weights and profiler captures do not belong in git. The training
+        # pipeline writes both, and both are gitignored — this is the backstop
+        # for when someone adds one with `git add -f`.
+        args: [--maxkb=512]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v19.1.5
+    hooks:
+      - id: clang-format
+        types_or: [c++, c, cuda]
+
+  - repo: local
+    hooks:
+      - id: cuda-structural-checks
+        name: CUDA structural checks
+        # Local rather than a published hook because the rules are specific to
+        # this codebase: unchecked launches, discarded statuses, device-wide
+        # synchronisation, maskless shuffles, divergent barriers.
+        entry: python scripts/check_cuda_sources.py
+        language: system
+        files: '\.(cu|cuh)$'
+        pass_filenames: true
+
+# mypy is deliberately absent. It needs the full dependency set installed in the
+# hook environment, which makes the first commit after a rebuild take minutes.
+# It runs in CI instead.
