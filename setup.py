@@ -24,7 +24,6 @@ from setuptools import setup
 
 def build_extensions() -> tuple[list, dict]:
     try:
-        import torch
         from torch.utils.cpp_extension import BuildExtension, CppExtension, CUDAExtension
     except ImportError:
         print("torch not importable; skipping the native extension", file=sys.stderr)
@@ -40,11 +39,13 @@ def build_extensions() -> tuple[list, dict]:
     ]
     sources = ["cpp/src/bindings.cpp", "cpp/src/metrics.cpp", "cpp/src/dynamic_batcher.cpp"]
 
-    # CUDA_HOME is what torch itself uses to decide; matching it avoids a state
-    # where torch thinks CUDA is available and the extension disagrees.
+    # CUDA_HOME is what torch itself uses to locate nvcc. It is the right gate
+    # rather than torch.cuda.is_available(), because building the kernels needs
+    # a toolkit, not a visible device — a build host and the machine that runs
+    # the result are frequently not the same.
     from torch.utils.cpp_extension import CUDA_HOME
 
-    if CUDA_HOME is not None and torch.cuda.is_available() or CUDA_HOME is not None:
+    if CUDA_HOME is not None:
         sources += [
             "cuda/src/reduction.cu",
             "cuda/src/softmax.cu",
