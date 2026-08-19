@@ -165,3 +165,45 @@ def test_a_config_override_still_widens_the_queue(capsys):
     # would make the batch size unreachable; the CLI widens it.
     payload = json.loads(capsys.readouterr().out)
     assert payload["config"]["max_batch_size"] == 512
+
+
+def test_serve_honours_the_config_file(monkeypatch):
+    # serve() hands its resolved values to the server through the environment.
+    # Passing the raw --model default straight through would silently ignore
+    # the config file, and the server would load the wrong model.
+    import os
+
+    captured: dict[str, str] = {}
+
+    def fake_run(*_args, **_kwargs):
+        captured.update(
+            {key: value for key, value in os.environ.items() if key.startswith("CUDAFORGE_")}
+        )
+
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    cli.serve(["--config", "inference/configs/throughput.yaml"])
+
+    assert captured["CUDAFORGE_MODEL"] == "gpt2"
+    assert captured["CUDAFORGE_MAX_BATCH"] == "64"
+    assert captured["CUDAFORGE_MAX_WAIT_US"] == "20000"
+
+
+def test_serve_flags_override_the_config_file(monkeypatch):
+    import os
+
+    captured: dict[str, str] = {}
+
+    def fake_run(*_args, **_kwargs):
+        captured.update(
+            {key: value for key, value in os.environ.items() if key.startswith("CUDAFORGE_")}
+        )
+
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    cli.serve(["--config", "inference/configs/throughput.yaml", "--max-batch-size", "8"])
+
+    assert captured["CUDAFORGE_MAX_BATCH"] == "8"
+    assert captured["CUDAFORGE_MAX_WAIT_US"] == "20000"
