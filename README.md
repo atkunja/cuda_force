@@ -349,6 +349,7 @@ warp shuffles, and conditionally-reached `__syncthreads()`.
 
 | Document | Covers |
 | --- | --- |
+| [api.md](docs/api.md) | the public surface and what each part guarantees |
 | [architecture.md](docs/architecture.md) | layering, request lifecycle, failure isolation, threading model |
 | [concurrency.md](docs/concurrency.md) | mutexes vs atomics, condvars vs polling, backpressure, batching policy |
 | [cuda-kernels.md](docs/cuda-kernels.md) | every kernel, its variants, and what each optimisation removes |
