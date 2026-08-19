@@ -25,6 +25,12 @@ from cudaforge.ops import backend_report
 from cudaforge.runners import EchoRunner, ModelRunner, TransformersRunner
 
 
+def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
+    from cudaforge import __version__  # imported lazily: avoids a circular import
+
+    parser.add_argument("--version", action="version", version=f"cudaforge {__version__}")
+
+
 def _add_engine_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default="sshleifer/tiny-gpt2")
     parser.add_argument("--max-batch-size", type=int, default=16)
@@ -54,6 +60,7 @@ def _build(args: argparse.Namespace) -> tuple[EngineConfig, ModelRunner]:
 
 def serve(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cudaforge-serve", description="Start the HTTP server")
+    _add_common_arguments(parser)
     _add_engine_arguments(parser)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -125,6 +132,7 @@ def bench(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="cudaforge-bench", description="Drive the engine with concurrent load"
     )
+    _add_common_arguments(parser)
     _add_engine_arguments(parser)
     parser.add_argument("--clients", type=int, default=8)
     parser.add_argument("--requests-per-client", type=int, default=25)
