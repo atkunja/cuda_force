@@ -260,6 +260,13 @@ python -m training.train --config training/configs/lora_gpt2.yaml
 Step 2 is the one that matters. If those assertions pass, the kernels compute
 what they claim to compute; everything after that is performance.
 
+The suite covers seven kernel families — reduction, softmax, RMSNorm, LoRA
+linear, quantisation, activations (SiLU/GELU/SwiGLU) and the fused residual +
+RMSNorm — plus the stream scheduler, the device memory pool and the RAII
+wrappers. Each is compared against a double-precision host reference over shapes
+that include non-power-of-two, very small, very large, and widths that defeat
+the vectorised paths so the scalar fallbacks are exercised rather than assumed.
+
 ## Future improvements
 
 Ordered by expected value:
