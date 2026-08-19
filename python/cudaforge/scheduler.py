@@ -88,6 +88,11 @@ class Batch:
         return len(self.requests)
 
     @property
+    def empty(self) -> bool:
+        """True when every member was dropped for missing its deadline."""
+        return not self.requests
+
+    @property
     def prompts(self) -> list[str]:
         return [request.prompt for request in self.requests]
 

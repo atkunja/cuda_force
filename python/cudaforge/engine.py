@@ -27,7 +27,13 @@ from typing import Any
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.metrics import MetricsRegistry, MetricsSnapshot
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
-from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
+from cudaforge.scheduler import (
+    Batch,
+    BatchTrigger,
+    DynamicBatcher,
+    Request,
+    RequestExpired,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -90,6 +96,7 @@ class InferenceEngine:
             max_wait_seconds=self._config.max_wait_seconds,
             queue_capacity=self._config.queue_capacity,
             metrics=self._metrics,
+            on_expired=self._expire,
         )
         self._closed = threading.Event()
 
@@ -115,6 +122,7 @@ class InferenceEngine:
         prompt: str,
         generation: GenerationConfig | None = None,
         block_when_full: bool = True,
+        deadline_seconds: float | None = None,
     ) -> Future[Response]:
         """Enqueue a prompt and return a future for its response.
 
@@ -123,6 +131,11 @@ class InferenceEngine:
                 rejection when False. Which is correct depends on the caller —
                 a batch client wants backpressure, an HTTP frontend generally
                 wants to return 503 rather than hold a connection open.
+            deadline_seconds: drop the request if it is still queued this many
+                seconds from now. Under overload this is what stops the runtime
+                spending capacity on work nobody is waiting for any more; the
+                future is completed with a ``RequestExpired`` error rather than
+                left hanging.
 
         Raises:
             EngineClosedError: if the engine is shutting down or the request was
@@ -136,7 +149,13 @@ class InferenceEngine:
         if limit and len(prompt) > limit:
             raise ValueError(f"prompt of {len(prompt)} characters exceeds the limit of {limit}")
 
-        request = Request(prompt=prompt, generation=generation or self._config.generation)
+        request = Request(
+            prompt=prompt,
+            generation=generation or self._config.generation,
+            deadline=(
+                time.monotonic() + deadline_seconds if deadline_seconds is not None else None
+            ),
+        )
         future: Future[Response] = Future()
 
         # Registered before submission: the batcher thread can pick the request
@@ -214,11 +233,33 @@ class InferenceEngine:
     def __exit__(self, *_: object) -> None:
         self.shutdown()
 
+    def _expire(self, request: Request) -> None:
+        """Settle the future of a request dropped for missing its deadline.
+
+        Failing it explicitly matters: a caller blocked in ``result()`` would
+        otherwise wait out its own timeout with nothing explaining why.
+        """
+        self._complete(
+            request.request_id,
+            Response(
+                request_id=request.request_id,
+                text="",
+                queue_time=request.queue_delay,
+                batch_size=0,
+                error=(
+                    f"{RequestExpired.__name__}: dropped after "
+                    f"{request.queue_delay * 1e3:.1f} ms in the queue, past its deadline"
+                ),
+            ),
+        )
+
     def _dispatch(self, batch: Batch) -> None:
         """Called on the batcher thread; hands the batch to the pool and returns."""
         self._executor.submit(self._execute, batch)
 
     def _execute(self, batch: Batch) -> None:
+        if batch.empty:
+            return
         started = time.monotonic()
         try:
             results = self._runner.generate(
