@@ -83,11 +83,12 @@ TEST_CASE("requests round up to a shared size class", "[pool]") {
     CountingBackend::Counters counters;
     MemoryPool<CountingBackend> pool{CountingBackend{&counters}};
 
-    // 1000 and 1500 both round to 2048, so the second call reuses the first
-    // block. This is the fragmentation/reuse tradeoff the size classes buy.
-    void* first = pool.allocate(1000);
+    // 1100 and 2000 both round to the 2048-byte class, so the second call
+    // reuses the first block. This is the fragmentation/reuse tradeoff the
+    // size classes buy: up to 2x slack in exchange for exact reuse.
+    void* first = pool.allocate(1100);
     pool.deallocate(first);
-    void* second = pool.allocate(1500);
+    void* second = pool.allocate(2000);
 
     REQUIRE(second == first);
     REQUIRE(counters.allocations.load() == 1);
