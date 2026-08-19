@@ -96,6 +96,19 @@ associative and a tree reduction genuinely differs from a sequential sum.
 Where the input is exactly representable (a sum of ones below 2^24), the test
 demands exact equality: any deviation there is a bug, not accumulated error.
 
+## Isolation
+
+Tests that touch process-wide state restore it. `cli.serve` configures the
+server by writing `CUDAFORGE_*` environment variables — the right interface for
+a CLI, and the wrong thing to leave behind in a test run. An autouse fixture in
+`conftest.py` snapshots and restores them.
+
+This was not hypothetical: without it, a CLI test's variables overrode a later
+server test's config file, and the failure appeared only when the whole suite
+ran rather than when the test did. That is the worst shape a test failure can
+take, because the obvious next step — running the failing test alone — makes it
+disappear.
+
 ## Determinism
 
 Every test seeds explicitly. An unseeded generator makes a marginal tolerance

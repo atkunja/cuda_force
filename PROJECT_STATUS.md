@@ -144,7 +144,14 @@ Recorded because each was found by a test that was written to look for it:
     with nothing pointing at the cause. Surfaced by a warning in a test that
     called `.backward()`. Now an explicit error, with the Python layer routing
     gradient-requiring calls to the differentiable reference.
-12. **The sanitizer was not applied to the benchmark targets**, so they linked
+12. **`serve` ignored its own `--config` file**, passing the flag defaults to
+    the server instead of the resolved values — so a config file changed the
+    benchmark's behaviour but not the server's.
+13. **Test pollution through the process environment.** `cli.serve` configures
+    the server by writing `CUDAFORGE_*` variables, and those leaked into later
+    tests; the failure appeared only when the whole suite ran, not when the
+    test did.
+14. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run
