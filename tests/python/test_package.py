@@ -92,3 +92,8 @@ def test_the_declared_version_matches_pyproject():
     pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
     declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
     assert cudaforge.__version__ == declared
+
+
+def test_the_dtype_helpers_are_exported():
+    assert cudaforge.kernel_supports(__import__("torch").float32)
+    assert cudaforge.KERNEL_DTYPES
