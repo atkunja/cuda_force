@@ -189,11 +189,76 @@ def summarize_generic(payload: dict[str, Any], name: str) -> str:
     return "".join(out)
 
 
+def summarize_kv_cache(payload: dict[str, Any]) -> str:
+    out = [
+        f"### KV cache occupancy — {payload.get('cache_tokens', 0):,} token cache, "
+        f"max sequence {payload.get('max_sequence_length', 0)}\n"
+    ]
+    if note := payload.get("note"):
+        out.append(f"\n{note}\n\n")
+
+    rows = []
+    for workload in payload.get("workloads", []):
+        # Block size 16 is the reported point; the others are in the JSON.
+        paged = next(
+            (entry for entry in workload.get("paged", []) if entry["block_size"] == 16),
+            None,
+        )
+        if paged is None:
+            continue
+        rows.append(
+            [
+                workload["workload"],
+                f"{workload['mean_length']:.0f}",
+                str(workload["contiguous_sequences"]),
+                f"{100 * workload['contiguous_waste']:.1f}%",
+                str(paged["sequences"]),
+                f"{100 * paged['waste']:.1f}%",
+                f"{paged['sequences_ratio']:.1f}x",
+            ]
+        )
+
+    out.append(
+        table(
+            [
+                "workload",
+                "mean len",
+                "contiguous",
+                "waste",
+                "paged (16)",
+                "waste",
+                "ratio",
+            ],
+            rows,
+        )
+    )
+    out.append(
+        "\nA ratio of 1.0x means every sequence reached the permitted maximum, "
+        "so there was no waste for paging to recover. The gain is the gap "
+        "between the permitted maximum and the actual distribution.\n"
+    )
+
+    throughput = payload.get("allocator_throughput", [])
+    if throughput:
+        out.append(
+            "\n"
+            + table(
+                ["pool blocks", "operations/s"],
+                [
+                    [str(entry["pool_blocks"]), f"{entry['operations_per_second'] / 1e6:.1f}M"]
+                    for entry in throughput
+                ],
+            )
+        )
+    return "".join(out)
+
+
 SUMMARIES = {
     "cuda_kernels": summarize_cuda_kernels,
     "dynamic_batching": summarize_batching,
     "operators": summarize_operators,
     "latency_histogram": summarize_histogram,
+    "kv_cache_occupancy": summarize_kv_cache,
 }
 
 
