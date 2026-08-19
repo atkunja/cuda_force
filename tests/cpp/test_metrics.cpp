@@ -24,6 +24,8 @@ TEST_CASE("counters accumulate", "[metrics]") {
     }
     metrics.record_rejected();
     metrics.record_failed();
+    metrics.record_expired();
+    metrics.record_expired();
     metrics.record_completion(1'000'000, 32);
     metrics.record_completion(2'000'000, 16);
 
@@ -31,6 +33,9 @@ TEST_CASE("counters accumulate", "[metrics]") {
     REQUIRE(snapshot.requests_received == 10);
     REQUIRE(snapshot.requests_rejected == 1);
     REQUIRE(snapshot.requests_failed == 1);
+    // Counted apart from rejection and failure: the three have different causes
+    // and different remedies.
+    REQUIRE(snapshot.requests_expired == 2);
     REQUIRE(snapshot.requests_completed == 2);
     REQUIRE(snapshot.tokens_generated == 48);
 }
@@ -70,11 +75,13 @@ TEST_CASE("reset clears every counter", "[metrics]") {
     metrics.record_received();
     metrics.record_completion(1000, 5);
     metrics.record_batch(4, false);
+    metrics.record_expired();
     metrics.reset();
 
     const auto snapshot = metrics.snapshot();
     REQUIRE(snapshot.requests_received == 0);
     REQUIRE(snapshot.requests_completed == 0);
+    REQUIRE(snapshot.requests_expired == 0);
     REQUIRE(snapshot.batches_processed == 0);
     REQUIRE(snapshot.tokens_generated == 0);
 }
@@ -89,6 +96,7 @@ TEST_CASE("json output carries the expected keys", "[metrics]") {
     REQUIRE(json.front() == '{');
     REQUIRE(json.back() == '}');
     REQUIRE(json.find("\"requests_completed\": 1") != std::string::npos);
+    REQUIRE(json.find("\"requests_expired\"") != std::string::npos);
     REQUIRE(json.find("\"tokens_generated\": 12") != std::string::npos);
     REQUIRE(json.find("\"latency_ms\"") != std::string::npos);
     REQUIRE(json.find("\"p99\"") != std::string::npos);
