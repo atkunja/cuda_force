@@ -27,9 +27,29 @@ class LatencyHistogram:
     deliberate: for a serving system, the question is almost always "what is
     p99 right now", and old samples from a different load regime actively
     mislead.
+
+    ## Why the window is 10,000 and not larger
+
+    `bisect.insort` into a sorted list is O(n): the insertion memmoves the tail.
+    Measured on the development host, with the window full so both eviction and
+    insertion are on the path:
+
+    | Window | Cost per record | Records/second |
+    | --- | --- | --- |
+    | 1,000 | 0.43 µs | 2,326k |
+    | 10,000 | 1.76 µs | 568k |
+    | 100,000 | 16.38 µs | 61k |
+
+    Two histograms are recorded per request, so a 100,000-sample window costs
+    roughly 33 µs of pure metrics overhead per request — a meaningful fraction
+    of a millisecond-scale latency, which is precisely the thing being measured.
+
+    10,000 samples is far more than a p99 needs and costs a ninth as much. Pass
+    a larger `capacity` only if the extra resolution is worth the overhead on
+    the request path.
     """
 
-    def __init__(self, capacity: int = 100_000) -> None:
+    def __init__(self, capacity: int = 10_000) -> None:
         if capacity <= 0:
             raise ValueError(f"capacity must be positive, got {capacity}")
         self._capacity = capacity
