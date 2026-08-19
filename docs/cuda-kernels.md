@@ -150,3 +150,55 @@ mantissa, so summing more than about 2048 terms of similar magnitude stops
 making progress — each addition rounds away — and the resulting distribution is
 visibly wrong. Widening the accumulator costs nothing on a bandwidth-bound
 kernel.
+
+## Kernel C — RMSNorm
+
+```
+y_i = x_i / sqrt(mean(x^2) + eps) * w_i
+```
+
+The difference from LayerNorm is that the mean is not subtracted: RMSNorm
+rescales without re-centring. That removes one full pass over the row and one
+reduction. At transformer widths the operation is memory-bound, so halving the
+reductions is close to halving the cost — which is why LLaMA-family models moved
+to it.
+
+`eps` goes **inside** the square root, matching the reference PyTorch
+formulation. Outside, the result differs for small-magnitude rows and parity
+with the reference breaks.
+
+### Vectorisation
+
+The scalar kernel issues one 32-bit load per element. The vectorised kernel
+treats the row as `cols / 4` `float4` values and issues one 128-bit transaction
+instead of four 32-bit ones — a quarter of the memory instructions on a kernel
+that is entirely memory-bound.
+
+The constraint is alignment. A `float4` load faults unless the address is
+16-byte aligned, and row starts must be aligned too, which requires `cols` to be
+a multiple of four — otherwise row 1 begins mid-vector even when row 0 is
+aligned. The launcher checks both the pointers and the row length, and falls
+back to the scalar kernel rather than faulting:
+
+```cuda
+return cols % 4 == 0 && aligned(input) && aligned(weight) && aligned(output);
+```
+
+`tests/cuda/test_rmsnorm.cu` deliberately includes non-multiple-of-four widths
+(17, 1023, 2049) so the fallback path is exercised rather than assumed.
+
+### `rsqrtf`
+
+`rsqrtf` maps to a single hardware instruction. Its relative error is well
+inside the FP32 tolerance the tests use, and it removes both a division and a
+square root from the inner loop. This is one of the few places where an
+arithmetic choice is worth making at all — and it is worth it because it removes
+instructions, not because it removes flops.
+
+### FP16 overflow
+
+FP16's maximum is 65504. A single activation of magnitude 256 squares to 65536
+and overflows to infinity, which then propagates through the entire row. The
+sum of squares is therefore accumulated in FP32 unconditionally.
+`tests/cuda/test_rmsnorm.cu` uses inputs of 300 specifically to hit this, and
+`tests/python/test_ops.py` asserts the same property for the reference path.
