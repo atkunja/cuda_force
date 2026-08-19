@@ -10,6 +10,7 @@ endif()
 
 add_library(cudaforge_kernels
   src/activations.cu
+  src/fused_norm.cu
   src/reduction.cu
   src/softmax.cu
   src/rmsnorm.cu
