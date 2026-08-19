@@ -1,0 +1,54 @@
+# Build
+build/
+build-*/
+cmake-build-*/
+*.o
+*.so
+*.dylib
+*.a
+compile_commands.json
+CMakeCache.txt
+CMakeFiles/
+Testing/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# PyTorch extension build artifacts
+python/cudaforge/_C*.so
+torch_extensions/
+
+# Model + data artifacts
+checkpoints/
+runs/
+*.safetensors
+*.bin
+!tests/**/*.bin
+
+# Benchmark output (results are generated, not committed)
+benchmarks/results/*.json
+benchmarks/results/*.csv
+!benchmarks/results/.gitkeep
+
+# Profiling output
+*.nsys-rep
+*.ncu-rep
+*.sqlite
+*.qdrep
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
