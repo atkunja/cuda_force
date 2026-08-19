@@ -258,3 +258,101 @@ def test_queue_delay_is_recorded_for_every_request():
             batcher.submit(make_request(i))
 
     assert metrics.queue_delay.count == 20
+
+
+# --- deadline-aware admission ---------------------------------------------
+
+
+def test_a_request_without_a_deadline_never_expires():
+    assert not Request(prompt="x").expired()
+
+
+def test_expiry_is_evaluated_against_the_deadline():
+    request = Request(prompt="x", deadline=time.monotonic() - 1)
+    assert request.expired()
+
+    request = Request(prompt="x", deadline=time.monotonic() + 60)
+    assert not request.expired()
+
+
+def test_expired_requests_are_dropped_rather_than_executed():
+    # Executing work nobody is waiting for spends capacity the live requests
+    # need, which under overload deepens the backlog that caused the timeouts.
+    collector = Collector()
+    metrics = MetricsRegistry()
+    dropped: list[Request] = []
+
+    with DynamicBatcher(
+        collector,
+        max_batch_size=4,
+        max_wait_seconds=0.01,
+        queue_capacity=64,
+        metrics=metrics,
+        on_expired=dropped.append,
+    ) as batcher:
+        past = time.monotonic() - 1
+        for i in range(6):
+            batcher.submit(Request(prompt=f"stale-{i}", deadline=past))
+        for i in range(4):
+            batcher.submit(Request(prompt=f"fresh-{i}"))
+        time.sleep(0.2)
+
+    assert len(dropped) == 6
+    assert collector.total == 4
+    assert all("fresh" in request.prompt for batch in collector.batches for request in batch.requests)
+    assert metrics.snapshot().requests_expired == 6
+
+
+def test_an_all_expired_queue_produces_no_batches():
+    collector = Collector()
+    with DynamicBatcher(
+        collector, max_batch_size=4, max_wait_seconds=0.01, queue_capacity=64
+    ) as batcher:
+        past = time.monotonic() - 1
+        for i in range(10):
+            batcher.submit(Request(prompt=f"stale-{i}", deadline=past))
+        time.sleep(0.15)
+
+    assert collector.total == 0
+
+
+def test_expiry_is_counted_separately_from_rejection():
+    # Distinct causes with distinct remedies: rejection means the queue is full,
+    # expiry means it is deeper than clients will wait for.
+    metrics = MetricsRegistry()
+    with DynamicBatcher(
+        lambda _: None,
+        max_batch_size=2,
+        max_wait_seconds=0.005,
+        queue_capacity=64,
+        metrics=metrics,
+    ) as batcher:
+        batcher.submit(Request(prompt="stale", deadline=time.monotonic() - 1))
+        time.sleep(0.1)
+
+    snapshot = metrics.snapshot()
+    assert snapshot.requests_expired == 1
+    assert snapshot.requests_rejected == 0
+    assert snapshot.requests_failed == 0
+
+
+def test_a_throwing_expiry_callback_does_not_stop_the_batcher():
+    metrics = MetricsRegistry()
+    collector = Collector()
+
+    def explode(_: Request) -> None:
+        raise RuntimeError("callback failure")
+
+    with DynamicBatcher(
+        collector,
+        max_batch_size=2,
+        max_wait_seconds=0.005,
+        queue_capacity=64,
+        metrics=metrics,
+        on_expired=explode,
+    ) as batcher:
+        batcher.submit(Request(prompt="stale", deadline=time.monotonic() - 1))
+        batcher.submit(Request(prompt="live"))
+        time.sleep(0.15)
+
+    assert collector.total == 1
