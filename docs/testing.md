@@ -4,7 +4,7 @@
 
 | Suite | Count | Needs | Runs on the dev host? |
 | --- | --- | --- | --- |
-| C++ () | 114 cases, 28,567 assertions | C++20 compiler | yes |
+| C++ (`tests/cpp`) | 114 cases, 28,567 assertions | C++20 compiler | yes |
 | C++ under TSan / ASan / UBSan | same 114 | clang | yes, all three clean |
 | Python (`tests/python`) | 288 | Python + PyTorch | yes |
 | CUDA (`tests/cuda`) | 30+ cases | NVIDIA GPU | **no** |
