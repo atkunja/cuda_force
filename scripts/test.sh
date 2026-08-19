@@ -51,6 +51,7 @@ fi
 # --- CUDA ------------------------------------------------------------------
 run_stage "CUDA structural checks" "$PYTHON" scripts/check_cuda_sources.py cuda tests/cuda
 run_stage "Documentation links" "$PYTHON" scripts/check_docs.py .
+run_stage "Documented file paths" "$PYTHON" scripts/check_references.py .
 
 if command -v nvcc >/dev/null 2>&1 && command -v nvidia-smi >/dev/null 2>&1; then
   run_stage "CUDA build" ./scripts/build.sh --cuda

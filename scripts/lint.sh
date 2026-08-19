@@ -50,6 +50,7 @@ fi
 check "mypy" "$PYTHON" -m mypy
 check "CUDA structural checks" "$PYTHON" scripts/check_cuda_sources.py cuda tests/cuda
 check "documentation links" "$PYTHON" scripts/check_docs.py .
+check "documented file paths" "$PYTHON" scripts/check_references.py .
 
 echo
 if [[ $FAILURES -eq 0 ]]; then

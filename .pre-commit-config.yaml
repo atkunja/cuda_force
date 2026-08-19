@@ -51,6 +51,13 @@ repos:
         files: '\.md$'
         pass_filenames: false
 
+      - id: documented-paths
+        name: Documented file path check
+        entry: python scripts/check_references.py
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+
 # mypy is deliberately absent. It needs the full dependency set installed in the
 # hook environment, which makes the first commit after a rebuild take minutes.
 # It runs in CI instead.

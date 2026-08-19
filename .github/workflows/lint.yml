@@ -35,6 +35,9 @@ jobs:
       - name: Documentation links
         run: python scripts/check_docs.py .
 
+      - name: Documented file paths
+        run: python scripts/check_references.py .
+
       - name: mypy
         # Run on the oldest supported interpreter. pyproject leaves
         # python_version unset for exactly this reason: pinning it to 3.10 makes
