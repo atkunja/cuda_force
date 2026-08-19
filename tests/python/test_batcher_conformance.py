@@ -118,9 +118,7 @@ def test_neither_implementation_loses_a_request(name, batch, wait, producers, ea
 
 
 @pytest.mark.parametrize(("name", "batch", "wait", "producers", "each", "gap"), SCENARIOS)
-def test_neither_implementation_exceeds_the_size_limit(
-    name, batch, wait, producers, each, gap
-):
+def test_neither_implementation_exceeds_the_size_limit(name, batch, wait, producers, each, gap):
     cpp = run_cpp(batch, wait, producers, each, gap)
     python = run_python(batch, wait, producers, each, gap)
 
