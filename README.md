@@ -216,3 +216,92 @@ Queue time and inference time are reported separately because they point at
 different problems: high queue time means the runtime is saturated or the wait
 is too generous, high inference time means the model or the batch size is the
 constraint. `GET /health` and `GET /metrics` are also served.
+
+## Building the C++ and CUDA targets
+
+```bash
+./scripts/build.sh                      # portable runtime; no CUDA needed
+./scripts/build.sh --cuda               # adds the kernels (requires nvcc)
+./scripts/build.sh --sanitizer thread   # TSan build
+./scripts/test.sh                       # everything runnable here, skips reported
+```
+
+The portable targets never depend on CUDA. That split is deliberate: the
+concurrency runtime, where most of the subtle correctness lives, gets full test
+and sanitizer coverage regardless of what hardware is present.
+
+### On CUDA hardware
+
+```bash
+./scripts/build.sh --cuda
+./build-cuda/tests/cuda/cudaforge_cuda_tests
+./build-cuda/benchmarks/bench_kernels > benchmarks/results/cuda-kernels.json
+./scripts/profile.sh
+```
+
+Or through Docker, which needs an NVIDIA driver and the NVIDIA Container
+Toolkit:
+
+```bash
+docker compose run --rm test
+docker compose run --rm bench
+docker compose up serve
+```
+
+### Developing on macOS
+
+CUDA kernels cannot compile or run on Apple Silicon, and nothing here pretends
+otherwise. What does work locally:
+
+| Works | Does not |
+| --- | --- |
+| The whole C++20 concurrency runtime, plus sanitizers | `nvcc`, any `.cu` compilation |
+| The Python package and its reference operators | CUDA kernel execution |
+| The inference engine, server and batching benchmarks | GPU benchmarks and Nsight profiles |
+| LoRA fine-tuning on CPU or MPS | QLoRA (bitsandbytes is Linux/CUDA only) |
+| CUDA structural checks | — |
+
+The PyTorch extension still builds — as a **CPU-only** extension — so the
+dispatcher registration and every CPU operator implementation are exercised
+locally.
+
+## Fine-tuning
+
+```bash
+python -m training.train --config training/configs/tiny.yaml      # CPU, ~1 min
+python -m training.train --config training/configs/lora_gpt2.yaml # 16 GB GPU
+python -m training.train --config training/configs/qlora_7b.yaml  # 24 GB GPU
+```
+
+The training loop is written out rather than delegated to `Trainer`, so
+gradient accumulation, loss-scaling order and scheduler timing are explicit.
+`training/lora.py` also contains a from-scratch `LoRALinear` used as the
+reference the CUDA kernel is validated against.
+
+Details, including why `alpha` is not a second learning rate and why `B` must
+start at zero, in [docs/fine-tuning.md](docs/fine-tuning.md).
+
+## Benchmarks
+
+```bash
+./scripts/benchmark.sh          # everything runnable here; skips are reported
+```
+
+Results are written to `benchmarks/results/` and are **not** committed —
+committed numbers would be numbers from someone else's machine.
+
+What has been measured, on an Apple M5 Pro with a simulated executor:
+
+| Measurement | Result |
+| --- | --- |
+| Batching, 16 clients, batch 1 → 16 | **3.52× throughput at unchanged p50 and p99** |
+| Batching, 8 clients, batch 1 → 16 | 499 → 722 req/s, p99 12.9 → 7.9 ms |
+| Batching, 1 client, batch 1 → 16 | 112 → 87 req/s — the latency cost, shown honestly |
+| Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
+| C++ suite | 70 cases, ~19k assertions, clean under TSan / ASan / UBSan |
+| Python suite | 182 tests |
+
+These measure the **scheduler**, not model throughput — execution is simulated
+so the variable under study is isolated and the benchmark runs without a GPU.
+**No CUDA kernel number exists**; the harness is complete and runs unchanged on
+NVIDIA hardware. See [docs/benchmarking.md](docs/benchmarking.md).
