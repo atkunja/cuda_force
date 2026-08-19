@@ -1,5 +1,7 @@
 #include "cudaforge/concurrent_queue.hpp"
 
+#include "thread_assert.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -11,6 +13,7 @@
 
 using cudaforge::ConcurrentQueue;
 using cudaforge::QueueStatus;
+using cudaforge::test::ThreadAssert;
 using namespace std::chrono_literals;
 
 TEST_CASE("queue rejects a zero capacity", "[queue]") {
@@ -134,6 +137,7 @@ TEST_CASE("capacity is never exceeded under concurrent producers", "[queue][stre
     constexpr int kPerProducer = 500;
 
     ConcurrentQueue<int> queue(kCapacity);
+    ThreadAssert errors;
     std::atomic<std::size_t> max_observed{0};
     std::atomic<bool> stop{false};
 
@@ -155,7 +159,7 @@ TEST_CASE("capacity is never exceeded under concurrent producers", "[queue][stre
     for (int p = 0; p < kProducers; ++p) {
         producers.emplace_back([&] {
             for (int i = 0; i < kPerProducer; ++i) {
-                REQUIRE(queue.push(i) == QueueStatus::Ok);
+                errors.check(queue.push(i) == QueueStatus::Ok);
             }
         });
     }
@@ -182,6 +186,7 @@ TEST_CASE("capacity is never exceeded under concurrent producers", "[queue][stre
     stop = true;
     watcher.join();
 
+    REQUIRE(errors.failures() == 0);
     REQUIRE(consumed.load() == kProducers * kPerProducer);
     REQUIRE(max_observed.load() <= kCapacity);
 }
@@ -192,6 +197,7 @@ TEST_CASE("every produced item is consumed exactly once", "[queue][stress]") {
     constexpr int kTotal = kProducers * kPerProducer;
 
     ConcurrentQueue<int> queue(16);
+    ThreadAssert errors;
     std::vector<std::atomic<int>> seen(kTotal);
     for (std::atomic<int>& slot : seen) {
         slot.store(0);
@@ -202,7 +208,7 @@ TEST_CASE("every produced item is consumed exactly once", "[queue][stress]") {
     for (int p = 0; p < kProducers; ++p) {
         producers.emplace_back([&, p] {
             for (int i = 0; i < kPerProducer; ++i) {
-                REQUIRE(queue.push(p * kPerProducer + i) == QueueStatus::Ok);
+                errors.check(queue.push(p * kPerProducer + i) == QueueStatus::Ok);
             }
         });
     }
@@ -230,6 +236,7 @@ TEST_CASE("every produced item is consumed exactly once", "[queue][stress]") {
                                       [](int acc, const std::atomic<int>& slot) {
                                           return acc + slot.load();
                                       });
+    REQUIRE(errors.failures() == 0);
     REQUIRE(total == kTotal);
     for (const std::atomic<int>& slot : seen) {
         REQUIRE(slot.load() == 1);
