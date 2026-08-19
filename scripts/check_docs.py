@@ -54,7 +54,10 @@ def slugify(heading: str) -> str:
     text = re.sub(r"[*_]", "", text)
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text)
-    return re.sub(r"\s+", "-", text)
+    # Each whitespace character becomes one hyphen. Collapsing runs would be
+    # wrong: GitHub anchors "Kernel A — Reduction" as "kernel-a--reduction",
+    # because removing the em dash leaves two spaces and each becomes a hyphen.
+    return re.sub(r"\s", "-", text)
 
 
 def headings_of(path: Path) -> list[str]:
