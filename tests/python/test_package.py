@@ -47,18 +47,32 @@ def test_version_is_a_dotted_string():
     assert len(cudaforge.__version__.split(".")) >= 2
 
 
-def test_importing_the_package_does_not_require_optional_dependencies():
-    # transformers, peft, datasets and fastapi are all optional extras. Importing
-    # cudaforge must work without them, which is why every use is a lazy import
-    # inside the function that needs it.
+def test_importing_the_package_does_not_pull_in_optional_dependencies():
+    # transformers, peft, datasets and fastapi are optional extras. Every use of
+    # them is a lazy import inside the function that needs it, so `import
+    # cudaforge` must not load any of them — otherwise the base install would
+    # fail for anyone who only wants the operators.
+    #
+    # Checked in a subprocess because this process has almost certainly imported
+    # them already for other tests.
+    import subprocess
     import sys
+    import textwrap
 
-    for optional in ("transformers", "peft", "datasets", "fastapi", "bitsandbytes"):
-        module = sys.modules.get("cudaforge")
-        assert module is not None
-        # The check is that cudaforge imported at all, above; this loop only
-        # documents which packages are deliberately not required.
-        assert optional not in getattr(module, "__annotations__", {})
+    probe = textwrap.dedent("""
+        import sys
+        import cudaforge  # noqa: F401
+        leaked = [
+            name
+            for name in ("transformers", "peft", "datasets", "fastapi", "bitsandbytes")
+            if name in sys.modules
+        ]
+        print(",".join(leaked))
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+    assert result.stdout.strip() == "", f"eagerly imported: {result.stdout.strip()}"
 
 
 def test_star_import_is_safe():
