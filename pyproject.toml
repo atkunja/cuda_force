@@ -77,7 +77,11 @@ ignore = [
 "tests/**" = ["ANN"]
 
 [tool.mypy]
-python_version = "3.10"
+# python_version is deliberately unset so mypy targets the interpreter it runs
+# under. Pinning it to the package's 3.10 floor makes mypy reject the bundled
+# numpy stubs, which use 3.12-only `type` statements — the checker fails before
+# it reaches any first-party code. CI runs mypy on the oldest supported
+# interpreter instead, which gives the same coverage without the conflict.
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
