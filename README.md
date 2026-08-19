@@ -345,6 +345,8 @@ warp shuffles, and conditionally-reached `__syncthreads()`.
 | [profiling.md](docs/profiling.md) | Nsight Systems and Compute, what each counter means |
 | [performance.md](docs/performance.md) | every optimisation as baseline → bottleneck → change → measured |
 | [testing.md](docs/testing.md) | what each suite asserts and why |
+| [concepts-index.md](docs/concepts-index.md) | every concept mapped to the file and function that implements it |
+| [troubleshooting.md](docs/troubleshooting.md) | symptoms, diagnoses and fixes |
 | [environment.md](docs/environment.md) | the development host and exactly what it could not run |
 
 ## Repository layout
