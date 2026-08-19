@@ -318,7 +318,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
 | Latency histogram | worst error **4.95%** vs its documented 6.25% bound, at 76–120M records/s |
 | C++ suite | 114 cases, 28,567 assertions, clean under TSan / ASan / UBSan |
-| Python suite | 288 tests |
+| Python suite | 326 tests |
 
 These measure the **scheduler**, not model throughput — execution is simulated
 so the variable under study is isolated and the benchmark runs without a GPU.

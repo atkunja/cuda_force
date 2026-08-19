@@ -157,7 +157,7 @@ by `nvcc` or executed on a GPU as part of this work.
 | Component | What is unverified |
 | --- | --- |
 | All `.cu` kernels | compilation and execution |
-| `tests/cuda/*` (30+ cases) | every assertion in them |
+| `tests/cuda/*` (38 cases) | every assertion in them |
 | `GpuScheduler` | runtime stream overlap and event ordering |
 | `MemoryPool<DeviceAllocatorBackend>` | device allocation behaviour |
 | `PinnedBuffer` | page-locked allocation and DMA overlap |

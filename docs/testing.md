@@ -6,9 +6,9 @@
 | --- | --- | --- | --- |
 | C++ (`tests/cpp`) | 114 cases, 28,567 assertions | C++20 compiler | yes |
 | C++ under TSan / ASan / UBSan | same 114 | clang | yes, all three clean |
-| Python (`tests/python`) | 288 | Python + PyTorch | yes |
-| CUDA (`tests/cuda`) | 30+ cases | NVIDIA GPU | **no** |
-| CUDA structural checks | 22 files | nothing | yes |
+| Python (`tests/python`) | 326 | Python + PyTorch | yes |
+| CUDA (`tests/cuda`) | 38 cases | NVIDIA GPU | **no** |
+| CUDA structural checks | 26 files | nothing | yes |
 
 ```bash
 ./scripts/test.sh          # everything this machine can run, with skips reported
