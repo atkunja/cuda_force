@@ -32,6 +32,10 @@ skip_stage() {
 PYTHON="${PYTHON:-python}"
 [[ -x .venv/bin/python ]] && PYTHON=".venv/bin/python"
 
+# Printed first so the skips below are interpretable rather than mysterious.
+echo
+"$PYTHON" scripts/environment_report.py || true
+
 # --- C++ -------------------------------------------------------------------
 if command -v cmake >/dev/null 2>&1; then
   run_stage "C++ build" ./scripts/build.sh
