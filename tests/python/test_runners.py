@@ -126,3 +126,146 @@ def test_generation_result_is_a_plain_value():
     assert result.text == "x"
     assert result.prompt_tokens == 1
     assert result.generated_tokens == 2
+
+
+# --- the transformers runner -----------------------------------------------
+
+
+class StubTokenizer:
+    """A whitespace tokenizer with the interface the runner uses.
+
+    Injected so the runner's own logic — left padding, per-row truncation,
+    token counting — is tested without a network round trip. What transformers
+    does with the ids is transformers' concern, not this project's.
+    """
+
+    pad_token_id = 0
+    eos_token = "<eos>"
+    padding_side = "right"
+
+    def __call__(self, prompts, return_tensors=None, padding=False, truncation=False):  # noqa: ANN001
+        import torch
+
+        encoded = [[len(word) % 60 + 1 for word in prompt.split()] for prompt in prompts]
+        width = max(len(ids) for ids in encoded)
+
+        input_ids = []
+        attention_mask = []
+        for ids in encoded:
+            pad = width - len(ids)
+            # Left padding, matching what the runner configures.
+            input_ids.append([self.pad_token_id] * pad + ids)
+            attention_mask.append([0] * pad + [1] * len(ids))
+
+        class Batch(dict):
+            def to(self, _device):  # noqa: ANN001
+                return self
+
+        return Batch(
+            input_ids=torch.tensor(input_ids),
+            attention_mask=torch.tensor(attention_mask),
+        )
+
+    def decode(self, ids, skip_special_tokens=False):  # noqa: ANN001
+        return " ".join(str(int(value)) for value in ids)
+
+
+class StubModel:
+    """Returns the prompt followed by a deterministic continuation."""
+
+    def __init__(self) -> None:
+        self.eval_called = False
+        self.last_max_new_tokens: int | None = None
+
+    def eval(self) -> None:
+        self.eval_called = True
+
+    def to(self, _device):  # noqa: ANN001
+        return self
+
+    def generate(self, input_ids=None, attention_mask=None, max_new_tokens=1, **_kwargs):  # noqa: ANN001
+        import torch
+
+        self.last_max_new_tokens = max_new_tokens
+        rows, width = input_ids.shape
+        continuation = torch.arange(1, max_new_tokens + 1).repeat(rows, 1)
+        return torch.cat([input_ids, continuation], dim=1)
+
+
+def make_runner():
+    from cudaforge.config import EngineConfig
+    from cudaforge.runners import TransformersRunner
+
+    tokenizer = StubTokenizer()
+    model = StubModel()
+    runner = TransformersRunner(
+        EngineConfig(device="cpu", dtype="float32"), model=model, tokenizer=tokenizer
+    )
+    return runner, model, tokenizer
+
+
+def test_the_runner_switches_the_tokenizer_to_left_padding():
+    # A causal model continues from the final position of each row, so right
+    # padding would ask it to continue from a pad token — garbage for every row
+    # shorter than the longest.
+    _, _, tokenizer = make_runner()
+    assert tokenizer.padding_side == "left"
+
+
+def test_the_runner_puts_the_model_in_eval_mode():
+    _, model, _ = make_runner()
+    assert model.eval_called
+
+
+def test_the_runner_returns_one_result_per_prompt():
+    runner, _, _ = make_runner()
+    prompts = ["a bb ccc", "dddd", "e f g h i"]
+    settings = [GenerationConfig(max_new_tokens=4) for _ in prompts]
+
+    results = runner.generate(prompts, settings)
+    assert len(results) == len(prompts)
+    assert all(result.generated_tokens == 4 for result in results)
+
+
+def test_the_batch_runs_for_its_longest_member():
+    # A batch runs as long as its most demanding member; shorter rows are
+    # truncated at their own limit rather than shortening the batch.
+    runner, model, _ = make_runner()
+    results = runner.generate(
+        ["a", "b"],
+        [GenerationConfig(max_new_tokens=2), GenerationConfig(max_new_tokens=8)],
+    )
+
+    assert model.last_max_new_tokens == 8
+    assert results[0].generated_tokens == 2
+    assert results[1].generated_tokens == 8
+
+
+def test_prompt_tokens_exclude_padding():
+    # The attention mask is what distinguishes real tokens from padding; using
+    # the padded width would overstate every short prompt.
+    runner, _, _ = make_runner()
+    results = runner.generate(
+        ["one", "one two three four"],
+        [GenerationConfig(max_new_tokens=1) for _ in range(2)],
+    )
+    assert results[0].prompt_tokens == 1
+    assert results[1].prompt_tokens == 4
+
+
+def test_the_runner_describes_itself():
+    runner, _, _ = make_runner()
+    assert "TransformersRunner" in runner.description
+    assert "cpu" in runner.description
+
+
+def test_warmup_runs_the_configured_number_of_iterations():
+    runner, model, _ = make_runner()
+    runner.warmup(3)
+    assert model.last_max_new_tokens == 1
+
+
+def test_warmup_with_a_non_positive_count_does_nothing():
+    runner, model, _ = make_runner()
+    runner.warmup(0)
+    assert model.last_max_new_tokens is None
