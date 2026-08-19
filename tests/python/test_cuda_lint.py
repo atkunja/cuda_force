@@ -25,8 +25,8 @@ import check_cuda_sources as checker
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def findings_for(tmp_path: Path, source: str) -> list[str]:
-    path = tmp_path / "kernel.cu"
+def findings_for(tmp_path: Path, source: str, name: str = "kernel.cu") -> list[str]:
+    path = tmp_path / name
     path.write_text(source, encoding="utf-8")
     return [finding.rule for finding in checker.check_file(path)]
 
@@ -245,3 +245,55 @@ def test_the_exit_code_reflects_findings(tmp_path):
     )
     assert result.returncode == 1
     assert "unchecked-launch" in result.stdout
+
+
+# --- block reduction barriers ----------------------------------------------
+
+
+def test_a_reduction_returning_from_shared_memory_is_flagged(tmp_path):
+    # Returning straight from shared memory lets a caller that reuses the array
+    # overwrite it from one warp while another has not yet read it. The symptom
+    # is a silently wrong row, not a crash.
+    assert "unbarriered-reduction-return" in findings_for(
+        tmp_path,
+        """
+        template <typename T>
+        __device__ __forceinline__ T block_reduce_sum(T value, T* shared) {
+            __syncthreads();
+            return shared[0];
+        }
+        """,
+        name="reduce.cuh",
+    )
+
+
+def test_the_barriered_form_is_accepted(tmp_path):
+    assert "unbarriered-reduction-return" not in findings_for(
+        tmp_path,
+        """
+        template <typename T>
+        __device__ __forceinline__ T block_reduce_max(T value, T* shared, T identity) {
+            __syncthreads();
+            const T result = shared[0];
+            __syncthreads();
+            return result;
+        }
+        """,
+        name="reduce.cuh",
+    )
+
+
+def test_calling_a_reduction_is_not_flagged(tmp_path):
+    # The rule guards the primitive's definition. Flagging call sites would fire
+    # on the correct softmax, which legitimately reduces twice over one array.
+    assert "unbarriered-reduction-return" not in findings_for(
+        tmp_path,
+        """
+        __global__ void softmax(const float* in, float* out, int cols) {
+            __shared__ float scratch[32];
+            const float row_max = block_reduce_max(local_max, scratch, -FLT_MAX);
+            const float row_sum = block_reduce_sum(local_sum, scratch);
+            out[0] = row_max + row_sum;
+        }
+        """,
+    )
