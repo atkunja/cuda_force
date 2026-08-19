@@ -47,6 +47,40 @@ from overflowing.
 `scale` is usually `alpha / rank`. Raises `ValueError` on any shape mismatch,
 naming which operand disagrees.
 
+### `silu(x) -> Tensor`
+
+SiLU, also called swish: `x * sigmoid(x)`. Smooth and non-monotonic, and its
+gradient does not vanish for negative inputs — the property that displaced ReLU
+in the transformer feed-forward block.
+
+### `gelu(x) -> Tensor`
+
+GELU, **tanh approximation**. That form specifically, because GPT-2 and BERT
+were trained against this curve; the exact erf form changes outputs by more than
+the numerical difference suggests.
+
+### `swiglu(gate, up) -> Tensor`
+
+`silu(gate) * up`, the LLaMA-family feed-forward activation. Both operands must
+match in shape and dtype.
+
+Fusing the activation with the multiply takes it from three passes over memory
+to one read of each input and one write — the theoretical minimum, which is why
+it is a kernel rather than two framework calls.
+
+### `fused_residual_rmsnorm(x, residual, weight, eps=1e-6) -> (Tensor, Tensor)`
+
+Residual add followed by RMSNorm, in one pass. Returns
+`(normalised, residual_out)`.
+
+Both outputs are needed: the first feeds the next sublayer, the second is what
+the *following* residual connection adds to. Returning only the first would
+force the caller to recompute the sum — and is an easy mistake that silently
+changes the model rather than failing.
+
+This is the highest-frequency fusion in inference, because every transformer
+block is `x = x + sublayer(norm(x))` twice over.
+
 ### `sum_reduce(x) -> Tensor`
 
 Sum of every element, as a 0-D tensor. Returns zero for an empty input.
@@ -62,6 +96,18 @@ Block-wise symmetric INT8 quantisation. Returns `(quantised, scales)` where
 Inverse of the above. Lossy by construction, with round-trip error bounded by
 half a quantisation step — `scales.max() / 2`. Raises `ValueError` if the scale
 count does not match the element count.
+
+### `kernel_supports(dtype) -> bool`
+
+Whether a CUDA kernel exists for a storage dtype: float32, float16 and
+bfloat16. Anything else takes the reference path, which handles every dtype
+ATen does.
+
+Worth checking before benchmarking — an unsupported dtype produces a timing that
+says nothing about the kernel. `KERNEL_DTYPES` is the underlying set.
+
+BF16 needs compute capability 8.0 or later; below that it is emulated and would
+be slower than the FP16 path it replaces.
 
 ### `backend_report() -> BackendReport`
 
