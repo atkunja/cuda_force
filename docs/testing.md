@@ -44,6 +44,27 @@ Concurrency tests now route worker-thread checks through
 [`thread_assert.hpp`](../tests/cpp/thread_assert.hpp) — an atomic failure
 counter — and assert once on the main thread after joining.
 
+### CUDA logic that is tested without CUDA
+
+Not everything under `cuda/` needs a GPU to be checked. Launch geometry —
+grid sizes, block sizes, warp counts — is pure arithmetic that happens to
+produce CUDA launch parameters, and getting it wrong is a real bug class: a
+kernel that silently processes only part of its input.
+
+It therefore lives in [`cpp/include/cudaforge/launch_config.hpp`](../cpp/include/cudaforge/launch_config.hpp),
+which has no CUDA include, and `cuda_utils.cuh` includes it. That single move
+puts the following under test on a machine with no toolkit:
+
+* `ceil_div` covers every element and never over-launches by a whole block;
+* `block_size_for_row` is always a power of two, at least one warp, and capped
+  at 1024;
+* `grid_size_for_stride_loop` never returns zero, never launches idle blocks for
+  a small input, and is capped by occupancy rather than by input size for a
+  large one.
+
+The remaining hardware dependency is one device query for the SM count, which is
+passed in as a parameter.
+
 ## What the Python tests assert
 
 Beyond the obvious shape and value checks, several tests exist to pin down
