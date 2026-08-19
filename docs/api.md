@@ -104,7 +104,9 @@ bfloat16. Anything else takes the reference path, which handles every dtype
 ATen does.
 
 Worth checking before benchmarking — an unsupported dtype produces a timing that
-says nothing about the kernel. `KERNEL_DTYPES` is the underlying set.
+says nothing about the kernel. `KERNEL_DTYPES` is the underlying set, and
+`CUDA_KERNELS_AVAILABLE` is the boolean for whether any of them can actually
+run here: it requires both a CUDA-compiled extension *and* a visible device.
 
 BF16 needs compute capability 8.0 or later; below that it is emulated and would
 be slower than the FP16 path it replaces.
@@ -230,12 +232,17 @@ means greedy. Every field is range-checked.
   padding (a causal model continues from the last position, so right padding
   would ask it to continue from padding).
 
+Each result is a `GenerationResult` carrying `text`, `prompt_tokens` and
+`generated_tokens`.
+
 Implementations must return results **in the same order** they were given, and
 one per prompt. The engine pairs them positionally and fails the whole batch
 with a clear error if the count disagrees.
 
 ## Metrics
 
+`LatencyHistogram` holds the samples — a recency window with exact percentiles,
+sized by measurement rather than generosity, since two are recorded per request.
 `MetricsRegistry` collects; `MetricsSnapshot` is a point-in-time view;
 `render_prometheus(snapshot)` formats it for a scraper. Field names match the
 C++ registry, so a dashboard need not know which runtime produced a snapshot —
