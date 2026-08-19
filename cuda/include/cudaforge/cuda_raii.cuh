@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 
 #include <cstddef>
+#include <stdexcept>
 #include <utility>
 
 #include "cudaforge/cuda_error.cuh"
@@ -213,12 +214,22 @@ public:
     [[nodiscard]] std::size_t bytes() const noexcept { return count_ * sizeof(T); }
     [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
 
+    /// Bounds-checked because the alternative is a device-side buffer overrun.
+    /// That does not fault at the copy: it corrupts whatever allocation happens
+    /// to follow, and surfaces later as wrong numbers or an illegal access in
+    /// an unrelated kernel.
     void copy_from_host(const T* host, std::size_t count, cudaStream_t stream) {
+        if (count > count_) {
+            throw std::out_of_range("DeviceBuffer::copy_from_host exceeds the allocation");
+        }
         CUDAFORGE_CHECK(
             cudaMemcpyAsync(data_, host, count * sizeof(T), cudaMemcpyHostToDevice, stream));
     }
 
     void copy_to_host(T* host, std::size_t count, cudaStream_t stream) const {
+        if (count > count_) {
+            throw std::out_of_range("DeviceBuffer::copy_to_host exceeds the allocation");
+        }
         CUDAFORGE_CHECK(
             cudaMemcpyAsync(host, data_, count * sizeof(T), cudaMemcpyDeviceToHost, stream));
     }
