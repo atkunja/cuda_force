@@ -21,6 +21,7 @@ add_executable(cudaforge_tests
   test_config.cpp
   test_launch_config.cpp
   test_bench_common.cpp
+  test_kv_cache.cpp
 )
 
 target_link_libraries(cudaforge_tests
