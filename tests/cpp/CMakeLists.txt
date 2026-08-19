@@ -12,6 +12,7 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(cudaforge_tests
   test_concurrent_queue.cpp
+  test_request.cpp
   test_thread_pool.cpp
   test_latency_histogram.cpp
   test_metrics.cpp
