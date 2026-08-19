@@ -117,8 +117,11 @@ def serve(argv: list[str] | None = None) -> int:
     config = _config_from(args)
 
     os.environ["CUDAFORGE_MODEL"] = config.model_name
+    os.environ["CUDAFORGE_DEVICE"] = config.device
     os.environ["CUDAFORGE_MAX_BATCH"] = str(config.max_batch_size)
     os.environ["CUDAFORGE_MAX_WAIT_US"] = str(config.max_wait_us)
+    os.environ["CUDAFORGE_QUEUE_CAPACITY"] = str(config.queue_capacity)
+    os.environ["CUDAFORGE_WORKER_THREADS"] = str(config.worker_threads)
     if args.echo_runner:
         os.environ["CUDAFORGE_ECHO_RUNNER"] = "1"
 
