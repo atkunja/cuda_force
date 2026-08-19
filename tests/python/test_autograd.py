@@ -36,13 +36,12 @@ def test_differentiating_a_registered_operator_raises():
 
 
 def test_the_registered_operator_still_works_for_inference():
+    # The guard applies to the backward pass only; the forward path is
+    # unaffected and must still match the reference exactly.
+    x = torch.randn(16)
     torch.testing.assert_close(
-        torch.ops.cudaforge.silu(torch.randn(16)),
-        torch.nn.functional.silu(torch.randn(16)),
-        rtol=1,
-        atol=1,
-    )  # shapes and finiteness; values differ because the inputs differ
-    assert torch.ops.cudaforge.silu(torch.randn(16)).shape == (16,)
+        torch.ops.cudaforge.silu(x), torch.nn.functional.silu(x)
+    )
 
 
 @pytest.mark.parametrize(
