@@ -75,3 +75,59 @@ Ordered by the question someone would actually ask.
 | Why FP32 accumulators for FP16 data? | `rmsnorm_half`, `softmax_half` | [cuda-kernels.md](cuda-kernels.md#fp16-overflow) |
 | What is occupancy, and is more always better? | `kDefaultBlockSize` comment | [gpu-execution.md](gpu-execution.md#occupancy-is-a-means-not-an-end) |
 | How is grid size chosen? | `reduction_grid_size` | [gpu-execution.md](gpu-execution.md#grid-size) |
+
+## Memory
+
+| Question | Code | Discussion |
+| --- | --- | --- |
+| Why does `cudaMalloc` hurt? | [`gpu_scheduler.cuh`](../cuda/include/cudaforge/gpu_scheduler.cuh) `DeviceAllocatorBackend` | [memory-management.md](memory-management.md#the-problem) |
+| How does the pool work? | [`memory_pool.hpp`](../cpp/include/cudaforge/memory_pool.hpp) | [memory-management.md](memory-management.md#the-pool) |
+| Why power-of-two size classes? | `round_up` | [memory-management.md](memory-management.md#size-classes) |
+| What does the pool *not* do? | — | [memory-management.md](memory-management.md#what-this-is-not) |
+| How does it compare to `cudaMallocAsync`? | — | same |
+| Why is it templated on a backend? | `AllocatorBackend` concept | [memory-management.md](memory-management.md#testing-without-a-gpu) |
+| What metrics matter? | `PoolStats` | [memory-management.md](memory-management.md#metrics-worth-watching) |
+
+## Machine learning
+
+| Question | Code | Discussion |
+| --- | --- | --- |
+| What is LoRA? | [`lora.py`](../training/lora.py) `LoRALinear` | [fine-tuning.md](fine-tuning.md#why-lora) |
+| Why does it save memory? | — | [fine-tuning.md](fine-tuning.md#why-lora) — optimiser state, not weights |
+| Why must B start at zero? | `LoRALinear.__init__` | [fine-tuning.md](fine-tuning.md#initialisation-is-not-arbitrary) |
+| Why not both at zero? | same | same |
+| What does alpha do? | `scaling` property | [fine-tuning.md](fine-tuning.md#alpha-is-not-a-second-learning-rate) |
+| Can adapters be merged? | `merged_weight`, `merge` | [fine-tuning.md](fine-tuning.md#merging-is-exact) |
+| What is QLoRA, and is it implemented here? | `build_model` `load_in_4bit` | [fine-tuning.md](fine-tuning.md#qlora) |
+| Is the custom INT8 kernel used for QLoRA? | **no** | same — scope stated explicitly |
+| How does quantisation work? | [`quantization.cu`](../cuda/src/quantization.cu) | [cuda-kernels.md](cuda-kernels.md#kernel-e--quantise--dequantise) |
+| Why block-wise scales? | `kQuantBlockSize` comment | same |
+| What is the error bound? | tested at `scale / 2` | same |
+| What is gradient accumulation? | `train()` accumulation branch | [fine-tuning.md](fine-tuning.md#gradient-accumulation) |
+| Why divide the loss by k? | same | same |
+| What is loss scaling for? | `GradScaler`, fp16-only | [fine-tuning.md](fine-tuning.md#mixed-precision) |
+| Why unscale before clipping? | `scaler.unscale_` then `clip_grad_norm_` | same |
+| bf16 vs fp16? | `EngineConfig.resolve_dtype` | [fine-tuning.md](fine-tuning.md#mixed-precision) |
+| What is gradient checkpointing? | `gradient_checkpointing_enable` | [fine-tuning.md](fine-tuning.md#qlora) |
+| Why left padding for batched generation? | `TransformersRunner.__init__` | class comment |
+| How is data packed for causal LM? | [`dataset.py`](../training/dataset.py) | [fine-tuning.md](fine-tuning.md#data-packing) |
+| What is DDP, and what does AllReduce do? | [`distributed_train.py`](../examples/distributed_train.py) | module docstring |
+| Why AllReduce over a parameter server? | same | same |
+| How does communication overlap computation? | same — gradient buckets | same |
+| Why is LoRA cheap under DDP? | same | same |
+
+## Performance and measurement
+
+| Question | Code | Discussion |
+| --- | --- | --- |
+| How do you know any of this is fast? | — | [performance.md](performance.md) — most of it is marked unmeasured |
+| What *has* been measured? | — | [performance.md](performance.md#measured-on-the-development-host) |
+| How do you benchmark correctly? | [`bench_common.hpp`](../benchmarks/bench_common.hpp) | [benchmarking.md](benchmarking.md#method) |
+| Why warm up? | `kWarmupRuns` | same |
+| Why the median, not the mean? | `percentile` | same |
+| How is dead-code elimination prevented? | `bench::keep` | same |
+| What is effective bandwidth for? | `effective_bandwidth` | same |
+| How would you profile this? | [`profile.sh`](../scripts/profile.sh) | [profiling.md](profiling.md) |
+| What does Nsight Systems tell you? | — | [profiling.md](profiling.md#nsight-systems-is-the-gpu-busy) |
+| What does Nsight Compute tell you? | — | [profiling.md](profiling.md#nsight-compute-why-is-this-kernel-slow) |
+| How do you detect false sharing? | — | [profiling.md](profiling.md#profiling-the-cpu-side) |
