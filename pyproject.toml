@@ -35,7 +35,13 @@ serve = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
 # bitsandbytes is Linux/CUDA only, which is why QLoRA is its own extra rather
 # than part of `train`: installing `train` must not fail on macOS.
 quantize = ["bitsandbytes>=0.43; platform_system == 'Linux'"]
-dev = ["pytest>=8.0", "pytest-timeout>=2.3", "ruff>=0.5", "mypy>=1.10"]
+dev = [
+  "pytest>=8.0",
+  "pytest-timeout>=2.3",
+  "pytest-cov>=5.0",
+  "ruff>=0.5",
+  "mypy>=1.10",
+]
 
 [project.urls]
 Repository = "https://github.com/atkunja/cuda_force"
@@ -96,6 +102,22 @@ files = ["python/cudaforge"]
 # useful. Silencing them here is narrower than a blanket ignore_errors.
 module = ["torch.*", "transformers.*", "peft.*", "datasets.*", "bitsandbytes.*", "yaml.*"]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["python/cudaforge", "inference", "training"]
+branch = true
+
+[tool.coverage.report]
+# No fail-under threshold. A number that must not drop invites tests written to
+# raise it rather than to catch anything, and the paths that stay uncovered here
+# are deliberate: they need a GPU, a model download, or a missing dependency.
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
