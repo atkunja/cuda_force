@@ -47,6 +47,42 @@ _LOG = logging.getLogger(__name__)
 _engine: InferenceEngine | None = None
 
 
+def config_from_environment() -> EngineConfig:
+    """Build the engine config from the environment.
+
+    `CUDAFORGE_CONFIG` names a YAML file; the individual variables override it,
+    so a container can ship a config and still be adjusted per deployment
+    without rebuilding the image.
+    """
+    path = os.environ.get("CUDAFORGE_CONFIG")
+    config = EngineConfig.from_yaml(path) if path else EngineConfig()
+
+    overrides = {
+        "model_name": os.environ.get("CUDAFORGE_MODEL"),
+        "device": os.environ.get("CUDAFORGE_DEVICE"),
+        "max_batch_size": os.environ.get("CUDAFORGE_MAX_BATCH"),
+        "max_wait_us": os.environ.get("CUDAFORGE_MAX_WAIT_US"),
+        "queue_capacity": os.environ.get("CUDAFORGE_QUEUE_CAPACITY"),
+        "worker_threads": os.environ.get("CUDAFORGE_WORKER_THREADS"),
+    }
+    integer_fields = {
+        "max_batch_size",
+        "max_wait_us",
+        "queue_capacity",
+        "worker_threads",
+    }
+    for field, value in overrides.items():
+        if value is None:
+            continue
+        setattr(config, field, int(value) if field in integer_fields else value)
+
+    # A queue smaller than a batch would make the configured batch size
+    # unreachable, so an override that widens the batch widens the queue too.
+    config.queue_capacity = max(config.queue_capacity, config.max_batch_size)
+    config.__post_init__()
+    return config
+
+
 def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
     """Construct the engine, falling back to the deterministic runner.
 
@@ -54,11 +90,7 @@ def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
     the server from starting: the concurrency machinery is worth exercising on
     its own, and a startup crash gives no signal about which part failed.
     """
-    config = config or EngineConfig(
-        model_name=os.environ.get("CUDAFORGE_MODEL", "sshleifer/tiny-gpt2"),
-        max_batch_size=int(os.environ.get("CUDAFORGE_MAX_BATCH", "16")),
-        max_wait_us=int(os.environ.get("CUDAFORGE_MAX_WAIT_US", "5000")),
-    )
+    config = config or config_from_environment()
 
     if os.environ.get("CUDAFORGE_ECHO_RUNNER"):
         _LOG.info("CUDAFORGE_ECHO_RUNNER set; using the deterministic runner")
