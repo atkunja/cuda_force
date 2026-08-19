@@ -297,3 +297,40 @@ def test_calling_a_reduction_is_not_flagged(tmp_path):
         }
         """,
     )
+
+
+# --- index arithmetic ------------------------------------------------------
+
+
+def test_narrow_index_arithmetic_is_flagged(tmp_path):
+    # The product is computed in 32-bit; near INT_MAX elements it overflows and
+    # the kernel reads the wrong element rather than faulting.
+    assert "narrow-index-arithmetic" in findings_for(
+        tmp_path,
+        "__global__ void k(int n) { const int i = blockIdx.x * blockDim.x + threadIdx.x; }",
+    )
+
+
+def test_widened_index_arithmetic_is_accepted(tmp_path):
+    assert "narrow-index-arithmetic" not in findings_for(
+        tmp_path,
+        """
+        __global__ void k(int n) {
+            const std::size_t i =
+                blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+        }
+        """,
+    )
+
+
+def test_the_rule_is_not_fooled_by_a_grid_stride(tmp_path):
+    # A grid-stride loop multiplies blockDim by gridDim, not by blockIdx; that
+    # is a different expression and must not be flagged.
+    assert "narrow-index-arithmetic" not in findings_for(
+        tmp_path,
+        """
+        __global__ void k(std::size_t n) {
+            const auto stride = static_cast<std::size_t>(blockDim.x) * gridDim.x;
+        }
+        """,
+    )
