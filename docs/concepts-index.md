@@ -17,7 +17,7 @@ Ordered by the question someone would actually ask.
 | What happens on shutdown? | `shutdown()`, and the drain rule in `pop` | [concurrency.md](concurrency.md#shutdown) |
 | How does backpressure work? | `push` blocks; `try_push` returns `Full` | [concurrency.md](concurrency.md#backpressure) |
 | Where are atomics used, and why relaxed? | [`thread_pool.hpp`](../cpp/include/cudaforge/thread_pool.hpp), [`metrics.hpp`](../cpp/include/cudaforge/metrics.hpp) | [architecture.md](architecture.md#threading-model-summary) |
-| How do you know there are no races? | TSan-clean across 70 cases | [testing.md](testing.md) |
+| How do you know there are no races? | TSan-clean across 87 cases | [testing.md](testing.md) |
 | What if a task throws? | `ThreadPool::run` catch block | [architecture.md](architecture.md#failure-isolation) |
 | How do futures get their values? | `submit_with_result`, `packaged_task` behind a `shared_ptr` | — |
 
