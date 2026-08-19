@@ -1,0 +1,133 @@
+name: cpp
+
+# The portable runtime builds and is tested on every push. The CUDA targets are
+# compiled only where nvcc exists, and are *executed* only on a self-hosted
+# NVIDIA runner — which most forks will not have, so that job is opt-in rather
+# than required.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: cpp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  portable:
+    name: portable (${{ matrix.os }}, ${{ matrix.compiler }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, compiler: gcc, cc: gcc, cxx: g++ }
+          - { os: ubuntu-latest, compiler: clang, cc: clang, cxx: clang++ }
+          - { os: macos-latest, compiler: appleclang, cc: clang, cxx: clang++ }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCUDAFORGE_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ./build/tests/cpp/cudaforge_tests
+
+  sanitizers:
+    # Each sanitizer needs its own build: TSan and ASan instrument allocations
+    # differently and cannot be linked together.
+    name: ${{ matrix.sanitizer }}sanitizer
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [address, undefined, thread]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Build and run
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCUDAFORGE_SANITIZER=${{ matrix.sanitizer }}
+          cmake --build build --parallel
+          ./build/tests/cpp/cudaforge_tests
+
+  cuda-structural:
+    # Runs everywhere, needs no toolkit. Catches unchecked launches, discarded
+    # statuses, device-wide synchronisation, maskless shuffles and divergent
+    # barriers before anything reaches a GPU.
+    name: cuda structural checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scripts/check_cuda_sources.py cuda tests/cuda
+
+  cuda-compile:
+    # Compiles the kernels with a real nvcc. No GPU is present, so nothing is
+    # executed — this proves the CUDA sources build, which is the part a
+    # GPU-less developer cannot verify locally.
+    name: cuda compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
+        with:
+          cuda: "12.4.1"
+          method: network
+          sub-packages: '["nvcc", "cudart-dev"]'
+
+      - name: Install ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B build-cuda -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCUDAFORGE_ENABLE_CUDA=ON \
+            -DCUDAFORGE_BUILD_TESTS=ON \
+            -DCMAKE_CUDA_ARCHITECTURES=80
+          cmake --build build-cuda --parallel
+
+  cuda-run:
+    # Requires a self-hosted runner with an NVIDIA GPU. Skipped unless the
+    # repository has one, so a fork without hardware still gets a green build
+    # rather than a permanently red required check.
+    name: cuda tests (self-hosted GPU)
+    runs-on: [self-hosted, linux, gpu]
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.HAS_GPU_RUNNER == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: nvidia-smi
+      - name: Build with CUDA
+        run: ./scripts/build.sh --cuda
+      - name: CUDA tests
+        run: ./build-cuda/tests/cuda/cudaforge_cuda_tests
+      - name: Kernel benchmarks
+        run: ./build-cuda/benchmarks/bench_kernels
