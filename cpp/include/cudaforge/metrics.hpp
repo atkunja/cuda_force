@@ -14,6 +14,7 @@ struct MetricsSnapshot {
     std::uint64_t requests_completed = 0;
     std::uint64_t requests_failed = 0;
     std::uint64_t requests_rejected = 0;
+    std::uint64_t requests_expired = 0;
 
     std::uint64_t batches_processed = 0;
     std::uint64_t batched_requests = 0;
@@ -59,6 +60,13 @@ public:
     void record_rejected() noexcept { rejected_.fetch_add(1, std::memory_order_relaxed); }
     void record_failed() noexcept { failed_.fetch_add(1, std::memory_order_relaxed); }
 
+    /// A request dropped at dequeue because its deadline had passed. Counted
+    /// apart from `rejected` (refused at admission) and `failed` (execution
+    /// error): a rising expiry count means the queue is deeper than clients
+    /// will wait for, which calls for shedding earlier rather than for more
+    /// capacity.
+    void record_expired() noexcept { expired_.fetch_add(1, std::memory_order_relaxed); }
+
     void record_queue_delay(std::uint64_t nanos) { queue_delay_.record(nanos); }
 
     void record_completion(std::uint64_t latency_ns, std::uint32_t tokens) noexcept {
@@ -93,6 +101,7 @@ public:
         snap.requests_completed = completed;
         snap.requests_failed = failed_.load(std::memory_order_relaxed);
         snap.requests_rejected = rejected_.load(std::memory_order_relaxed);
+        snap.requests_expired = expired_.load(std::memory_order_relaxed);
 
         snap.batches_processed = batches;
         snap.batched_requests = batched;
@@ -130,6 +139,7 @@ public:
         completed_.store(0, std::memory_order_relaxed);
         failed_.store(0, std::memory_order_relaxed);
         rejected_.store(0, std::memory_order_relaxed);
+        expired_.store(0, std::memory_order_relaxed);
         batches_.store(0, std::memory_order_relaxed);
         batched_requests_.store(0, std::memory_order_relaxed);
         size_closures_.store(0, std::memory_order_relaxed);
@@ -148,6 +158,7 @@ private:
     std::atomic<std::uint64_t> completed_{0};
     std::atomic<std::uint64_t> failed_{0};
     std::atomic<std::uint64_t> rejected_{0};
+    std::atomic<std::uint64_t> expired_{0};
     std::atomic<std::uint64_t> batches_{0};
     std::atomic<std::uint64_t> batched_requests_{0};
     std::atomic<std::uint64_t> size_closures_{0};

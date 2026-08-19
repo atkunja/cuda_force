@@ -24,6 +24,7 @@ std::string to_json(const MetricsSnapshot& snapshot) {
     out << "  \"requests_completed\": " << snapshot.requests_completed << ",\n";
     out << "  \"requests_failed\": " << snapshot.requests_failed << ",\n";
     out << "  \"requests_rejected\": " << snapshot.requests_rejected << ",\n";
+    out << "  \"requests_expired\": " << snapshot.requests_expired << ",\n";
     out << "  \"batches_processed\": " << snapshot.batches_processed << ",\n";
     out << "  \"batches_closed_by_size\": " << snapshot.batches_closed_by_size << ",\n";
     out << "  \"batches_closed_by_timeout\": " << snapshot.batches_closed_by_timeout << ",\n";

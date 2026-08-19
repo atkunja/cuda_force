@@ -6,9 +6,10 @@
 namespace cudaforge {
 
 DynamicBatcher::DynamicBatcher(RuntimeConfig config, BatchHandler handler,
-                               std::shared_ptr<Metrics> metrics)
+                               std::shared_ptr<Metrics> metrics, ExpiryHandler on_expired)
     : config_(config),
       handler_(std::move(handler)),
+      on_expired_(std::move(on_expired)),
       metrics_(std::move(metrics)),
       queue_(config.queue_capacity) {
     config_.validate();
@@ -85,15 +86,39 @@ void DynamicBatcher::run() {
     }
 }
 
+bool DynamicBatcher::drop_if_expired(const Request& request) {
+    if (!request.expired()) {
+        return false;
+    }
+    metrics_->record_expired();
+    if (on_expired_) {
+        try {
+            on_expired_(request);
+        } catch (...) {
+            // The handler is caller-supplied; a throwing one must not stop the
+            // only thread that drains the queue.
+            metrics_->record_failed();
+        }
+    }
+    return true;
+}
+
 Batch DynamicBatcher::collect_batch() {
     Batch batch;
     batch.requests.reserve(config_.max_batch_size);
 
+    // Loops past expired requests so the batch always has at least one live
+    // member; an empty batch is reserved for "queue closed and drained".
     Request first;
-    if (queue_.pop(first) != QueueStatus::Ok) {
-        return batch;  // closed and drained
+    while (true) {
+        if (queue_.pop(first) != QueueStatus::Ok) {
+            return batch;  // closed and drained
+        }
+        first.dequeued = Clock::now();
+        if (!drop_if_expired(first)) {
+            break;
+        }
     }
-    first.dequeued = Clock::now();
 
     // Anchored to the first request, never extended. This is what bounds
     // batching-induced queue delay at max_wait regardless of arrival rate.
@@ -120,12 +145,18 @@ Batch DynamicBatcher::collect_batch() {
             while (batch.requests.size() < config_.max_batch_size &&
                    queue_.try_pop(next) == QueueStatus::Ok) {
                 next.dequeued = Clock::now();
+                if (drop_if_expired(next)) {
+                    continue;
+                }
                 batch.requests.push_back(std::move(next));
             }
             break;
         }
 
         next.dequeued = Clock::now();
+        if (drop_if_expired(next)) {
+            continue;
+        }
         batch.requests.push_back(std::move(next));
     }
 
