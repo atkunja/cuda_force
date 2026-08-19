@@ -73,8 +73,22 @@ def strip_comments(text: str) -> list[str]:
     return [re.sub(r"//.*$", "", line) for line in without_block.splitlines()]
 
 
+def function_end(lines: list[str], start: int) -> int:
+    """Index just past the enclosing top-level definition.
+
+    Approximated by the next line whose first character is a closing brace,
+    which is where clang-format puts the end of a namespace-scope function. A
+    launch and its check can be separated by an arbitrary amount of code inside
+    a switch, so a fixed-size window produces false positives.
+    """
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("}"):
+            return index + 1
+    return len(lines)
+
+
 def check_launch_is_checked(path: Path, lines: list[str]) -> list[Finding]:
-    """A kernel launch must be followed by a launch check within a few lines.
+    """A kernel launch must be checked before its launcher returns.
 
     Kernel launches return void. Without cudaGetLastError() a bad launch
     configuration is silently ignored and the failure surfaces later at an
@@ -84,14 +98,15 @@ def check_launch_is_checked(path: Path, lines: list[str]) -> list[Finding]:
     for index, line in enumerate(lines):
         if not LAUNCH_RE.search(line):
             continue
-        window = "\n".join(lines[index : index + 12])
-        if "CUDAFORGE_CHECK_LAUNCH" not in window:
+        scope = "\n".join(lines[index : function_end(lines, index)])
+        if "CUDAFORGE_CHECK_LAUNCH" not in scope:
             findings.append(
                 Finding(
                     path,
                     index + 1,
                     "unchecked-launch",
-                    "kernel launch without a following CUDAFORGE_CHECK_LAUNCH",
+                    "kernel launch not followed by CUDAFORGE_CHECK_LAUNCH "
+                    "before the launcher returns",
                 )
             )
     return findings
@@ -114,27 +129,56 @@ def check_no_device_sync(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
-def check_status_is_used(path: Path, lines: list[str]) -> list[Finding]:
-    """Every status-returning runtime call must have its result inspected."""
-    findings: list[Finding] = []
+def logical_statements(lines: list[str]) -> list[tuple[int, str]]:
+    """Group physical lines into (first_line_number, statement) pairs.
+
+    A checked call is routinely split across lines by the formatter:
+
+        CUDAFORGE_CHECK(
+            cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, stream));
+
+    Matching per physical line would report the second line as unchecked. The
+    statement is what carries the meaning, so that is what gets matched.
+    """
+    statements: list[tuple[int, str]] = []
+    buffer: list[str] = []
+    first = 1
     for index, line in enumerate(lines):
-        stripped = line.strip()
+        if not buffer:
+            first = index + 1
+        buffer.append(line.strip())
+        if ";" in line or line.strip().endswith("{") or line.strip().endswith("}"):
+            statements.append((first, " ".join(buffer)))
+            buffer = []
+    if buffer:
+        statements.append((first, " ".join(buffer)))
+    return statements
+
+
+def check_status_is_used(path: Path, lines: list[str]) -> list[Finding]:
+    """Every status-returning runtime call must have its result inspected.
+
+    Accepted forms are the check macro, an explicit assignment to cudaError_t,
+    a direct comparison against cudaSuccess, or an explicit discard via
+    static_cast<void> — the last being how the destructors here acknowledge
+    that they cannot throw.
+    """
+    findings: list[Finding] = []
+    for line_number, statement in logical_statements(lines):
         for call in CHECKED_CALLS:
-            if f"{call}(" not in stripped:
+            if f"{call}(" not in statement:
                 continue
             checked = (
-                "CUDAFORGE_CHECK" in stripped
-                or "cudaError_t" in stripped
-                or "== cudaSuccess" in stripped
-                or "!= cudaSuccess" in stripped
-                or "static_cast<void>" in stripped
-                or stripped.startswith("//")
+                "CUDAFORGE_CHECK" in statement
+                or "cudaError_t" in statement
+                or "cudaSuccess" in statement
+                or "static_cast<void>" in statement
             )
             if not checked:
                 findings.append(
                     Finding(
                         path,
-                        index + 1,
+                        line_number,
                         "unchecked-status",
                         f"{call} return value is discarded",
                     )
