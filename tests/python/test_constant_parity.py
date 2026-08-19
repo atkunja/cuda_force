@@ -23,9 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def constant_from(path: Path, name: str) -> int:
     """Read `inline constexpr <type> <name> = <value>;` out of a header."""
     source = path.read_text(encoding="utf-8")
-    match = re.search(
-        rf"inline\s+constexpr\s+\w+\s+{re.escape(name)}\s*=\s*(\d+)\s*;", source
-    )
+    match = re.search(rf"inline\s+constexpr\s+\w+\s+{re.escape(name)}\s*=\s*(\d+)\s*;", source)
     assert match is not None, f"{name} not found in {path}"
     return int(match.group(1))
 
@@ -39,7 +37,7 @@ def test_the_quantisation_block_size_agrees_across_languages():
         REPO_ROOT / "cuda" / "include" / "cudaforge" / "quantization.cuh",
         "kQuantBlockSize",
     )
-    assert QUANT_BLOCK_SIZE == cuda_value
+    assert cuda_value == QUANT_BLOCK_SIZE
 
 
 def test_the_quantisation_block_size_is_a_power_of_two():

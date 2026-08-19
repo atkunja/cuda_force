@@ -193,7 +193,7 @@ system degrades faster the harder it is pushed.
 A request may therefore carry a deadline:
 
 ```python
-engine.submit(prompt, deadline_seconds=2.0)   # or deadline_seconds in the HTTP body
+engine.submit(prompt, deadline_seconds=2.0)  # or deadline_seconds in the HTTP body
 ```
 
 Expired requests are dropped, counted as `requests_expired`, and their futures

@@ -40,12 +40,8 @@ def test_output_ends_with_a_newline():
 
 def test_every_metric_is_declared_before_it_is_used():
     text = render_prometheus(snapshot_with_activity())
-    declared_help = {
-        line.split()[2] for line in text.splitlines() if line.startswith("# HELP")
-    }
-    declared_type = {
-        line.split()[2] for line in text.splitlines() if line.startswith("# TYPE")
-    }
+    declared_help = {line.split()[2] for line in text.splitlines() if line.startswith("# HELP")}
+    declared_type = {line.split()[2] for line in text.splitlines() if line.startswith("# TYPE")}
     emitted = set(parse(text))
 
     assert emitted == declared_help
