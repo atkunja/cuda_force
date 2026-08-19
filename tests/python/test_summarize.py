@@ -271,3 +271,101 @@ def test_metrics_overhead_results_render(tmp_path, capsys):
     assert "1.76" in text
     # The per-request figure is the one that matters; two histograms per request.
     assert "3.25 µs per request" in text
+
+
+def test_queue_results_group_by_capacity(tmp_path, capsys):
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "concurrent_queue",
+            "hardware_threads": 18,
+            "cases": [
+                {
+                    "producers": 1,
+                    "consumers": 1,
+                    "capacity": 16,
+                    "items": 100,
+                    "seconds": 0.1,
+                    "items_per_second": 1000.0,
+                },
+                {
+                    "producers": 8,
+                    "consumers": 8,
+                    "capacity": 16,
+                    "items": 100,
+                    "seconds": 0.05,
+                    "items_per_second": 2000.0,
+                },
+                {
+                    "producers": 1,
+                    "consumers": 1,
+                    "capacity": 256,
+                    "items": 100,
+                    "seconds": 0.1,
+                    "items_per_second": 1000.0,
+                },
+            ],
+        },
+        capsys,
+    )
+    assert "Capacity 16" in text
+    assert "Capacity 256" in text
+    # Normalised against the best in each group, so the scaling shape is visible.
+    assert "100%" in text
+    assert "50%" in text
+
+
+def test_memory_results_highlight_backend_calls(tmp_path, capsys):
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "memory_pool",
+            "backend": "host",
+            "note": "host backend only",
+            "cases": [
+                {
+                    "threads": 4,
+                    "pool_seconds": 0.0026,
+                    "raw_backend_seconds": 0.0081,
+                    "pool_allocations": 8080,
+                    "backend_allocations": 18,
+                    "reuse_rate": 0.9978,
+                    "peak_bytes_in_use": 1024,
+                    "bytes_reserved": 2048,
+                }
+            ],
+        },
+        capsys,
+    )
+    assert "8,080" in text
+    assert "99.78%" in text
+    # The number that transfers to the device backend.
+    assert "backend calls" in text
+
+
+def test_scheduler_results_render_the_timeout_fraction(tmp_path, capsys):
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "dynamic_batcher",
+            "note": "execution is simulated",
+            "cases": [
+                {
+                    "producers": 4,
+                    "max_batch_size": 16,
+                    "max_wait_us": 5000,
+                    "requests": 100,
+                    "seconds": 1.0,
+                    "requests_per_second": 100.0,
+                    "average_batch_size": 8.0,
+                    "queue_delay_p50_ms": 1.0,
+                    "queue_delay_p99_ms": 2.5,
+                    "timeout_closure_fraction": 0.75,
+                }
+            ],
+        },
+        capsys,
+    )
+    assert "75%" in text
+    assert "2.50" in text
+    assert "execution is simulated" in text
