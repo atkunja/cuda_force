@@ -49,8 +49,7 @@ __global__ void quantize_int8(const float* __restrict__ input, std::int8_t* __re
 __global__ void dequantize_int8(const std::int8_t* __restrict__ input,
                                 const float* __restrict__ scales, float* __restrict__ output,
                                 int count) {
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index >= static_cast<std::size_t>(count)) {
         return;
     }
@@ -63,8 +62,7 @@ __global__ void quantize_dequantize(const float* __restrict__ input, float* __re
                                     int count) {
     __shared__ float shared[kWarpSize];
 
-    const std::size_t index =
-        static_cast<std::size_t>(blockIdx.x) * kQuantBlockSize + threadIdx.x;
+    const std::size_t index = static_cast<std::size_t>(blockIdx.x) * kQuantBlockSize + threadIdx.x;
     const bool in_range = index < static_cast<std::size_t>(count);
 
     const float value = in_range ? input[index] : 0.0F;

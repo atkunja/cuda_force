@@ -36,8 +36,7 @@ __global__ void silu_kernel(const float* __restrict__ input, float* __restrict__
                             int count) {
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
         output[index] = silu(input[index]);
     }
@@ -47,8 +46,7 @@ __global__ void gelu_kernel(const float* __restrict__ input, float* __restrict__
                             int count) {
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
         output[index] = gelu_tanh(input[index]);
     }
@@ -60,8 +58,7 @@ __global__ void add_kernel(const float* __restrict__ a, const float* __restrict_
                            float* __restrict__ output, int count) {
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
         output[index] = a[index] + b[index];
     }
@@ -71,8 +68,7 @@ __global__ void swiglu_scalar(const float* __restrict__ gate, const float* __res
                               float* __restrict__ output, int count) {
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
         output[index] = silu(gate[index]) * up[index];
     }
@@ -82,8 +78,7 @@ __global__ void swiglu_scalar(const float* __restrict__ gate, const float* __res
 /// per operand instead of four 32-bit ones.
 __global__ void swiglu_vectorised(const float4* __restrict__ gate, const float4* __restrict__ up,
                                   float4* __restrict__ output, int vec_count) {
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index >= static_cast<std::size_t>(vec_count)) {
         return;
     }
@@ -106,8 +101,7 @@ __global__ void swiglu_half_kernel(const __half* __restrict__ gate, const __half
                                    __half* __restrict__ output, int count) {
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
-    const std::size_t index =
-        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
         const float activated = silu(__half2float(gate[index]));
         output[index] = __float2half(activated * __half2float(up[index]));
