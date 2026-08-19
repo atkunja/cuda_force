@@ -93,9 +93,7 @@ def time_snapshot(samples: int) -> float:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=20_000)
-    parser.add_argument(
-        "--windows", type=int, nargs="+", default=[1_000, 10_000, 100_000]
-    )
+    parser.add_argument("--windows", type=int, nargs="+", default=[1_000, 10_000, 100_000])
     parser.add_argument("--output")
     args = parser.parse_args(argv)
 
