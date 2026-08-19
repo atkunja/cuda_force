@@ -1,0 +1,244 @@
+"""Tests for the CUDA structural checker.
+
+These matter more than they might appear. The checker is the only automated
+scrutiny the `.cu` sources get on a machine without a CUDA toolkit, and a linter
+that silently stops detecting anything looks exactly like a clean codebase.
+
+Each rule is tested in both directions: it fires on the bad shape, and it stays
+quiet on the good one.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+
+import check_cuda_sources as checker  # noqa: E402
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def findings_for(tmp_path: Path, source: str) -> list[str]:
+    path = tmp_path / "kernel.cu"
+    path.write_text(source, encoding="utf-8")
+    return [finding.rule for finding in checker.check_file(path)]
+
+
+# --- unchecked launches ----------------------------------------------------
+
+
+def test_a_launch_without_a_check_is_flagged(tmp_path):
+    assert "unchecked-launch" in findings_for(
+        tmp_path,
+        """
+        void launch(cudaStream_t stream) {
+            my_kernel<<<1, 256, 0, stream>>>(nullptr);
+        }
+        """,
+    )
+
+
+def test_a_checked_launch_is_accepted(tmp_path):
+    assert "unchecked-launch" not in findings_for(
+        tmp_path,
+        """
+        void launch(cudaStream_t stream) {
+            my_kernel<<<1, 256, 0, stream>>>(nullptr);
+            CUDAFORGE_CHECK_LAUNCH(stream);
+        }
+        """,
+    )
+
+
+def test_a_check_after_a_switch_is_accepted(tmp_path):
+    # The real launchers put the check after a switch, far more than a few lines
+    # from the launch. A fixed-size window would produce a false positive here,
+    # which is what motivated scoping the rule to the enclosing function.
+    assert "unchecked-launch" not in findings_for(
+        tmp_path,
+        """
+        void launch(cudaStream_t stream, int variant) {
+            switch (variant) {
+                case 0:
+                    kernel_a<<<1, 256, 0, stream>>>();
+                    break;
+                case 1: {
+                    const int grid = compute_grid();
+                    const std::size_t shared = compute_shared();
+                    kernel_b<<<grid, 256, shared, stream>>>();
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            CUDAFORGE_CHECK_LAUNCH(stream);
+        }
+        """,
+    )
+
+
+# --- device-wide synchronisation -------------------------------------------
+
+
+def test_device_synchronize_is_flagged(tmp_path):
+    assert "device-sync" in findings_for(
+        tmp_path,
+        """
+        void wait() {
+            CUDAFORGE_CHECK(cudaDeviceSynchronize());
+        }
+        """,
+    )
+
+
+def test_stream_synchronize_is_accepted(tmp_path):
+    assert "device-sync" not in findings_for(
+        tmp_path,
+        """
+        void wait(cudaStream_t stream) {
+            CUDAFORGE_CHECK(cudaStreamSynchronize(stream));
+        }
+        """,
+    )
+
+
+# --- discarded statuses ----------------------------------------------------
+
+
+def test_a_discarded_status_is_flagged(tmp_path):
+    assert "unchecked-status" in findings_for(
+        tmp_path,
+        """
+        void allocate(void** p) {
+            cudaMalloc(p, 1024);
+        }
+        """,
+    )
+
+
+def test_a_status_split_across_lines_is_accepted(tmp_path):
+    # The formatter routinely wraps these. Matching per physical line would
+    # report the second line as unchecked.
+    assert "unchecked-status" not in findings_for(
+        tmp_path,
+        """
+        void copy(void* dst, const void* src, std::size_t bytes, cudaStream_t stream) {
+            CUDAFORGE_CHECK(
+                cudaMemcpyAsync(dst, src, bytes, cudaMemcpyHostToDevice, stream));
+        }
+        """,
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "const cudaError_t status = cudaMalloc(&p, 1024);",
+        "if (cudaMalloc(&p, 1024) != cudaSuccess) { return nullptr; }",
+        "static_cast<void>(cudaFree(p));",
+    ],
+)
+def test_every_accepted_status_form_is_recognised(tmp_path, body):
+    assert "unchecked-status" not in findings_for(
+        tmp_path, f"void f() {{ void* p; {body} }}"
+    )
+
+
+# --- warp primitives -------------------------------------------------------
+
+
+def test_a_maskless_shuffle_is_flagged(tmp_path):
+    # Undefined on Volta and later, where lanes can be at different instructions.
+    assert "maskless-shuffle" in findings_for(
+        tmp_path, "__device__ float f(float v) { return __shfl_down(v, 16); }"
+    )
+
+
+def test_a_masked_shuffle_is_accepted(tmp_path):
+    assert "maskless-shuffle" not in findings_for(
+        tmp_path,
+        "__device__ float f(float v) { return __shfl_down_sync(0xffffffffU, v, 16); }",
+    )
+
+
+# --- barriers --------------------------------------------------------------
+
+
+def test_a_conditional_barrier_is_flagged(tmp_path):
+    # Deadlocks when threads in the block diverge.
+    assert "divergent-barrier" in findings_for(
+        tmp_path,
+        "__global__ void k() { if (threadIdx.x < 16) __syncthreads(); }",
+    )
+
+
+def test_an_unconditional_barrier_is_accepted(tmp_path):
+    assert "divergent-barrier" not in findings_for(
+        tmp_path,
+        """
+        __global__ void k() {
+            if (threadIdx.x < 16) { tile[threadIdx.x] = 0.0F; }
+            __syncthreads();
+        }
+        """,
+    )
+
+
+# --- comment handling ------------------------------------------------------
+
+
+def test_violations_inside_comments_are_ignored(tmp_path):
+    # The real sources discuss cudaDeviceSynchronize at length in comments
+    # explaining why it is not used. Flagging prose would make the rule useless.
+    assert findings_for(
+        tmp_path,
+        """
+        // Never call cudaDeviceSynchronize() here.
+        /* cudaMalloc(&p, 1024); would be unchecked. */
+        void f() {}
+        """,
+    ) == []
+
+
+def test_line_numbers_survive_block_comments(tmp_path):
+    path = tmp_path / "kernel.cu"
+    path.write_text(
+        "/* line one\n   line two\n   line three */\nvoid f() { cudaMalloc(&p, 1); }\n",
+        encoding="utf-8",
+    )
+    findings = checker.check_file(path)
+    assert len(findings) == 1
+    assert findings[0].line == 4
+
+
+# --- the real sources ------------------------------------------------------
+
+
+def test_the_repository_sources_pass(tmp_path):
+    result = subprocess.run(
+        [sys.executable, "scripts/check_cuda_sources.py", "cuda", "tests/cuda"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
+
+
+def test_the_exit_code_reflects_findings(tmp_path):
+    bad = tmp_path / "bad.cu"
+    bad.write_text("void f(cudaStream_t s) { k<<<1, 1, 0, s>>>(); }\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts" / "check_cuda_sources.py"), str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "unchecked-launch" in result.stdout
