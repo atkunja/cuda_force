@@ -126,3 +126,69 @@ them and the SMs busy simultaneously. The default is 4.
 Streams are created at the highest available priority band so inference work is
 not preempted by lower-priority background streams a host application may be
 running on the same device.
+
+## Launch configuration
+
+### Block size
+
+256 threads by default: four warps per block, enough resident warps to hide
+memory latency while leaving register headroom. At 1024 threads the per-thread
+register budget drops far enough to spill on several of these kernels, and a
+spill to local memory costs more than the occupancy gains.
+
+Row-wise kernels size the block to the row instead, rounded up to a power of two
+so the tree reduction's halving loop terminates cleanly at one active thread.
+
+### Grid size
+
+Two different strategies, for two different reasons:
+
+* **Grid-stride kernels** (whole-array reduction) use a grid proportional to the
+  SM count, capped by the input. Each block handles many elements, so one block
+  per tile would create far more blocks than can be resident and pay scheduling
+  overhead for nothing.
+* **Row-per-block kernels** (softmax, RMSNorm) use one block per row. The row is
+  then reduced entirely in registers and shared memory, with no global atomics
+  at all.
+
+### Occupancy is a means, not an end
+
+Occupancy — resident warps per SM as a fraction of the maximum — matters only
+because idle warps are what hide memory latency. Past the point where latency is
+already hidden, more occupancy buys nothing, and a kernel that raises occupancy
+by using fewer registers can easily be slower.
+
+Nsight Compute reports achieved occupancy alongside memory throughput; the
+second is the number to optimise. See [profiling.md](profiling.md).
+
+## Warp execution
+
+Threads execute in warps of 32 in lockstep. Two consequences shape every kernel
+here:
+
+**Divergence serialises.** When threads in a warp take different branches, the
+hardware executes both paths with the inactive lanes masked off. The reduction
+loop uses `index < half` rather than a strided-modulo condition specifically so
+that entire warps retire together instead of every warp running at partial
+occupancy throughout.
+
+**`__syncthreads()` must be reached by every thread in the block.** A barrier
+inside a conditional deadlocks when threads diverge. `check_cuda_sources.py`
+flags the shape that is always wrong.
+
+**Warp primitives need an explicit mask.** On Volta and later, lanes can be at
+genuinely different instructions, so `__shfl_down_sync` needs a mask naming
+every participating lane. Passing `0xffffffff` from a divergent branch is
+undefined behaviour. The maskless legacy forms are rejected by the structural
+checks.
+
+## What has not been measured
+
+Nothing in this document has been executed. The development host has no NVIDIA
+GPU — see [environment.md](environment.md). The scheduler compiles under the
+CUDA container and the NVIDIA-runner CI job, and `tests/cuda/test_scheduler.cu`
+verifies round-robin assignment, event ordering, cross-stream chaining and
+per-stream accounting on real hardware.
+
+Whether the overlap described above materialises on a given workload is a
+question for Nsight Systems, not for this document.
