@@ -306,3 +306,10 @@ def test_endpoints_report_503_before_the_engine_is_ready(monkeypatch):
 
     response = asyncio.run(server.ready())
     assert response.status_code == 503
+
+
+def test_the_prometheus_endpoint_carries_the_engine_configuration(client):
+    text = client.get("/metrics/prometheus").text
+    # Lets a dashboard group or filter by model and batching configuration.
+    assert "cudaforge_build_info" in text
+    assert 'max_batch_size="8"' in text
