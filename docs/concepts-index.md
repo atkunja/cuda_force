@@ -134,3 +134,5 @@ Ordered by the question someone would actually ask.
 | What does Nsight Systems tell you? | — | [profiling.md](profiling.md#nsight-systems-is-the-gpu-busy) |
 | What does Nsight Compute tell you? | — | [profiling.md](profiling.md#nsight-compute-why-is-this-kernel-slow) |
 | How do you detect false sharing? | — | [profiling.md](profiling.md#profiling-the-cpu-side) |
+| How are metrics exposed to a scraper? | [`exposition.py`](../python/cudaforge/exposition.py) | counter vs gauge typing matters for `rate()` |
+| Liveness vs readiness? | `/health` vs `/ready` in [`server.py`](../inference/server.py) | [troubleshooting.md](troubleshooting.md#the-orchestrator-keeps-restarting-the-container) |

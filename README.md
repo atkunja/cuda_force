@@ -226,7 +226,8 @@ constraint.
 | --- | --- |
 | `GET /health` | liveness — a failure here means restart the process |
 | `GET /ready` | readiness — 503 when the queue is near capacity, meaning take it out of rotation, not restart it |
-| `GET /metrics` | counters, batching statistics and latency percentiles |
+| `GET /metrics` | counters, batching statistics and latency percentiles, as JSON |
+| `GET /metrics/prometheus` | the same snapshot in the Prometheus text exposition format |
 | `POST /generate` | generation |
 
 ## Building the C++ and CUDA targets

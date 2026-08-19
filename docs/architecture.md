@@ -105,6 +105,7 @@ assembled from the backlog that accumulated while the previous one ran.
 | GPU ordering | `GpuScheduler` streams | streams *are* the ordering primitive |
 | Buffer reuse | `MemoryPool` | allocation is the thing being avoided |
 | Timing and counters | `Metrics` | one place, so a snapshot is coherent |
+| Metric exposition | `exposition.py` | format is a rendering concern, not a collection one |
 | Result delivery | per-request futures | decouples completion from the caller's thread |
 | Liveness vs readiness | `/health` vs `/ready` | a full queue means take me out of rotation, not restart me |
 
