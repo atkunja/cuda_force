@@ -197,6 +197,10 @@ class InferenceEngine:
     def snapshot(self) -> MetricsSnapshot:
         snapshot = self._metrics.snapshot()
         snapshot.queue_depth = self.queue_depth
+        # These become labels on the Prometheus info metric, so a dashboard can
+        # group by model and configuration rather than by instance.
+        snapshot.extra["model"] = self._config.model_name
+        snapshot.extra["device"] = str(self._config.resolve_device())
         snapshot.extra["runner"] = self._runner.description
         snapshot.extra["max_batch_size"] = self._config.max_batch_size
         snapshot.extra["max_wait_us"] = self._config.max_wait_us

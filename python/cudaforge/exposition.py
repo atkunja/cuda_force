@@ -79,7 +79,7 @@ def _render_info(snapshot: MetricsSnapshot) -> list[str]:
     """
     labels = {
         key: str(snapshot.extra.get(key, ""))
-        for key in ("runner", "max_batch_size", "max_wait_us")
+        for key in ("model", "device", "runner", "max_batch_size", "max_wait_us")
         if key in snapshot.extra
     }
     if not labels:
