@@ -15,11 +15,14 @@ from cudaforge.ops import (
     CUDA_KERNELS_AVAILABLE,
     backend_report,
     dequantize_int8,
+    gelu,
     lora_linear,
     quantize_int8,
     rmsnorm,
+    silu,
     softmax,
     sum_reduce,
+    swiglu,
 )
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
@@ -46,9 +49,12 @@ __all__ = [
     "__version__",
     "backend_report",
     "dequantize_int8",
+    "gelu",
     "lora_linear",
     "quantize_int8",
     "rmsnorm",
+    "silu",
     "softmax",
     "sum_reduce",
+    "swiglu",
 ]

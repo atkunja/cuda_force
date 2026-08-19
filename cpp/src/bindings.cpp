@@ -23,6 +23,7 @@
 #ifdef CUDAFORGE_WITH_CUDA
 #include <c10/cuda/CUDAStream.h>
 
+#include "cudaforge/activations.cuh"
 #include "cudaforge/lora_linear.cuh"
 #include "cudaforge/quantization.cuh"
 #include "cudaforge/reduction.cuh"
@@ -120,6 +121,40 @@ torch::Tensor lora_linear_cuda(const torch::Tensor& x, const torch::Tensor& w,
                        b.data_ptr<float>(), output.data_ptr<float>(), workspace.data_ptr<float>(),
                        batch, in_features, out_features, rank, static_cast<float>(scale),
                        LoRAKernel::Fused, current_stream());
+    return output;
+}
+
+torch::Tensor silu_cuda(const torch::Tensor& input) {
+    check_float32(input, "input");
+    check_last_dim_contiguous(input, "input");
+
+    torch::Tensor output = torch::empty_like(input);
+    launch_silu(input.data_ptr<float>(), output.data_ptr<float>(),
+                static_cast<int>(input.numel()), current_stream());
+    return output;
+}
+
+torch::Tensor gelu_cuda(const torch::Tensor& input) {
+    check_float32(input, "input");
+    check_last_dim_contiguous(input, "input");
+
+    torch::Tensor output = torch::empty_like(input);
+    launch_gelu(input.data_ptr<float>(), output.data_ptr<float>(),
+                static_cast<int>(input.numel()), current_stream());
+    return output;
+}
+
+torch::Tensor swiglu_cuda(const torch::Tensor& gate, const torch::Tensor& up) {
+    check_float32(gate, "gate");
+    check_float32(up, "up");
+    check_last_dim_contiguous(gate, "gate");
+    check_last_dim_contiguous(up, "up");
+    TORCH_CHECK(gate.sizes() == up.sizes(), "gate and up must have the same shape, got ",
+                gate.sizes(), " and ", up.sizes());
+
+    torch::Tensor output = torch::empty_like(gate);
+    launch_swiglu(gate.data_ptr<float>(), up.data_ptr<float>(), output.data_ptr<float>(),
+                  static_cast<int>(gate.numel()), SwiGLUKernel::Vectorised, current_stream());
     return output;
 }
 
@@ -249,6 +284,9 @@ TORCH_LIBRARY(cudaforge, m) {
     m.def("softmax(Tensor input) -> Tensor");
     m.def("lora_linear(Tensor x, Tensor w, Tensor a, Tensor b, float scale) -> Tensor");
     m.def("sum(Tensor input) -> Tensor");
+    m.def("silu(Tensor input) -> Tensor");
+    m.def("gelu(Tensor input) -> Tensor");
+    m.def("swiglu(Tensor gate, Tensor up) -> Tensor");
     m.def("quantize_int8(Tensor input) -> Tensor[]");
     m.def("dequantize_int8(Tensor quantised, Tensor scales) -> Tensor");
 }
@@ -258,6 +296,9 @@ TORCH_LIBRARY_IMPL(cudaforge, CPU, m) {
     m.impl("softmax", &cudaforge::bindings::softmax_cpu);
     m.impl("lora_linear", &cudaforge::bindings::lora_linear_cpu);
     m.impl("sum", &cudaforge::bindings::sum_cpu);
+    m.impl("silu", &cudaforge::bindings::silu_cpu);
+    m.impl("gelu", &cudaforge::bindings::gelu_cpu);
+    m.impl("swiglu", &cudaforge::bindings::swiglu_cpu);
     m.impl("quantize_int8", &cudaforge::bindings::quantize_int8_cpu);
     m.impl("dequantize_int8", &cudaforge::bindings::dequantize_int8_cpu);
 }
@@ -268,6 +309,9 @@ TORCH_LIBRARY_IMPL(cudaforge, CUDA, m) {
     m.impl("softmax", &cudaforge::bindings::softmax_cuda);
     m.impl("lora_linear", &cudaforge::bindings::lora_linear_cuda);
     m.impl("sum", &cudaforge::bindings::sum_cuda);
+    m.impl("silu", &cudaforge::bindings::silu_cuda);
+    m.impl("gelu", &cudaforge::bindings::gelu_cuda);
+    m.impl("swiglu", &cudaforge::bindings::swiglu_cuda);
     m.impl("quantize_int8", &cudaforge::bindings::quantize_int8_cuda);
     m.impl("dequantize_int8", &cudaforge::bindings::dequantize_int8_cuda);
 }
