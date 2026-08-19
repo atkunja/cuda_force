@@ -61,6 +61,29 @@ caches. The number that transfers is the call count: on the device backend each
 avoided call is a `cudaMalloc` that would have synchronised the device. That
 part is **not measured**.
 
+### Latency histogram accuracy
+
+| Field | |
+| --- | --- |
+| Baseline | storing every sample and sorting — exact, but unbounded memory |
+| Bottleneck | memory growth precisely under the sustained load where percentiles matter most |
+| Change | log-linear buckets, 16 sub-buckets per magnitude, O(1) memory |
+| Expected | worst-case relative error of 1/16 = 6.25% |
+| **Measured** | **worst observed error 4.95%**, across four distributions, at 76–120M records/second |
+
+Errors by distribution, 200k samples each, against exact sorted percentiles:
+
+| Distribution | Worst relative error |
+| --- | --- |
+| Uniform over 1 ns – 10 ms | 4.95% |
+| Log-normal (the shape real latency takes) | 4.53% |
+| Bimodal, 2% slow tail | 4.28% |
+| Constant | 0.86% |
+
+The bimodal case is the one that matters — it is why percentile reporting exists
+at all, and it is where a naive bucketing would do worst. Reproduce with
+`./build/benchmarks/bench_histogram`.
+
 ### Correctness under sanitizers
 
 | Field | |
