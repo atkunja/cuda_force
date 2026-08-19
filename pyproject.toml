@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cudaforge"
+version = "0.1.0"
+description = "GPU-native LLM fine-tuning and concurrent inference runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Ayush Kunjadia" }]
+keywords = ["cuda", "llm", "inference", "lora", "gpu", "batching"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C++",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "License :: OSI Approved :: MIT License",
+]
+
+# torch is the only hard runtime dependency. Everything needed exclusively for
+# fine-tuning or serving lives in an extra, so importing cudaforge to use the
+# operators does not drag in transformers, datasets and a web server.
+dependencies = ["torch>=2.1", "numpy>=1.24"]
+
+[project.optional-dependencies]
+train = [
+  "transformers>=4.40",
+  "peft>=0.11",
+  "datasets>=2.19",
+  "accelerate>=0.30",
+  "pyyaml>=6.0",
+]
+serve = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
+# bitsandbytes is Linux/CUDA only, which is why QLoRA is its own extra rather
+# than part of `train`: installing `train` must not fail on macOS.
+quantize = ["bitsandbytes>=0.43; platform_system == 'Linux'"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3", "ruff>=0.5", "mypy>=1.10"]
+
+[project.urls]
+Repository = "https://github.com/atkunja/cuda_force"
+
+[project.scripts]
+cudaforge-serve = "cudaforge.cli:serve"
+cudaforge-bench = "cudaforge.cli:bench"
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["python", "training", "inference", "benchmarks", "examples", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "I",    # import sorting
+  "UP",   # pyupgrade
+  "B",    # bugbear
+  "SIM",  # simplify
+  "RUF",
+  "ANN",  # missing annotations
+]
+ignore = [
+  "ANN401",  # Any is occasionally the honest annotation for **kwargs
+  "B008",    # FastAPI's Depends() default is the documented idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on concrete values; annotating every fixture adds noise without
+# adding safety.
+"tests/**" = ["ANN"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+files = ["python/cudaforge"]
+
+[[tool.mypy.overrides]]
+# These ship without type information, or with stubs too incomplete to be
+# useful. Silencing them here is narrower than a blanket ignore_errors.
+module = ["torch.*", "transformers.*", "peft.*", "datasets.*", "bitsandbytes.*", "yaml.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-ra --strict-markers --timeout=120"
+markers = [
+  "cuda: requires an NVIDIA GPU; skipped automatically when none is present",
+  "slow: excluded from the default CI run",
+]
