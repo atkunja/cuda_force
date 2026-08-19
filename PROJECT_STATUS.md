@@ -32,6 +32,7 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | Softmax | Naive, shared-memory, online recurrence, FP16; capacity-aware fallback. |
 | RMSNorm | Scalar, `float4` vectorised with alignment checks and fallback, FP16 with FP32 accumulation. |
 | LoRA linear | Tiled matmul with bank-conflict padding; unfused and fused paths. |
+| Activations | SiLU, GELU (tanh form), and SwiGLU in scalar, vectorised and FP16 paths. |
 | Quantisation | Block-wise symmetric INT8 quantise, dequantise and fake-quantise. |
 | `GpuScheduler` | Round-robin stream leases, event-based cross-stream chaining, async copies, per-stream accounting. |
 | RAII layer | `CudaStream`, `CudaEvent` (timing vs ordering), `DeviceBuffer`, `PinnedBuffer`. |
@@ -40,9 +41,11 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 
 ### PyTorch integration — `cpp/src/bindings.cpp`, `python/cudaforge/`
 
-Operators registered through `TORCH_LIBRARY` with separate CPU and CUDA
+Nine operators registered through `TORCH_LIBRARY` with separate CPU and CUDA
 implementations, so the fallback is a real dispatch path rather than a Python
-if-statement. Shape, dtype, device and contiguity validation with actionable
+if-statement. An explicit Autograd registration turns "silently wrong
+gradients" into an immediate error, and the Python layer routes to the
+differentiable reference whenever a backward pass is expected. Shape, dtype, device and contiguity validation with actionable
 messages. `backend_report()` reports which path is active.
 
 ### Training — `training/`
@@ -79,7 +82,7 @@ Makefile, and 14 documents.
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **288 tests — pass** |
+| Python test suite | **326 tests — pass** |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
@@ -131,7 +134,13 @@ Recorded because each was found by a test that was written to look for it:
    whitespace where GitHub emits one hyphen per space.
 10. **Line numbers off in the CUDA checker**, which attributed a statement to a
     preceding blank or comment line.
-11. **The sanitizer was not applied to the benchmark targets**, so they linked
+11. **No autograd kernel registered for the custom operators.** PyTorch's
+    default is to warn once and then produce silently incorrect gradients — the
+    worst available failure mode, since training converges to the wrong thing
+    with nothing pointing at the cause. Surfaced by a warning in a test that
+    called `.backward()`. Now an explicit error, with the Python layer routing
+    gradient-requiring calls to the differentiable reference.
+12. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run
