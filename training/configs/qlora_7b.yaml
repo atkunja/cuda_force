@@ -1,0 +1,40 @@
+# QLoRA on a 7B model.
+#
+# Requires CUDA and bitsandbytes; there is no CPU or MPS backend for 4-bit
+# quantisation, and the run will refuse to start elsewhere rather than silently
+# training in a dtype that does not fit the intended memory budget.
+#
+# The 4-bit path here is bitsandbytes' NF4, not the INT8 quantisation kernel in
+# cuda/src/quantization.cu. Those are different schemes and this config does
+# not use the custom one — see docs/fine-tuning.md.
+#
+# Fits a 24 GB card. Gradient checkpointing is on because activation memory,
+# not weights, is the binding constraint once the weights are 4-bit.
+
+model_name: mistralai/Mistral-7B-v0.1
+output_dir: checkpoints/mistral-7b-qlora
+
+dataset_name: tatsu-lab/alpaca
+dataset_split: train
+text_field: text
+
+max_seq_length: 1024
+batch_size: 1
+gradient_accumulation_steps: 16
+learning_rate: 0.0002
+warmup_ratio: 0.03
+epochs: 1
+seed: 42
+
+mixed_precision: true
+gradient_checkpointing: true
+load_in_4bit: true
+
+logging_steps: 10
+save_steps: 200
+
+lora:
+  rank: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: ["q_proj", "k_proj", "v_proj", "o_proj"]
