@@ -113,3 +113,55 @@ def test_both_entry_points_accept_version():
         with pytest.raises(SystemExit) as excinfo:
             entry(["--version"])
         assert excinfo.value.code == 0
+
+
+def test_a_yaml_config_is_loaded(capsys):
+    cli.bench(
+        [
+            "--config", "inference/configs/latency.yaml",
+            "--echo-runner",
+            "--clients", "1",
+            "--requests-per-client", "2",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["config"]["model"] == "gpt2"
+    assert payload["config"]["max_batch_size"] == 4
+
+
+def test_an_explicit_flag_overrides_the_config_file(capsys):
+    # argparse cannot tell "passed the default" from "passed nothing", so the
+    # override is decided by comparing against the parser's defaults. This is
+    # the case that would break if that comparison were wrong.
+    cli.bench(
+        [
+            "--config", "inference/configs/latency.yaml",
+            "--max-batch-size", "32",
+            "--echo-runner",
+            "--clients", "1",
+            "--requests-per-client", "2",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["config"]["max_batch_size"] == 32
+    # Unspecified fields still come from the file.
+    assert payload["config"]["max_wait_us"] == 1000
+
+
+def test_a_config_override_still_widens_the_queue(capsys):
+    cli.bench(
+        [
+            "--config", "inference/configs/latency.yaml",
+            "--max-batch-size", "512",
+            "--echo-runner",
+            "--clients", "1",
+            "--requests-per-client", "1",
+            "--json",
+        ]
+    )
+    # The file's queue_capacity of 256 is below the overridden batch size, which
+    # would make the batch size unreachable; the CLI widens it.
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["config"]["max_batch_size"] == 512
