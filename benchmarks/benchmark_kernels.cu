@@ -27,6 +27,7 @@
 #include "bench_common.hpp"
 #include "cudaforge/activations.cuh"
 #include "cudaforge/cuda_raii.cuh"
+#include "cudaforge/fused_norm.cuh"
 #include "cudaforge/lora_linear.cuh"
 #include "cudaforge/quantization.cuh"
 #include "cudaforge/reduction.cuh"
@@ -259,6 +260,44 @@ void benchmark_activations(JsonWriter& writer, cudaStream_t stream) {
     }
 }
 
+void benchmark_fused_norm(JsonWriter& writer, cudaStream_t stream) {
+    const std::pair<int, int> shapes[] = {{4096, 1024}, {2048, 4096}, {512, 8192}};
+
+    for (const auto& [rows, cols] : shapes) {
+        const auto elements = static_cast<std::size_t>(rows) * cols;
+        DeviceBuffer<float> input(elements);
+        DeviceBuffer<float> residual(elements);
+        DeviceBuffer<float> weight(static_cast<std::size_t>(cols));
+        DeviceBuffer<float> output(elements);
+        DeviceBuffer<float> residual_out(elements);
+        for (DeviceBuffer<float>* buffer : {&input, &residual, &weight}) {
+            buffer->fill_zero(stream);
+        }
+
+        const std::string label = std::to_string(rows) + "x" + std::to_string(cols);
+
+        const Timing fused = time_kernel(stream, [&] {
+            launch_fused_residual_rmsnorm(input.data(), residual.data(), weight.data(),
+                                          output.data(), residual_out.data(), rows, cols,
+                                          1e-6F, stream);
+        });
+        // Two reads and two writes.
+        emit(writer, "fused_residual_rmsnorm", "fused", label, fused,
+             effective_bandwidth(4 * elements * sizeof(float), fused.median_ms));
+
+        // The unfused sequence it replaces, timed as one unit so the comparison
+        // is like for like.
+        const Timing unfused = time_kernel(stream, [&] {
+            launch_add(input.data(), residual.data(), residual_out.data(),
+                       static_cast<int>(elements), stream);
+            launch_rmsnorm(residual_out.data(), weight.data(), output.data(), rows, cols,
+                           1e-6F, RMSNormKernel::Naive, stream);
+        });
+        emit(writer, "fused_residual_rmsnorm", "separate", label, unfused,
+             effective_bandwidth(6 * elements * sizeof(float), unfused.median_ms));
+    }
+}
+
 void benchmark_quantization(JsonWriter& writer, cudaStream_t stream) {
     for (int count : {1 << 20, 1 << 24}) {
         DeviceBuffer<float> input(static_cast<std::size_t>(count));
@@ -318,6 +357,7 @@ int main() {
         benchmark_rmsnorm(writer, stream);
         benchmark_lora(writer, stream);
         benchmark_activations(writer, stream);
+        benchmark_fused_norm(writer, stream);
         benchmark_quantization(writer, stream);
 
         writer.end_array();

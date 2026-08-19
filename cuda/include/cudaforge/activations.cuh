@@ -63,4 +63,13 @@ void launch_swiglu_half(const __half* gate, const __half* up, __half* output, in
 /// against this curve.
 void launch_gelu(const float* input, float* output, int count, cudaStream_t stream);
 
+/// Elementwise `output = a + b`.
+///
+/// Present as the unfused baseline the fused residual+RMSNorm kernel is
+/// measured against. Comparing the fused kernel against nothing would say
+/// nothing; comparing it against the two launches it replaces is the whole
+/// point.
+void launch_add(const float* a, const float* b, float* output, int count,
+                cudaStream_t stream);
+
 }  // namespace cudaforge

@@ -49,6 +49,14 @@ __global__ void gelu_kernel(const float* __restrict__ input, float* __restrict__
 
 /// Fused `silu(gate) * up`. Two reads and one write — the minimum possible
 /// traffic for this operation.
+__global__ void add_kernel(const float* __restrict__ a, const float* __restrict__ b,
+                           float* __restrict__ output, int count) {
+    const int index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+    if (index < count) {
+        output[index] = a[index] + b[index];
+    }
+}
+
 __global__ void swiglu_scalar(const float* __restrict__ gate, const float* __restrict__ up,
                               float* __restrict__ output, int count) {
     const int index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -116,6 +124,16 @@ void launch_gelu(const float* input, float* output, int count, cudaStream_t stre
     }
     const int grid = ceil_div(count, kDefaultBlockSize);
     gelu_kernel<<<grid, kDefaultBlockSize, 0, stream>>>(input, output, count);
+    CUDAFORGE_CHECK_LAUNCH(stream);
+}
+
+void launch_add(const float* a, const float* b, float* output, int count,
+                cudaStream_t stream) {
+    if (count <= 0) {
+        return;
+    }
+    const int grid = ceil_div(count, kDefaultBlockSize);
+    add_kernel<<<grid, kDefaultBlockSize, 0, stream>>>(a, b, output, count);
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
