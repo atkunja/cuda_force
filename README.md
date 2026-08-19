@@ -298,6 +298,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Batching, 8 clients, batch 1 → 16 | 499 → 722 req/s, p99 12.9 → 7.9 ms |
 | Batching, 1 client, batch 1 → 16 | 112 → 87 req/s — the latency cost, shown honestly |
 | Memory pool | 2,020 allocations served by 5 backend calls; reuse rate 0.9975 |
+| Latency histogram | worst error **4.95%** vs its documented 6.25% bound, at 76–120M records/s |
 | C++ suite | 70 cases, ~19k assertions, clean under TSan / ASan / UBSan |
 | Python suite | 182 tests |
 
