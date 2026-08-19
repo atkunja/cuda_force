@@ -51,7 +51,8 @@ __device__ __forceinline__ T warp_reduce_max(T value, unsigned mask = 0xffffffff
 /// and a full block-sized shared array in the classic formulation.
 ///
 /// The result is broadcast back to all threads because the callers below need
-/// every thread to divide by the same sum.
+/// every thread to divide by the same sum, and it is returned in a register
+/// with a trailing barrier so the shared array can be reused immediately.
 template<typename T>
 __device__ __forceinline__ T block_reduce_sum(T value, T* shared) {
     const int lane = threadIdx.x % kWarpSize;
@@ -74,7 +75,15 @@ __device__ __forceinline__ T block_reduce_sum(T value, T* shared) {
         }
     }
     __syncthreads();
-    return shared[0];
+
+    // Read into a register, then bar every thread from leaving until all have
+    // read. Without this second barrier a caller that reuses `shared` for a
+    // following reduction — softmax does exactly that, max then sum — can have
+    // one warp overwrite shared[0] while another has not yet read it. The
+    // result is a silently wrong row, not a crash.
+    const T result = shared[0];
+    __syncthreads();
+    return result;
 }
 
 template<typename T>
@@ -97,7 +106,12 @@ __device__ __forceinline__ T block_reduce_max(T value, T* shared, T identity) {
         }
     }
     __syncthreads();
-    return shared[0];
+
+    // See block_reduce_sum: the second barrier is what makes reusing `shared`
+    // for a following reduction safe.
+    const T result = shared[0];
+    __syncthreads();
+    return result;
 }
 
 }  // namespace cudaforge
