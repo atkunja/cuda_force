@@ -56,17 +56,37 @@ between batches. The structural checks reject the latter, so suspect the former.
 ### Annotating with NVTX
 
 NVTX ranges label regions in the timeline so a gap can be attributed to a phase
-rather than guessed at:
+rather than guessed at. They are built in, behind a CMake option:
 
-```cpp
-#include <nvtx3/nvToolsExt.h>
-nvtxRangePush("batch_execute");
-// ...
-nvtxRangePop();
+```bash
+cmake -S . -B build-cuda -G Ninja \
+  -DCUDAFORGE_ENABLE_CUDA=ON -DCUDAFORGE_ENABLE_NVTX=ON
 ```
 
-Worth adding around batch formation, H2D, compute and D2H when investigating a
-specific stall.
+`scripts/profile.sh` enables it automatically. Adding your own:
+
+```cpp
+#include "cudaforge/nvtx.cuh"
+
+void execute(Batch&& batch) {
+    CUDAFORGE_NVTX_RANGE("batch_execute", NvtxCategory::Compute);
+    // ...
+}                                   // the range closes here, exceptions included
+```
+
+The RAII form matters: pushing and popping by hand is exactly the bookkeeping an
+early return gets wrong, and an unbalanced range makes the whole timeline
+unreadable rather than merely losing one label.
+
+Categories are colour-coded — ingress blue, batching orange, transfers green,
+compute red, sampling purple — so the timeline is readable without reading every
+label. The scheduler's copies and its shutdown drain are annotated already; a
+long `synchronize_all` bar anywhere other than shutdown means the pipeline is
+being drained when it should not be.
+
+Annotate **phases, not launches**. Each range costs a few hundred nanoseconds,
+which is nothing against per-batch work and considerable against a single
+kernel launch. Everything is compiled out when the option is off.
 
 ## Nsight Compute: why is this kernel slow?
 
