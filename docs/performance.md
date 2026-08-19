@@ -84,6 +84,18 @@ The bimodal case is the one that matters — it is why percentile reporting exis
 at all, and it is where a naive bucketing would do worst. Reproduce with
 `./build/benchmarks/bench_histogram`.
 
+### HTTP overhead against runtime time
+
+| Field | |
+| --- | --- |
+| Baseline | — this is a decomposition, not an optimisation |
+| **Measured** | client p99 **279.22 ms** against server p99 **1.03 ms**, 300 requests at concurrency 32 with the deterministic runner |
+
+The runtime is doing essentially nothing in that run, so the difference is
+transport and client-side contention. Recorded because it is the reason latency
+attributed to "the batcher" is so often not the batcher — and because it is the
+argument for `cudaforge-bench` and `benchmark_server.py` being separate tools.
+
 ### Correctness under sanitizers
 
 | Field | |

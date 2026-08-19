@@ -21,6 +21,7 @@ Where a GPU comparison would normally appear, this repository says so instead.
 | `bench_memory` | C++ compiler | yes |
 | `benchmark_batching.py` | Python | yes |
 | `benchmark_kernels.py` | Python | yes, but see the caveat below |
+| `benchmark_server.py` | a running server | yes |
 | `bench_kernels` (CUDA) | NVIDIA GPU | **no** |
 
 `benchmark_kernels.py` on a CPU-only host compares the reference
@@ -53,6 +54,10 @@ skipped and why. Individually:
 python benchmarks/benchmark_batching.py         # end-to-end batching sweep
 python benchmarks/benchmark_kernels.py          # operators vs PyTorch
 cudaforge-bench --echo-runner --clients 16      # engine under concurrent load
+
+# End to end over HTTP, against a running server
+cudaforge-serve --echo-runner &
+python benchmarks/benchmark_server.py --requests 500 --concurrency 32
 ```
 
 On an NVIDIA machine, add:
@@ -144,6 +149,27 @@ Execution is simulated with a sleep unless `--model` is passed, so these
 describe the **scheduler**, not model throughput. That separation is deliberate:
 it isolates the variable under study and keeps the benchmark runnable without a
 GPU. The output says so.
+
+### HTTP (`benchmark_server.py`)
+
+`cudaforge-bench` drives the engine in-process, which is the right way to
+measure the **scheduler** — it excludes HTTP entirely. `benchmark_server.py`
+measures what a client actually experiences: connection handling,
+serialisation, the event loop, and the queue behind them.
+
+It reports both sides, and the gap between them is the point. A measured run on
+the development host, 300 requests at concurrency 32 against the deterministic
+runner:
+
+| | p50 | p95 | p99 |
+| --- | --- | --- | --- |
+| Client-observed | 50.67 ms | 187.21 ms | 279.22 ms |
+| Server-observed | 0.02 ms | 0.20 ms | 1.03 ms |
+
+The runtime is doing essentially nothing — the runner is instantaneous — so
+almost all of that is HTTP and client-side contention. That is worth knowing
+before attributing a latency number to the batcher, and it is why the two tools
+exist separately rather than one reporting a single figure.
 
 ### Memory (`bench_memory`)
 

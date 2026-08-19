@@ -43,6 +43,18 @@ echo "==> batching sweep"
 "$PYTHON" benchmarks/benchmark_batching.py \
   --output "$RESULTS/batching-${STAMP}.json"
 
+# --- HTTP ------------------------------------------------------------------
+# Only run when a server is already listening. Starting one here would make the
+# script responsible for a process lifecycle it cannot supervise well.
+if curl -sf "${CUDAFORGE_URL:-http://127.0.0.1:8000}/health" >/dev/null 2>&1; then
+  echo "==> http server"
+  "$PYTHON" benchmarks/benchmark_server.py \
+    --url "${CUDAFORGE_URL:-http://127.0.0.1:8000}" --json \
+    > "$RESULTS/http-${STAMP}.json"
+else
+  echo "==> skipping the HTTP benchmark (no server listening; start one with cudaforge-serve)"
+fi
+
 # --- CUDA ------------------------------------------------------------------
 if command -v nvidia-smi >/dev/null 2>&1; then
   if [[ ! -x build-cuda/benchmarks/bench_kernels ]]; then
