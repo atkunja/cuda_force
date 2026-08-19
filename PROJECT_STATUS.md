@@ -131,6 +131,11 @@ Recorded because each was found by a test that was written to look for it:
    whitespace where GitHub emits one hyphen per space.
 10. **Line numbers off in the CUDA checker**, which attributed a statement to a
     preceding blank or comment line.
+11. **The sanitizer was not applied to the benchmark targets**, so they linked
+    an instrumented runtime without the sanitizer runtime and the whole
+    ThreadSanitizer build failed to link. The test target applied it and kept
+    passing, which is why this only surfaced when `scripts/test.sh` was run
+    end to end rather than stage by stage.
 
 ---
 
