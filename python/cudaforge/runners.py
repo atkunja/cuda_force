@@ -134,8 +134,12 @@ class TransformersRunner:
             self._tokenizer.pad_token = self._tokenizer.eos_token
         self._tokenizer.padding_side = "left"
 
-        self._model = AutoModelForCausalLM.from_pretrained(config.model_name, dtype=self._dtype)
-        self._model.to(self._device)
+        model = AutoModelForCausalLM.from_pretrained(config.model_name, dtype=self._dtype)
+        # `PreTrainedModel.to` is wrapped by a decorator whose annotation types
+        # the first argument as a model rather than a device, so a correct call
+        # is rejected. The suppression is upstream's, not this code's; the
+        # behaviour is covered by the runner tests.
+        self._model = model.to(self._device)  # type: ignore[arg-type]
         self._model.eval()
 
     def warmup(self, iterations: int) -> None:
