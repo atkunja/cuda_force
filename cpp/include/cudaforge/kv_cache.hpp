@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
-#include <utility>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudaforge {
@@ -106,8 +106,7 @@ private:
 /// and therefore fragmentation-free.
 class SequenceBlockTable {
 public:
-    SequenceBlockTable(SequenceId id, std::size_t block_size)
-        : id_(id), block_size_(block_size) {}
+    SequenceBlockTable(SequenceId id, std::size_t block_size) : id_(id), block_size_(block_size) {}
 
     [[nodiscard]] SequenceId id() const noexcept { return id_; }
     [[nodiscard]] std::size_t token_count() const noexcept { return tokens_; }
