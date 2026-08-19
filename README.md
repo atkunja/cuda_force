@@ -123,3 +123,96 @@ Each stage decouples a rate mismatch. Details in
 
 </td></tr>
 </table>
+
+## The kernels
+
+Each ships with a reference implementation, correctness tests over awkward
+shapes, and a benchmark harness.
+
+| Kernel | Variants | The interesting part |
+| --- | --- | --- |
+| **Reduction** | atomic · shared-memory tree · warp shuffle | why one `atomicAdd` per element serialises the whole grid |
+| **Softmax** | naive · shared-memory · online | the online (max, sum) recurrence — no row-length limit, one fewer pass |
+| **RMSNorm** | scalar · `float4` · FP16 | 128-bit transactions, plus alignment checks with a real fallback |
+| **LoRA linear** | unfused · fused | keeping the `batch × rank` intermediate out of global memory |
+| **Quantise** | block-wise INT8 | round-trip error provably under `scale / 2` |
+
+Full reasoning in [docs/cuda-kernels.md](docs/cuda-kernels.md).
+
+## Quick start
+
+```bash
+git clone https://github.com/atkunja/cuda_force.git
+cd cuda_force
+./scripts/setup.sh
+source .venv/bin/activate
+```
+
+`setup.sh` installs a CPU-only PyTorch if no CUDA toolkit is present, and skips
+bitsandbytes off Linux. The package remains importable and fully testable
+either way.
+
+```bash
+# Which implementation path is actually active
+python -c "from cudaforge.ops import backend_report; print(backend_report())"
+
+# One request end to end
+python examples/simple_inference.py --echo-runner
+
+# What dynamic batching buys
+python examples/concurrent_requests.py
+
+# A real LoRA fine-tune, CPU, under a minute, no downloads beyond the model
+python examples/fine_tune.py
+```
+
+### Using the operators
+
+```python
+import torch
+import cudaforge
+
+x = torch.randn(8, 4096, device="cuda")
+w = torch.ones(4096, device="cuda")
+
+y = cudaforge.rmsnorm(x, w, eps=1e-6)
+p = cudaforge.softmax(x)
+z = cudaforge.lora_linear(x, weight, lora_a, lora_b, scale=2.0)
+
+q, scales = cudaforge.quantize_int8(x)
+restored = cudaforge.dequantize_int8(q, scales)
+```
+
+On a machine without CUDA these dispatch to reference PyTorch implementations
+and return identical results. `cudaforge.backend_report()` says which path ran —
+worth checking before drawing any conclusion from a timing.
+
+### Serving
+
+```bash
+cudaforge-serve --model gpt2 --max-batch-size 16 --max-wait-us 5000
+```
+
+```bash
+curl -s localhost:8000/generate \
+  -H 'content-type: application/json' \
+  -d '{"prompt": "Explain CUDA warps.", "max_new_tokens": 64, "temperature": 0.7}'
+```
+
+```json
+{
+  "request_id": "3f9a1c0e7b2d4a58",
+  "text": "...",
+  "prompt_tokens": 4,
+  "generated_tokens": 64,
+  "queue_time_ms": 1.83,
+  "inference_time_ms": 42.11,
+  "total_latency_ms": 43.94,
+  "batch_size": 7
+}
+```
+
+Queue time and inference time are reported separately because they point at
+different problems: high queue time means the runtime is saturated or the wait
+is too generous, high inference time means the model or the batch size is the
+constraint. `GET /health` and `GET /metrics` are also served.
