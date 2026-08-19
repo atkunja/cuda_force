@@ -86,6 +86,32 @@ The last one found a real bug: a runner returning the wrong row count raised
 outside the engine's guard, so no future was completed and every caller blocked
 until its timeout.
 
+## Cross-implementation conformance
+
+The batcher exists twice — once in C++, once in Python — and the documentation
+claims they implement the same policy. Each was tested only against its own
+expectations, which is exactly how two implementations drift apart while both
+suites stay green.
+
+`tests/python/test_batcher_conformance.py` runs the *same* scenario through
+both and compares. The C++ half is a standalone harness,
+[`batcher_scenario.cpp`](../tests/cpp/batcher_scenario.cpp), that emits JSON;
+the Python test drives it and its own batcher over identical parameters.
+
+Exact equality is deliberately not asserted, and would be wrong to assert: the
+two are separately scheduled, so batch-by-batch sizes legitimately differ. What
+must agree is the *policy*:
+
+| Property | Scenario |
+| --- | --- |
+| No request is lost | saturated, trickle, single producer, batch-of-one |
+| No batch exceeds the size limit | all four |
+| A saturated queue closes mostly on size, not on the deadline | four producers, no gap |
+| A batch size of one never aggregates | the degenerate configuration |
+| A saturated queue aggregates more than one request | eight producers, no gap |
+
+Skipped with a stated reason when the harness has not been built.
+
 ## Tolerances
 
 CUDA tests compare against a **double-precision** host reference — the

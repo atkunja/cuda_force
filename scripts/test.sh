@@ -37,6 +37,10 @@ if command -v cmake >/dev/null 2>&1; then
   run_stage "C++ build" ./scripts/build.sh
   run_stage "C++ tests" ./build/tests/cpp/cudaforge_tests
 
+# The batcher conformance tests need this harness; they skip without it, so
+# building it here is what makes them actually run.
+run_stage "C++ scenario harness" test -x ./build/tests/cpp/batcher_scenario
+
   # Sanitizers are mutually exclusive at the ABI level, so each needs its own
   # build directory and its own run.
   for sanitizer in address undefined thread; do

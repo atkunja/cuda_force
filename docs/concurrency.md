@@ -270,6 +270,19 @@ rather than sequences:
 | Backpressure caps depth rather than growing | `a bounded queue applies backpressure rather than growing` |
 | A failing task does not reduce pool capacity | `a throwing task does not kill its worker` |
 
+### The two implementations are checked against each other
+
+The batcher exists in C++ and in Python, and this document claims they behave
+identically. That claim is verified rather than asserted: a standalone C++
+harness runs a scenario and emits JSON, and a Python test drives it alongside
+its own batcher over the same parameters, comparing the policy — nothing lost,
+the size limit respected, batches closing for the same reason under the same
+arrival pattern.
+
+Batch-by-batch sizes are *not* compared. The two are separately scheduled, so
+they legitimately differ; requiring equality would be a test of the scheduler,
+not of the policy.
+
 ### Assertions never run on worker threads
 
 Catch2's `REQUIRE` macros are not thread-safe — they manipulate per-run state
