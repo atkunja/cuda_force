@@ -11,10 +11,11 @@ import pytest
 
 fastapi_testclient = pytest.importorskip("fastapi.testclient")
 
+from inference import server  # noqa: E402
+
 from cudaforge.config import EngineConfig  # noqa: E402
 from cudaforge.engine import InferenceEngine  # noqa: E402
 from cudaforge.runners import EchoRunner  # noqa: E402
-from inference import server  # noqa: E402
 
 
 @pytest.fixture

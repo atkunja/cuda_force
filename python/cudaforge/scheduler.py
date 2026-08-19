@@ -215,7 +215,7 @@ class DynamicBatcher:
 
             try:
                 self._handler(batch)
-            except Exception:  # noqa: BLE001 - a failing handler must not stop the batcher
+            except Exception:
                 # Otherwise one bad batch stalls every subsequent request until
                 # shutdown. The failure is counted and the loop continues.
                 self._metrics.record_failed()

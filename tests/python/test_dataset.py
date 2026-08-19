@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-
 from training.dataset import PackedCausalDataset, build_dataset, load_texts, pack_token_stream
 
 

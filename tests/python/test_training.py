@@ -14,7 +14,6 @@ import pytest
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-
 from training.config import LoRAConfig, TrainingConfig
 from training.dataset import PackedCausalDataset
 from training.evaluation import evaluate, perplexity_from_loss
@@ -29,7 +28,7 @@ class StubCausalLM(nn.Module):
         self.embed = nn.Embedding(vocab, hidden)
         self.head = nn.Linear(hidden, vocab)
 
-    def forward(self, input_ids, attention_mask=None, labels=None):  # noqa: ANN001
+    def forward(self, input_ids, attention_mask=None, labels=None):
         logits = self.head(self.embed(input_ids))
         loss = None
         if labels is not None:

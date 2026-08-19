@@ -236,7 +236,7 @@ class InferenceEngine:
                     f"{len(batch.requests)} requests"
                 )
             self._complete_batch(batch, results, time.monotonic() - started)
-        except Exception as error:  # noqa: BLE001 - the failure belongs to the requests
+        except Exception as error:
             # One bad batch must not take the engine down, and every request in
             # it must be settled so no caller is left waiting.
             _LOG.exception("batch execution failed")

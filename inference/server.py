@@ -20,8 +20,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -63,7 +63,7 @@ def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
 
     try:
         return InferenceEngine(config=config, runner=TransformersRunner(config))
-    except Exception as error:  # noqa: BLE001 - degraded start beats no start
+    except Exception as error:
         _LOG.warning(
             "falling back to the deterministic runner; could not load %s: %s",
             config.model_name,
@@ -74,7 +74,7 @@ def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    global _engine  # noqa: PLW0603 - one process-wide engine by design
+    global _engine
     _engine = build_engine()
     _LOG.info("serving: %s", backend_report())
     try:

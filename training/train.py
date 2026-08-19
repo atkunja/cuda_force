@@ -66,7 +66,10 @@ def build_model(config: TrainingConfig) -> tuple[torch.nn.Module, object]:
     training in fp16 when 4-bit was asked for would produce a run that does not
     fit the memory budget it was configured for.
     """
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # imported lazily: optional dependency
+    from transformers import (  # imported lazily: optional dependency
+        AutoModelForCausalLM,
+        AutoTokenizer,
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
     if tokenizer.pad_token_id is None:

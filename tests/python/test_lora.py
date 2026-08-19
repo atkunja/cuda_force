@@ -3,10 +3,10 @@ from __future__ import annotations
 import pytest
 import torch
 from torch import nn
-
-from cudaforge import ops
 from training.config import LoRAConfig
 from training.lora import LoRALinear, count_parameters, describe_parameters
+
+from cudaforge import ops
 
 
 def test_b_starts_at_zero_so_the_adapted_model_matches_the_base():
