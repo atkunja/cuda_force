@@ -1,6 +1,7 @@
 #include "cudaforge/quantization.cuh"
 
 #include <cfloat>
+#include <cstddef>
 
 #include "cudaforge/cuda_error.cuh"
 #include "cudaforge/cuda_utils.cuh"
@@ -18,11 +19,13 @@ __global__ void quantize_int8(const float* __restrict__ input, std::int8_t* __re
                               float* __restrict__ scales, int count) {
     __shared__ float shared[kWarpSize];
 
-    const int block_index = static_cast<int>(blockIdx.x);
-    const int base = block_index * kQuantBlockSize;
-    const int index = base + static_cast<int>(threadIdx.x);
+    const auto block_index = static_cast<std::size_t>(blockIdx.x);
+    // size_t throughout: block_index * kQuantBlockSize overflows a 32-bit
+    // signed index for the largest tensors this accepts.
+    const std::size_t index = block_index * kQuantBlockSize + threadIdx.x;
+    const bool in_range = index < static_cast<std::size_t>(count);
 
-    const float value = index < count ? input[index] : 0.0F;
+    const float value = in_range ? input[index] : 0.0F;
     const float absmax = block_reduce_max(fabsf(value), shared, 0.0F);
 
     // An all-zero block has absmax 0. Quantising with a zero scale would divide
@@ -34,7 +37,7 @@ __global__ void quantize_int8(const float* __restrict__ input, std::int8_t* __re
         scales[block_index] = scale;
     }
 
-    if (index < count) {
+    if (in_range) {
         // rintf rounds half to even, matching the reference implementation.
         // Truncation would bias every value toward zero and shift the mean of
         // the dequantised tensor.
@@ -46,8 +49,9 @@ __global__ void quantize_int8(const float* __restrict__ input, std::int8_t* __re
 __global__ void dequantize_int8(const std::int8_t* __restrict__ input,
                                 const float* __restrict__ scales, float* __restrict__ output,
                                 int count) {
-    const int index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
-    if (index >= count) {
+    const std::size_t index =
+        blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
+    if (index >= static_cast<std::size_t>(count)) {
         return;
     }
     output[index] = static_cast<float>(input[index]) * scales[index / kQuantBlockSize];
@@ -59,14 +63,15 @@ __global__ void quantize_dequantize(const float* __restrict__ input, float* __re
                                     int count) {
     __shared__ float shared[kWarpSize];
 
-    const int base = static_cast<int>(blockIdx.x) * kQuantBlockSize;
-    const int index = base + static_cast<int>(threadIdx.x);
+    const std::size_t index =
+        static_cast<std::size_t>(blockIdx.x) * kQuantBlockSize + threadIdx.x;
+    const bool in_range = index < static_cast<std::size_t>(count);
 
-    const float value = index < count ? input[index] : 0.0F;
+    const float value = in_range ? input[index] : 0.0F;
     const float absmax = block_reduce_max(fabsf(value), shared, 0.0F);
     const float scale = absmax > 0.0F ? absmax / 127.0F : 1.0F;
 
-    if (index < count) {
+    if (in_range) {
         const float quantised = fminf(fmaxf(rintf(value / scale), -127.0F), 127.0F);
         output[index] = quantised * scale;
     }
