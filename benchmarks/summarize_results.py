@@ -282,6 +282,100 @@ def summarize_metrics(payload: dict[str, Any]) -> str:
     return "".join(out)
 
 
+def summarize_queue(payload: dict[str, Any]) -> str:
+    """Producer/consumer scaling.
+
+    The interesting quantity is not peak throughput but where it stops scaling:
+    one mutex serialises every push and pop, so beyond some thread count the
+    queue is the bottleneck and adding threads makes things worse.
+    """
+    out = [f"### Concurrent queue — {payload.get('hardware_threads', '?')} hardware threads\n"]
+
+    by_capacity: dict[int, list[dict[str, Any]]] = {}
+    for case in payload.get("cases", []):
+        by_capacity.setdefault(case["capacity"], []).append(case)
+
+    for capacity, cases in sorted(by_capacity.items()):
+        out.append(f"\n**Capacity {capacity}**\n\n")
+        best = max((case["items_per_second"] for case in cases), default=0.0)
+        out.append(
+            table(
+                ["producers", "consumers", "items/s", "of best"],
+                [
+                    [
+                        str(case["producers"]),
+                        str(case["consumers"]),
+                        f"{case['items_per_second']:,.0f}",
+                        f"{100 * case['items_per_second'] / best:.0f}%" if best else "—",
+                    ]
+                    for case in cases
+                ],
+            )
+        )
+
+    out.append(
+        "\nThroughput falling as threads are added means the queue's single "
+        "mutex has become the bottleneck. The fix is sharding it, not removing "
+        "the lock.\n"
+    )
+    return "".join(out)
+
+
+def summarize_scheduler(payload: dict[str, Any]) -> str:
+    out = ["### Batch scheduler\n"]
+    if note := payload.get("note"):
+        out.append(f"\n{note}\n\n")
+
+    out.append(
+        table(
+            ["producers", "batch", "wait µs", "req/s", "avg batch", "timeout", "p99 ms"],
+            [
+                [
+                    str(case["producers"]),
+                    str(case["max_batch_size"]),
+                    str(case["max_wait_us"]),
+                    f"{case['requests_per_second']:,.0f}",
+                    f"{case['average_batch_size']:.2f}",
+                    f"{100 * case['timeout_closure_fraction']:.0f}%",
+                    f"{case['queue_delay_p99_ms']:.2f}",
+                ]
+                for case in payload.get("cases", [])
+            ],
+        )
+    )
+    return "".join(out)
+
+
+def summarize_memory(payload: dict[str, Any]) -> str:
+    out = [f"### Memory pool — {payload.get('backend', '?')} backend\n"]
+    if note := payload.get("note"):
+        out.append(f"\n{note}\n\n")
+
+    out.append(
+        table(
+            ["threads", "pool s", "raw s", "allocations", "backend calls", "reuse"],
+            [
+                [
+                    str(case["threads"]),
+                    f"{case['pool_seconds']:.4f}",
+                    f"{case['raw_backend_seconds']:.4f}",
+                    f"{case['pool_allocations']:,}",
+                    str(case["backend_allocations"]),
+                    f"{100 * case['reuse_rate']:.2f}%",
+                ]
+                for case in payload.get("cases", [])
+            ],
+        )
+    )
+    out.append(
+        "\nThe column that transfers to the device backend is **backend calls**: "
+        "each one avoided there is a `cudaMalloc` that would have synchronised "
+        "the device. The wall-clock saving on the host backend is small because "
+        "malloc already caches.\n"
+    )
+    return "".join(out)
+
+
 SUMMARIES = {
     "cuda_kernels": summarize_cuda_kernels,
     "dynamic_batching": summarize_batching,
@@ -289,6 +383,9 @@ SUMMARIES = {
     "latency_histogram": summarize_histogram,
     "kv_cache_occupancy": summarize_kv_cache,
     "metrics_overhead": summarize_metrics,
+    "concurrent_queue": summarize_queue,
+    "dynamic_batcher": summarize_scheduler,
+    "memory_pool": summarize_memory,
 }
 
 
