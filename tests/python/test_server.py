@@ -262,3 +262,49 @@ def test_sampling_fields_are_still_range_checked_when_supplied(client):
         {"prompt": "ok", "top_k": -1},
     ):
         assert client.post("/generate", json=body).status_code == 422
+
+
+def test_build_engine_falls_back_when_the_model_cannot_load(monkeypatch):
+    # A startup crash gives no signal about which part failed; a degraded start
+    # that says so in /health is more useful.
+    from cudaforge.runners import TransformersRunner
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("no such model")
+
+    monkeypatch.setattr(server, "TransformersRunner", explode)
+    monkeypatch.delenv("CUDAFORGE_ECHO_RUNNER", raising=False)
+
+    engine = server.build_engine(
+        EngineConfig(model_name="does-not-exist", warmup_iterations=0)
+    )
+    try:
+        assert "EchoRunner" in engine.snapshot().extra["runner"]
+    finally:
+        engine.shutdown()
+    assert TransformersRunner is not None  # the real one is still importable
+
+
+def test_the_echo_runner_environment_variable_short_circuits_loading(monkeypatch):
+    monkeypatch.setenv("CUDAFORGE_ECHO_RUNNER", "1")
+
+    def explode(*_args, **_kwargs):  # must never be reached
+        raise AssertionError("model loading should have been skipped")
+
+    monkeypatch.setattr(server, "TransformersRunner", explode)
+
+    engine = server.build_engine(EngineConfig(warmup_iterations=0))
+    try:
+        assert "EchoRunner" in engine.snapshot().extra["runner"]
+    finally:
+        engine.shutdown()
+
+
+def test_endpoints_report_503_before_the_engine_is_ready(monkeypatch):
+    # /ready must say "not yet" rather than raising, so an orchestrator sees a
+    # clean not-ready signal during startup.
+    monkeypatch.setattr(server, "_engine", None)
+    import asyncio
+
+    response = asyncio.run(server.ready())
+    assert response.status_code == 503
