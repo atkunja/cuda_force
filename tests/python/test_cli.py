@@ -97,3 +97,19 @@ def test_help_exits_cleanly():
     with pytest.raises(SystemExit) as excinfo:
         cli.bench(["--help"])
     assert excinfo.value.code == 0
+
+
+def test_version_flag_reports_the_package_version(capsys):
+    import cudaforge
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli.bench(["--version"])
+    assert excinfo.value.code == 0
+    assert cudaforge.__version__ in capsys.readouterr().out
+
+
+def test_both_entry_points_accept_version():
+    for entry in (cli.bench, cli.serve):
+        with pytest.raises(SystemExit) as excinfo:
+            entry(["--version"])
+        assert excinfo.value.code == 0
