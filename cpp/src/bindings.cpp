@@ -16,6 +16,7 @@
 // testable on a machine with no GPU.
 
 #include <torch/extension.h>
+#include <torch/csrc/autograd/autograd_not_implemented_fallback.h>
 
 #include <string>
 #include <vector>
@@ -314,6 +315,22 @@ TORCH_LIBRARY(cudaforge, m) {
     m.def("swiglu(Tensor gate, Tensor up) -> Tensor");
     m.def("quantize_int8(Tensor input) -> Tensor[]");
     m.def("dequantize_int8(Tensor quantised, Tensor scales) -> Tensor");
+}
+
+// These operators are inference-only: no backward kernels exist for them.
+//
+// Without this registration PyTorch falls back to a behaviour that lets a
+// backward pass run *through* them and produce quietly incorrect gradients —
+// it warns, once, and then keeps going. Silently wrong gradients are the worst
+// possible failure mode: training converges to something, just not to the right
+// thing, and nothing points at the cause.
+//
+// The fallback below turns that into an immediate, explicit error naming the
+// operator. Anyone who needs gradients should use the reference implementations
+// in `cudaforge.ops`, which are ordinary ATen compositions and differentiate
+// normally, or the PEFT/transformers path that `training/` uses.
+TORCH_LIBRARY_IMPL(cudaforge, Autograd, m) {
+    m.fallback(torch::autograd::autogradNotImplementedFallback());
 }
 
 TORCH_LIBRARY_IMPL(cudaforge, CPU, m) {
