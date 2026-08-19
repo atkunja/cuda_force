@@ -105,15 +105,33 @@ def backend_report() -> BackendReport:
     )
 
 
-def _dispatch_available(name: str, tensor: torch.Tensor) -> bool:
-    """True when the registered operator should handle this tensor."""
+def _needs_autograd(*tensors: torch.Tensor) -> bool:
+    """True when this call is expected to participate in a backward pass."""
+    return torch.is_grad_enabled() and any(tensor.requires_grad for tensor in tensors)
+
+
+def _dispatch_available(name: str, *tensors: torch.Tensor) -> bool:
+    """True when the registered operator should handle these tensors.
+
+    The custom kernels are inference-only: no backward kernels exist, and the
+    extension registers an explicit guard so that attempting to differentiate
+    through one raises rather than producing quietly wrong gradients.
+
+    Rather than propagate that restriction to callers, this returns False when a
+    backward pass is expected, so the call lands on the reference
+    implementation — an ordinary ATen composition that differentiates correctly.
+    The result is identical either way; only the implementation and the presence
+    of a gradient differ.
+    """
     if not _EXTENSION_LOADED:
         return False
     if not hasattr(torch.ops.cudaforge, name):
         return False
+    if _needs_autograd(*tensors):
+        return False
     # The CUDA implementation is only registered when compiled with CUDA. For a
     # CPU tensor the dispatcher's CPU implementation is registered either way.
-    if tensor.is_cuda:
+    if tensors and tensors[0].is_cuda:
         return _CUDA_COMPILED
     return True
 
@@ -228,7 +246,7 @@ def rmsnorm(x: torch.Tensor, weight: torch.Tensor, eps: float = 1e-6) -> torch.T
     x = x.contiguous()
     weight = weight.contiguous()
 
-    if _dispatch_available("rmsnorm", x) and x.ndim == 2 and x.dtype == torch.float32:
+    if _dispatch_available("rmsnorm", x, weight) and x.ndim == 2 and x.dtype == torch.float32:
         return torch.ops.cudaforge.rmsnorm(x, weight, eps)
     return _rmsnorm_reference(x, weight, eps)
 
@@ -281,7 +299,11 @@ def lora_linear(
     lora_a = lora_a.contiguous()
     lora_b = lora_b.contiguous()
 
-    if _dispatch_available("lora_linear", x) and x.ndim == 2 and x.dtype == torch.float32:
+    if (
+        _dispatch_available("lora_linear", x, weight, lora_a, lora_b)
+        and x.ndim == 2
+        and x.dtype == torch.float32
+    ):
         return torch.ops.cudaforge.lora_linear(x, weight, lora_a, lora_b, scale)
     return _lora_linear_reference(x, weight, lora_a, lora_b, scale)
 
@@ -335,7 +357,7 @@ def swiglu(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
 
     gate = gate.contiguous()
     up = up.contiguous()
-    if _dispatch_available("swiglu", gate) and gate.dtype == torch.float32:
+    if _dispatch_available("swiglu", gate, up) and gate.dtype == torch.float32:
         return torch.ops.cudaforge.swiglu(gate, up)
     return _swiglu_reference(gate, up)
 
@@ -376,7 +398,7 @@ def dequantize_int8(quantised: torch.Tensor, scales: torch.Tensor) -> torch.Tens
 
     quantised = quantised.contiguous()
     scales = scales.contiguous()
-    if _dispatch_available("dequantize_int8", quantised):
+    if _dispatch_available("dequantize_int8", quantised, scales):
         return torch.ops.cudaforge.dequantize_int8(quantised, scales)
     return _dequantize_int8_reference(quantised, scales)
 
