@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Create a virtual environment and install CudaForge with its extras.
+#
+# The extension build is best-effort on purpose: the package must remain
+# installable and usable on a machine with no CUDA toolkit and no compiler,
+# because the operators fall back to reference PyTorch implementations.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+PYTHON="${PYTHON:-python3}"
+VENV="${VENV:-.venv}"
+
+echo "==> creating $VENV with $($PYTHON --version)"
+"$PYTHON" -m venv "$VENV"
+# shellcheck disable=SC1090
+source "$VENV/bin/activate"
+
+python -m pip install --quiet --upgrade pip setuptools wheel
+
+echo "==> installing cudaforge and development dependencies"
+pip install --quiet -e ".[dev]"
+
+if [[ "${CUDAFORGE_INSTALL_TRAIN:-1}" == "1" ]]; then
+  echo "==> installing training dependencies"
+  pip install --quiet -e ".[train]"
+fi
+
+if [[ "${CUDAFORGE_INSTALL_SERVE:-1}" == "1" ]]; then
+  echo "==> installing serving dependencies"
+  pip install --quiet -e ".[serve]"
+fi
+
+# bitsandbytes has no macOS wheel and no CPU backend, so QLoRA is opt-in rather
+# than part of the default install.
+if [[ "$(uname -s)" == "Linux" ]] && command -v nvcc >/dev/null 2>&1; then
+  echo "==> CUDA toolkit detected; installing quantisation dependencies"
+  pip install --quiet -e ".[quantize]" || echo "    bitsandbytes install failed; QLoRA unavailable"
+else
+  echo "==> no CUDA toolkit; skipping bitsandbytes (QLoRA will be unavailable)"
+fi
+
+echo
+python - <<'PY'
+import torch
+from cudaforge.ops import backend_report
+
+print(backend_report())
+print(f"torch {torch.__version__}  cuda={torch.cuda.is_available()}")
+PY
+
+echo
+echo "activate with: source $VENV/bin/activate"
