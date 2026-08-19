@@ -91,4 +91,28 @@ double BlockAllocator::utilisation() const {
     return static_cast<double>(total_ - free_list_.size()) / static_cast<double>(total_);
 }
 
+void SequenceBlockTable::add_tokens(std::size_t count) {
+    if (tokens_ + count > capacity()) {
+        throw std::out_of_range(
+            "SequenceBlockTable::add_tokens beyond the allocated blocks; allocate first");
+    }
+    tokens_ += count;
+}
+
+void SequenceBlockTable::replace_block(std::size_t logical_index, BlockId block) {
+    if (logical_index >= blocks_.size()) {
+        throw std::out_of_range("SequenceBlockTable::replace_block on an unheld block");
+    }
+    blocks_[logical_index] = block;
+}
+
+std::pair<BlockId, std::size_t> SequenceBlockTable::locate(std::size_t token_index) const {
+    if (token_index >= tokens_) {
+        throw std::out_of_range("SequenceBlockTable::locate past the end of the sequence");
+    }
+    // The whole point of the scheme: a logical token index resolves through the
+    // table to an arbitrary physical block, so the cache need not be contiguous.
+    return {blocks_[token_index / block_size_], token_index % block_size_};
+}
+
 }  // namespace cudaforge

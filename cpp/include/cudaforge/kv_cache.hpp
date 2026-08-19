@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -94,6 +95,55 @@ private:
     std::size_t block_size_;
     std::vector<BlockId> free_list_;
     std::vector<std::uint32_t> reference_counts_;
+};
+
+/// Per-sequence mapping from logical block index to physical block.
+///
+/// A sequence's tokens are laid out logically as
+/// `[block 0][block 1]...[block n]`, but the physical blocks backing them are
+/// wherever the allocator had space. This table is what the attention kernel
+/// would index through — the indirection that makes the cache non-contiguous
+/// and therefore fragmentation-free.
+class SequenceBlockTable {
+public:
+    SequenceBlockTable(SequenceId id, std::size_t block_size)
+        : id_(id), block_size_(block_size) {}
+
+    [[nodiscard]] SequenceId id() const noexcept { return id_; }
+    [[nodiscard]] std::size_t token_count() const noexcept { return tokens_; }
+    [[nodiscard]] const std::vector<BlockId>& blocks() const noexcept { return blocks_; }
+
+    /// Tokens that fit in the blocks already held.
+    [[nodiscard]] std::size_t capacity() const noexcept { return blocks_.size() * block_size_; }
+
+    /// Unused slots in the final block. This is the *entire* internal
+    /// fragmentation of a paged cache: at most `block_size - 1` tokens per
+    /// sequence, against thousands for a contiguous cache sized to the maximum
+    /// sequence length.
+    [[nodiscard]] std::size_t slack() const noexcept { return capacity() - tokens_; }
+
+    /// True when the next token needs a block the sequence does not yet hold.
+    [[nodiscard]] bool needs_block() const noexcept { return tokens_ >= capacity(); }
+
+    void append_block(BlockId block) { blocks_.push_back(block); }
+
+    /// Records `count` more tokens. Throws if they do not fit — the caller must
+    /// have allocated first, and silently overrunning would corrupt the block
+    /// belonging to whichever sequence holds the next one.
+    void add_tokens(std::size_t count);
+
+    /// Replaces a logical block, for copy-on-write when a shared block must be
+    /// written to.
+    void replace_block(std::size_t logical_index, BlockId block);
+
+    /// Physical block holding a given token, and its offset within it.
+    [[nodiscard]] std::pair<BlockId, std::size_t> locate(std::size_t token_index) const;
+
+private:
+    SequenceId id_;
+    std::size_t block_size_;
+    std::size_t tokens_ = 0;
+    std::vector<BlockId> blocks_;
 };
 
 }  // namespace cudaforge
