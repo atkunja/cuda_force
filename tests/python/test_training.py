@@ -309,3 +309,69 @@ def test_two_seeded_runs_produce_the_same_result(tmp_path, loader):
     # Missing a seed is the usual reason two runs with identical configs
     # diverge, and it is invisible until someone tries to reproduce a result.
     assert run() == pytest.approx(run())
+
+
+# --- the command line ------------------------------------------------------
+
+
+def test_main_applies_flag_overrides_on_top_of_a_config(tmp_path, monkeypatch):
+    import yaml
+
+    from training import train as train_module
+
+    config_path = tmp_path / "run.yaml"
+    config_path.write_text(
+        yaml.safe_dump({"model_name": "from-file", "batch_size": 2, "epochs": 5}),
+        encoding="utf-8",
+    )
+
+    captured: dict[str, TrainingConfig] = {}
+    monkeypatch.setattr(
+        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
+    )
+
+    assert (
+        train_module.main(
+            ["--config", str(config_path), "--epochs", "2", "--lora-rank", "16"]
+        )
+        == 0
+    )
+
+    config = captured["config"]
+    assert config.model_name == "from-file"  # untouched by flags
+    assert config.epochs == 2  # overridden
+    assert config.lora.rank == 16
+
+
+def test_main_validates_the_resulting_config(tmp_path, monkeypatch):
+    # An override that produces an unworkable config must fail at startup, not
+    # partway through a run.
+    from training import train as train_module
+
+    monkeypatch.setattr(train_module, "train", lambda config: TrainState())
+    with pytest.raises(ValueError, match="batch_size"):
+        train_module.main(["--batch-size", "0"])
+
+
+def test_main_defaults_need_no_config_file(monkeypatch):
+    from training import train as train_module
+
+    captured: dict[str, TrainingConfig] = {}
+    monkeypatch.setattr(
+        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
+    )
+
+    assert train_module.main(["--max-steps", "1"]) == 0
+    assert captured["config"].max_steps == 1
+
+
+def test_the_4bit_flag_is_recorded(monkeypatch):
+    from training import train as train_module
+
+    captured: dict[str, TrainingConfig] = {}
+    monkeypatch.setattr(
+        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
+    )
+
+    train_module.main(["--load-in-4bit", "--max-steps", "1"])
+    assert captured["config"].load_in_4bit
