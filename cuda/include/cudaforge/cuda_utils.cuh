@@ -5,39 +5,12 @@
 #include <cstddef>
 #include <cstdint>
 
+// Launch geometry lives in a CUDA-free header so it can be compiled and tested
+// on a machine with no toolkit. kWarpSize, kDefaultBlockSize, ceil_div,
+// block_size_for_row and grid_size_for_stride_loop all come from here.
+#include "cudaforge/launch_config.hpp"
+
 namespace cudaforge {
-
-/// Threads per warp. Hard-coded rather than read from device properties
-/// because the warp-level primitives below assume 32 at compile time; a device
-/// with a different warp size would need different code, not a different
-/// constant.
-inline constexpr int kWarpSize = 32;
-
-/// Chosen for the elementwise and row-wise kernels here. 256 gives four warps
-/// per block, which keeps enough warps resident to hide memory latency while
-/// leaving register headroom — at 1024 threads the register budget per thread
-/// drops far enough to spill on several of these kernels.
-inline constexpr int kDefaultBlockSize = 256;
-
-[[nodiscard]] inline constexpr int ceil_div(int numerator, int denominator) {
-    return (numerator + denominator - 1) / denominator;
-}
-
-[[nodiscard]] inline constexpr std::size_t ceil_div(std::size_t numerator,
-                                                    std::size_t denominator) {
-    return (numerator + denominator - 1) / denominator;
-}
-
-/// Rounds up to the next power of two, capped at the maximum block size.
-/// Row-wise reductions want a block size that is a power of two so the
-/// tree-reduction halving loop terminates cleanly at one active thread.
-[[nodiscard]] inline int block_size_for_row(int row_length) {
-    int size = kWarpSize;
-    while (size < row_length && size < 1024) {
-        size *= 2;
-    }
-    return size;
-}
 
 /// Sums a value across the 32 lanes of a warp.
 ///
