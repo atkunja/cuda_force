@@ -1,0 +1,31 @@
+# Tuned for throughput.
+#
+# A large batch and a generous wait: requests are aggregated aggressively so
+# each weight read is amortised over as many rows as possible. Appropriate for
+# batch or offline traffic where total tokens per second matters and no one is
+# watching an individual response.
+#
+# The cost is direct and bounded: no request waits longer than max_wait_us plus
+# its batch's service time.
+#
+#   cudaforge-serve --config inference/configs/throughput.yaml
+
+model_name: gpt2
+device: auto
+dtype: auto
+
+max_batch_size: 64
+max_wait_us: 20000
+# Deep enough to keep the batcher fed through arrival bursts. A queue smaller
+# than max_batch_size would make the configured batch size unreachable.
+queue_capacity: 4096
+worker_threads: 8
+cuda_streams: 4
+
+max_prompt_chars: 8192
+warmup_iterations: 5
+
+generation:
+  max_new_tokens: 128
+  temperature: 0.7
+  top_p: 0.95
