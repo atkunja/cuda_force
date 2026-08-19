@@ -124,3 +124,41 @@ Three, each deliberate:
 * **`python/cudaforge/runners.py` was added.** The engine needs to be
   model-agnostic for its concurrency to be testable without downloading weights;
   the runner protocol is that seam.
+
+## Failure isolation
+
+Every boundary that crosses a thread has an explicit answer for "what if this
+throws":
+
+| Site | Behaviour | Reason |
+| --- | --- | --- |
+| Task in `ThreadPool` | counted, swallowed; worker survives | otherwise the pool loses capacity one task at a time until it deadlocks |
+| Handler in `DynamicBatcher` | counted, swallowed; batcher survives | otherwise every subsequent request stalls in the queue until shutdown |
+| Runner in `InferenceEngine` | every request in the batch is failed individually | each caller learns what happened; the engine keeps serving |
+| Runner returns the wrong row count | treated as a batch failure | caught explicitly *inside* the guard — see below |
+| CUDA call | throws `CudaError` with the status code | callers can distinguish recoverable OOM from a poisoned context |
+
+The row-count case is worth singling out because it was a real bug found by its
+own test. The zip that pairs requests with results originally sat outside the
+try block, so a runner returning too few rows raised inside the executor, where
+nothing completed the futures — every caller blocked until its timeout with no
+error. The check now happens inside the guard, and the failure path settles
+every future.
+
+## Threading model summary
+
+| Component | Threads | Synchronisation |
+| --- | --- | --- |
+| `ConcurrentQueue` | any | one mutex, two condition variables |
+| `ThreadPool` | N workers | queue's mutex; relaxed atomics for counters |
+| `DynamicBatcher` | exactly 1 | owns formation; no shared mutable state |
+| `InferenceEngine` | 1 batcher + W workers | one mutex over the future registry, never held across generation |
+| `Metrics` (C++) | any | relaxed atomics; histogram has its own mutex |
+| `Metrics` (Python) | any | one lock; the GIL makes contention irrelevant |
+| `GpuScheduler` | any | relaxed atomic counter for assignment; mutex for stats only |
+| `MemoryPool` | any | one mutex over free lists and stats |
+
+The pattern throughout: **atomics for independent counters on hot paths, a mutex
+wherever an invariant spans more than one word.** A relaxed atomic is used only
+where nothing is published through it — no reader establishes happens-before
+from a counter.
