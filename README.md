@@ -157,7 +157,10 @@ bitsandbytes off Linux. The package remains importable and fully testable
 either way.
 
 ```bash
-# Which implementation path is actually active
+# What this machine can actually build and run
+python scripts/environment_report.py
+
+# Which implementation path is active
 python -c "from cudaforge.ops import backend_report; print(backend_report())"
 
 # One request end to end

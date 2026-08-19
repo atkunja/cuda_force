@@ -2,6 +2,16 @@
 
 Symptoms, in the order they are usually hit.
 
+## Start here
+
+```bash
+python scripts/environment_report.py
+```
+
+Reports what this machine can build and run, and says plainly when the CUDA
+paths are unavailable. Most "why doesn't X work" questions are answered by that
+output before anything else is investigated.
+
 ## "It's slow" — but is it even using the custom kernels?
 
 ```python

@@ -1,5 +1,14 @@
 # Development Environment
 
+```bash
+python scripts/environment_report.py
+```
+
+That prints the same facts for whatever machine you are on, including a direct
+answer to "what can this machine actually build and run". The record below is
+the development host, and it is the basis for every "not measured here" claim in
+this repository.
+
 This report records the machine CudaForge was developed on. It matters because
 the development host has **no NVIDIA GPU**, which determines exactly which parts
 of this repository were executed locally and which are hardware-pending.
@@ -22,7 +31,10 @@ of this repository were executed locally and which are hardware-pending.
 | CMake | 3.31+ (Homebrew) | Used for the portable C++ targets |
 | Ninja | Homebrew | Default CMake generator |
 | GNU Make | 3.81 (Apple) | Present but unused; Ninja preferred |
-| Python | 3.12 (Homebrew) | System Python 3.9.6 is too old for the pinned deps |
+| Python | 3.12.14 (Homebrew) | System Python 3.9.6 is too old for the pinned deps |
+| PyTorch | 2.13.0 | CPU/MPS build; `torch.cuda.is_available()` is False |
+| transformers / peft | 5.15.1 / 0.20.0 | |
+| shellcheck | Homebrew | |
 | Docker | 29.6.1 | Engine present; see CUDA caveat below |
 | Git | 2.50.1 | |
 | gh | Homebrew | |
