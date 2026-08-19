@@ -226,12 +226,19 @@ async def metrics_prometheus() -> PlainTextResponse:
 async def generate(request: GenerateRequest, response: FastAPIResponse) -> GenerateResponse:
     engine = _require_engine()
 
+    # Omitted fields fall back to the engine's configured defaults, so a
+    # `generation:` block in a serving config actually takes effect.
+    defaults = engine.config.generation
     generation = GenerationConfig(
-        max_new_tokens=request.max_new_tokens,
-        temperature=request.temperature,
-        top_p=request.top_p,
-        top_k=request.top_k,
-        seed=request.seed,
+        max_new_tokens=request.max_new_tokens
+        if request.max_new_tokens is not None
+        else defaults.max_new_tokens,
+        temperature=request.temperature
+        if request.temperature is not None
+        else defaults.temperature,
+        top_p=request.top_p if request.top_p is not None else defaults.top_p,
+        top_k=request.top_k if request.top_k is not None else defaults.top_k,
+        seed=request.seed if request.seed is not None else defaults.seed,
     )
 
     try:

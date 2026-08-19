@@ -13,13 +13,19 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class GenerateRequest(BaseModel):
-    """A single generation request."""
+    """A single generation request.
+
+    Every sampling field is optional. An omitted field falls back to the
+    engine's configured default rather than to a constant here — otherwise the
+    `generation:` block in a serving config would be silently ignored, which is
+    worse than not offering it.
+    """
 
     prompt: str = Field(..., min_length=1, max_length=8192)
-    max_new_tokens: int = Field(64, ge=1, le=2048)
-    temperature: float = Field(0.7, ge=0.0, le=2.0)
-    top_p: float = Field(1.0, gt=0.0, le=1.0)
-    top_k: int = Field(0, ge=0, description="0 disables top-k filtering")
+    max_new_tokens: int | None = Field(None, ge=1, le=2048)
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
+    top_p: float | None = Field(None, gt=0.0, le=1.0)
+    top_k: int | None = Field(None, ge=0, description="0 disables top-k filtering")
     seed: int | None = Field(None, ge=0)
     deadline_seconds: float | None = Field(
         None,
