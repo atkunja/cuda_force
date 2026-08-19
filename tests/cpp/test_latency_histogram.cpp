@@ -197,8 +197,7 @@ TEST_CASE("min and max bracket every recorded sample", "[histogram][buckets]") {
     REQUIRE(histogram.percentile(0.0) <= histogram.max_ns());
 }
 
-TEST_CASE("a single sample is its own percentile at every quantile",
-          "[histogram][buckets]") {
+TEST_CASE("a single sample is its own percentile at every quantile", "[histogram][buckets]") {
     LatencyHistogram histogram;
     histogram.record(123'456);
     const std::uint64_t reported = histogram.percentile(0.5);
