@@ -69,7 +69,6 @@ void launch_gelu(const float* input, float* output, int count, cudaStream_t stre
 /// measured against. Comparing the fused kernel against nothing would say
 /// nothing; comparing it against the two launches it replaces is the whole
 /// point.
-void launch_add(const float* a, const float* b, float* output, int count,
-                cudaStream_t stream);
+void launch_add(const float* a, const float* b, float* output, int count, cudaStream_t stream);
 
 }  // namespace cudaforge

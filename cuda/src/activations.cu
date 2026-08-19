@@ -127,8 +127,7 @@ void launch_gelu(const float* input, float* output, int count, cudaStream_t stre
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_add(const float* a, const float* b, float* output, int count,
-                cudaStream_t stream) {
+void launch_add(const float* a, const float* b, float* output, int count, cudaStream_t stream) {
     if (count <= 0) {
         return;
     }

@@ -238,9 +238,8 @@ void benchmark_activations(JsonWriter& writer, cudaStream_t stream) {
         gate.fill_zero(stream);
         up.fill_zero(stream);
 
-        const Timing silu = time_kernel(stream, [&] {
-            launch_silu(gate.data(), output.data(), count, stream);
-        });
+        const Timing silu =
+            time_kernel(stream, [&] { launch_silu(gate.data(), output.data(), count, stream); });
         // One read and one write.
         emit(writer, "silu", "scalar", std::to_string(count), silu,
              effective_bandwidth(2 * static_cast<std::size_t>(count) * sizeof(float),
@@ -278,8 +277,8 @@ void benchmark_fused_norm(JsonWriter& writer, cudaStream_t stream) {
 
         const Timing fused = time_kernel(stream, [&] {
             launch_fused_residual_rmsnorm(input.data(), residual.data(), weight.data(),
-                                          output.data(), residual_out.data(), rows, cols,
-                                          1e-6F, stream);
+                                          output.data(), residual_out.data(), rows, cols, 1e-6F,
+                                          stream);
         });
         // Two reads and two writes.
         emit(writer, "fused_residual_rmsnorm", "fused", label, fused,
@@ -290,8 +289,8 @@ void benchmark_fused_norm(JsonWriter& writer, cudaStream_t stream) {
         const Timing unfused = time_kernel(stream, [&] {
             launch_add(input.data(), residual.data(), residual_out.data(),
                        static_cast<int>(elements), stream);
-            launch_rmsnorm(residual_out.data(), weight.data(), output.data(), rows, cols,
-                           1e-6F, RMSNormKernel::Naive, stream);
+            launch_rmsnorm(residual_out.data(), weight.data(), output.data(), rows, cols, 1e-6F,
+                           RMSNormKernel::Naive, stream);
         });
         emit(writer, "fused_residual_rmsnorm", "separate", label, unfused,
              effective_bandwidth(6 * elements * sizeof(float), unfused.median_ms));

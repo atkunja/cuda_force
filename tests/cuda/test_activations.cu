@@ -197,8 +197,8 @@ TEST_CASE("elementwise add matches the host", "[cuda][activation]") {
     DeviceBuffer<float> device_out(a.size());
     device_a.copy_from_host(a.data(), a.size(), stream);
     device_b.copy_from_host(b.data(), b.size(), stream);
-    launch_add(device_a.data(), device_b.data(), device_out.data(),
-               static_cast<int>(a.size()), stream);
+    launch_add(device_a.data(), device_b.data(), device_out.data(), static_cast<int>(a.size()),
+               stream);
 
     std::vector<float> actual(a.size());
     device_out.copy_to_host(actual.data(), actual.size(), stream);
