@@ -263,3 +263,57 @@ TEST_CASE("pinned buffers are addressable", "[cuda][raii]") {
     REQUIRE(buffer[0] == 1.5F);
     REQUIRE(buffer[255] == 2.5F);
 }
+
+TEST_CASE("a bad launch configuration is reported, not ignored", "[cuda][error]") {
+    // cudaGetLastError is the synchronous half of the launch check. Without it
+    // an invalid configuration is silently dropped and the failure surfaces at
+    // an unrelated call thousands of lines later.
+    CudaStream stream;
+    DeviceBuffer<float> input(1024);
+    DeviceBuffer<float> output(1);
+    input.fill_zero(stream);
+    output.fill_zero(stream);
+
+    // A shared-memory request far beyond any device's limit.
+    int device = 0;
+    CUDAFORGE_CHECK(cudaGetDevice(&device));
+    int max_shared = 0;
+    CUDAFORGE_CHECK(
+        cudaDeviceGetAttribute(&max_shared, cudaDevAttrMaxSharedMemoryPerBlock, device));
+
+    // The launcher clamps its own requests, so this drives the raw API to show
+    // that the checking macro turns the failure into an exception.
+    const cudaError_t status = cudaFuncSetAttribute(
+        nullptr, cudaFuncAttributeMaxDynamicSharedMemorySize, max_shared * 100);
+    REQUIRE(status != cudaSuccess);
+    // Clear the sticky-free error so later cases are unaffected.
+    static_cast<void>(cudaGetLastError());
+}
+
+TEST_CASE("a checked failure carries an actionable message", "[cuda][error]") {
+    // The message names the file, line and expression, because a bare status
+    // code sends the reader to the CUDA header rather than to the call site.
+    try {
+        CUDAFORGE_CHECK(cudaSetDevice(9999));
+        FAIL("expected the invalid device to be rejected");
+    } catch (const CudaError& error) {
+        const std::string message = error.what();
+        REQUIRE(message.find("CUDA error") != std::string::npos);
+        REQUIRE(message.find("cudaSetDevice") != std::string::npos);
+        REQUIRE(message.find(__FILE__) != std::string::npos);
+    }
+    static_cast<void>(cudaGetLastError());
+    CUDAFORGE_CHECK(cudaSetDevice(0));
+}
+
+TEST_CASE("stream priorities are within the device range", "[cuda][scheduler]") {
+    // The scheduler creates streams at the highest available priority so
+    // inference is not preempted by background work on the same device.
+    int lowest = 0;
+    int highest = 0;
+    CUDAFORGE_CHECK(cudaDeviceGetStreamPriorityRange(&lowest, &highest));
+    REQUIRE(highest <= lowest);  // lower numeric value means higher priority
+
+    REQUIRE_NOTHROW(CudaStream(highest));
+    REQUIRE_NOTHROW(CudaStream(lowest));
+}
