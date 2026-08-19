@@ -1,0 +1,38 @@
+# Dependency updates.
+#
+# Weekly rather than daily: this project pins a small number of dependencies and
+# a daily cadence produces more pull requests than there is signal in them.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Action versions are the ones most likely to break CI silently by being
+    # deprecated, so they are grouped into a single reviewable PR.
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Development tooling can move together; a ruff or mypy bump either passes
+      # CI or does not, and reviewing them one at a time adds nothing.
+      dev-tools:
+        patterns: ["ruff", "mypy", "pytest*", "pre-commit"]
+    ignore:
+      # torch is deliberately not auto-bumped. A major version can change
+      # dispatcher behaviour and the extension's ABI, which needs a deliberate
+      # migration rather than a green checkmark.
+      - dependency-name: torch
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
