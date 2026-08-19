@@ -21,6 +21,17 @@ class GenerateRequest(BaseModel):
     top_p: float = Field(1.0, gt=0.0, le=1.0)
     top_k: int = Field(0, ge=0, description="0 disables top-k filtering")
     seed: int | None = Field(None, ge=0)
+    deadline_seconds: float | None = Field(
+        None,
+        gt=0,
+        le=600,
+        description=(
+            "Drop this request instead of executing it if it is still waiting "
+            "after this many seconds. Set it to your client timeout: past that "
+            "point the work is wasted, and under load it displaces requests "
+            "someone is still waiting for."
+        ),
+    )
 
     @field_validator("prompt")
     @classmethod
@@ -86,6 +97,7 @@ class MetricsResponse(BaseModel):
     requests_completed: int
     requests_failed: int
     requests_rejected: int
+    requests_expired: int
 
     batches_processed: int
     batches_closed_by_size: int

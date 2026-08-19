@@ -138,7 +138,12 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
 
     try:
         # block_when_full=False: shed load rather than hold the connection.
-        future = engine.submit(request.prompt, generation, block_when_full=False)
+        future = engine.submit(
+            request.prompt,
+            generation,
+            block_when_full=False,
+            deadline_seconds=request.deadline_seconds,
+        )
     except EngineClosedError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     except ValueError as error:
@@ -152,8 +157,12 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     response = await loop.run_in_executor(None, future.result, 300.0)
 
     if not response.ok:
+        # A missed deadline is the runtime shedding load deliberately, not a
+        # server fault. 503 tells the client to retry or back off; 500 would
+        # suggest something is broken.
+        expired = "RequestExpired" in (response.error or "")
         return JSONResponse(
-            status_code=500,
+            status_code=503 if expired else 500,
             content={"detail": response.error, "request_id": response.request_id},
         )
 
