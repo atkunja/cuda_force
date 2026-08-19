@@ -73,11 +73,11 @@ custom CUDA structural linter, 3 CI workflows, multi-stage CUDA Dockerfile with
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **70 cases, 19,430 assertions — pass** |
+| C++ test suite | **87 cases, 4,409 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **182 tests — pass** |
+| Python test suite | **251 tests — pass** |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
