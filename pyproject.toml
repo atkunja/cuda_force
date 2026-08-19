@@ -63,6 +63,7 @@ select = [
   "UP",   # pyupgrade
   "B",    # bugbear
   "SIM",  # simplify
+  "BLE",  # blind excepts — each one must be justified at the site
   "RUF",
   "ANN",  # missing annotations
 ]

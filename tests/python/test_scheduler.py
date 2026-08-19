@@ -299,7 +299,8 @@ def test_expired_requests_are_dropped_rather_than_executed():
 
     assert len(dropped) == 6
     assert collector.total == 4
-    assert all("fresh" in request.prompt for batch in collector.batches for request in batch.requests)
+    batched = [request for batch in collector.batches for request in batch.requests]
+    assert all("fresh" in request.prompt for request in batched)
     assert metrics.snapshot().requests_expired == 6
 
 
