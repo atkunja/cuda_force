@@ -305,3 +305,62 @@ this is equivalent.
 
 The error bound this scheme does guarantee is half a quantisation step —
 `scale_b / 2` — and both the CUDA and Python test suites assert exactly that.
+
+## Error handling
+
+Every CUDA runtime call goes through `CUDAFORGE_CHECK`. Silently ignoring a
+status is the single most common source of CUDA bugs that surface thousands of
+lines later as an unrelated illegal access, because the failure is asynchronous
+and the context stays poisoned.
+
+Kernel launches need two checks, and they catch different things:
+
+| Check | Catches | Cost |
+| --- | --- | --- |
+| `cudaGetLastError()` | launch configuration errors — bad grid or block dimensions, too much shared memory | free; reported synchronously |
+| `cudaStreamSynchronize()` | faults inside the kernel | destroys overlap |
+
+The synchronising half is compiled in only under `CUDAFORGE_DEBUG_SYNC`. Release
+builds keep the cheap check and rely on the next stream synchronisation to
+surface execution faults.
+
+`CudaError` carries the status code, not just a message, so callers can branch:
+`cudaErrorMemoryAllocation` is recoverable by trimming a cache and retrying,
+while `cudaErrorIllegalAddress` has already poisoned the context and is not.
+`is_sticky()` makes that distinction explicit.
+
+## Verifying kernels without a GPU
+
+The development host cannot compile or run any of this. Three things still hold
+the code accountable:
+
+1. **Structural checks.** `scripts/check_cuda_sources.py` runs without nvcc and
+   rejects unchecked launches, discarded statuses, `cudaDeviceSynchronize`,
+   maskless shuffles, and conditionally-reached `__syncthreads()`. It parses
+   logical statements rather than physical lines, so a call the formatter split
+   across lines is still matched.
+
+2. **Reference implementations.** Every kernel has a PyTorch or host equivalent
+   that defines its semantics, and those references are tested exhaustively on
+   CPU. They also *are* the fallback path, so they are exercised continuously
+   rather than rotting.
+
+3. **Compilation on real hardware.** The CUDA container and the NVIDIA-runner CI
+   job build the kernels and run `tests/cuda`. See [environment.md](environment.md)
+   for exactly what has and has not been executed.
+
+## Tolerances
+
+Floating-point addition is not associative, so a GPU tree reduction and a host
+sequential sum genuinely differ. Tests compare against a **double-precision**
+host reference — the mathematical answer, not another float32 accumulation with
+its own error — and scale the tolerance with the term count:
+
+```cpp
+tolerance = magnitude * 1e-5 * sqrt(count);
+```
+
+Worst-case error grows as O(N·eps); for random signs it behaves closer to
+O(sqrt(N)·eps), which is what this reflects. Where an input is exactly
+representable (a sum of ones below 2^24), the test demands exact equality
+instead — any deviation there is a bug, not accumulated error.
