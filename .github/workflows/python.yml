@@ -53,6 +53,12 @@ jobs:
           python examples/simple_inference.py --echo-runner
           python examples/concurrent_requests.py --clients 4 --requests-per-client 5
 
+      - name: Operator parity
+        # On a CPU runner this compares the references against themselves and
+        # says so. It still catches a reference implementation that regresses,
+        # and it is the exact command a GPU owner should run first.
+        run: python examples/kernel_parity.py
+
       - name: Benchmarks (smoke)
         run: |
           python benchmarks/benchmark_kernels.py --warmup 2 --runs 5 > /dev/null
@@ -75,6 +81,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[dev,train]"
+
+      - name: LoRA example
+        run: python examples/fine_tune.py --epochs 1
 
       - name: Tiny fine-tune
         # The tiny config needs no dataset download, so this is a genuine

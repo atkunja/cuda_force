@@ -129,5 +129,8 @@ jobs:
         run: ./scripts/build.sh --cuda
       - name: CUDA tests
         run: ./build-cuda/tests/cuda/cudaforge_cuda_tests
+      - name: Operator parity on the GPU
+        run: python examples/kernel_parity.py
+
       - name: Kernel benchmarks
         run: ./build-cuda/benchmarks/bench_kernels
