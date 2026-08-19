@@ -65,3 +65,57 @@ during generation.
 Benchmarks (4 C++/Python harnesses plus a CUDA one), 4 examples, 7 scripts, a
 custom CUDA structural linter, 3 CI workflows, multi-stage CUDA Dockerfile with
 5 compose services, pre-commit config, and 11 documents.
+
+---
+
+## Tested locally — actually executed on this machine
+
+| Check | Result |
+| --- | --- |
+| C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
+| C++ test suite | **70 cases, 19,430 assertions — pass** |
+| C++ under ThreadSanitizer | **pass**, no races reported |
+| C++ under AddressSanitizer | **pass** |
+| C++ under UndefinedBehaviorSanitizer | **pass** |
+| Python test suite | **182 tests — pass** |
+| PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
+| C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
+| INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
+| LoRA fine-tune, end to end | **pass** — 64/102,778 trainable (0.062%), 2 steps, eval, checkpoint |
+| C++ benchmarks (queue, scheduler, memory) | **run** |
+| Python benchmarks (operators, batching) | **run** |
+| Engine under concurrent load | **run** — 160 requests, avg batch 8.0 |
+| `ruff check` / `ruff format --check` | **clean** |
+| `mypy` | **clean**, 8 source files |
+| `clang-format --dry-run --Werror` | **clean**, 46 files |
+| `shellcheck scripts/*.sh` | **clean** |
+| CUDA structural checks | **clean**, 22 files |
+
+### Measured results
+
+Apple M5 Pro, simulated executor. These describe the **scheduler**, not model
+throughput.
+
+| Measurement | Result |
+| --- | --- |
+| Batching, 16 clients, `max_batch_size` 1 → 16 | 361 → 1,269 req/s (**3.52×**), p50 and p99 unchanged |
+| Batching, 8 clients, `max_batch_size` 1 → 16 | 499 → 722 req/s, p99 12.89 → 7.88 ms |
+| Batching, 1 client, `max_batch_size` 1 → 16 | 112 → 87 req/s — the latency cost when there is nothing to batch |
+| Memory pool | 2,020 allocations, 5 backend calls, reuse rate 0.9975 |
+
+### Bugs found and fixed during development
+
+Recorded because each was found by a test that was written to look for it:
+
+1. **Futures never settled on a row-count mismatch.** A runner returning fewer
+   results than requests raised outside the engine's guard, so no future was
+   completed and every caller blocked until timeout.
+2. **Catch2 assertions on worker threads.** Not thread-safe; produced a sporadic
+   `SIGABRT` under ASan whose timing depended on the scheduler.
+3. **`min_block_bytes` ignored** by the pool's size-class selection.
+4. **Blocking on a full queue while posting the shutdown sentinel**, which could
+   deadlock the only thread able to drain it.
+5. **`O(n)` histogram eviction** from a list front, on the per-request path.
+6. **19 late-binding closures** in the benchmark harness, each capturing the
+   loop variable rather than its value.
+7. **Missing includes** for `<chrono>`, `<cstdint>`, `<cstddef>`, `<stdexcept>`.
