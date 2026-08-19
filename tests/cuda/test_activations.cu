@@ -12,7 +12,9 @@ using namespace cudaforge::test;
 
 namespace {
 
-float reference_silu(float x) { return x / (1.0F + std::exp(-x)); }
+float reference_silu(float x) {
+    return x / (1.0F + std::exp(-x));
+}
 
 float reference_gelu(float x) {
     constexpr float kSqrt2OverPi = 0.7978845608028654F;
@@ -42,13 +44,13 @@ std::vector<float> run_swiglu(const std::vector<float>& gate, const std::vector<
 
 TEST_CASE("silu matches the host reference", "[cuda][activation]") {
     for (int count : {1, 63, 64, 65, 4096, 1 << 20}) {
-        const auto input = random_vector(static_cast<std::size_t>(count),
-                                         static_cast<unsigned>(count), 4.0F);
+        const auto input =
+            random_vector(static_cast<std::size_t>(count), static_cast<unsigned>(count), 4.0F);
 
-        const auto actual = run_on_device(
-            input, input.size(), [&](const float* in, float* out, cudaStream_t stream) {
-                launch_silu(in, out, count, stream);
-            });
+        const auto actual = run_on_device(input, input.size(),
+                                          [&](const float* in, float* out, cudaStream_t stream) {
+                                              launch_silu(in, out, count, stream);
+                                          });
 
         std::vector<float> expected(input.size());
         for (std::size_t i = 0; i < input.size(); ++i) {
@@ -66,9 +68,8 @@ TEST_CASE("silu matches the host reference", "[cuda][activation]") {
 TEST_CASE("silu is zero at zero and monotone for large inputs", "[cuda][activation]") {
     const std::vector<float> input = {0.0F, -20.0F, 20.0F};
     const auto output = run_on_device(
-        input, input.size(), [&](const float* in, float* out, cudaStream_t stream) {
-            launch_silu(in, out, 3, stream);
-        });
+        input, input.size(),
+        [&](const float* in, float* out, cudaStream_t stream) { launch_silu(in, out, 3, stream); });
 
     REQUIRE(output[0] == 0.0F);
     // Large negative saturates toward zero; large positive approaches identity.
@@ -78,8 +79,8 @@ TEST_CASE("silu is zero at zero and monotone for large inputs", "[cuda][activati
 
 TEST_CASE("gelu matches the tanh approximation", "[cuda][activation]") {
     const auto input = random_vector(4096, /*seed=*/71, 3.0F);
-    const auto actual = run_on_device(
-        input, input.size(), [&](const float* in, float* out, cudaStream_t stream) {
+    const auto actual =
+        run_on_device(input, input.size(), [&](const float* in, float* out, cudaStream_t stream) {
             launch_gelu(in, out, 4096, stream);
         });
 
@@ -94,10 +95,10 @@ TEST_CASE("both swiglu variants match the reference", "[cuda][activation]") {
     // Counts deliberately mix multiples of four with sizes that are not, so the
     // vectorised path and its scalar fallback are both exercised.
     for (int count : {1, 3, 64, 65, 1023, 1024, 1 << 20}) {
-        const auto gate = random_vector(static_cast<std::size_t>(count),
-                                        static_cast<unsigned>(count), 3.0F);
-        const auto up = random_vector(static_cast<std::size_t>(count),
-                                      static_cast<unsigned>(count) + 1, 3.0F);
+        const auto gate =
+            random_vector(static_cast<std::size_t>(count), static_cast<unsigned>(count), 3.0F);
+        const auto up =
+            random_vector(static_cast<std::size_t>(count), static_cast<unsigned>(count) + 1, 3.0F);
 
         std::vector<float> expected(gate.size());
         for (std::size_t i = 0; i < gate.size(); ++i) {
@@ -116,8 +117,8 @@ TEST_CASE("swiglu with a unit up-projection is silu", "[cuda][activation]") {
     const std::vector<float> ones(gate.size(), 1.0F);
 
     const auto swiglu = run_swiglu(gate, ones, SwiGLUKernel::Vectorised);
-    const auto silu = run_on_device(
-        gate, gate.size(), [&](const float* in, float* out, cudaStream_t stream) {
+    const auto silu =
+        run_on_device(gate, gate.size(), [&](const float* in, float* out, cudaStream_t stream) {
             launch_silu(in, out, static_cast<int>(gate.size()), stream);
         });
 
@@ -165,8 +166,7 @@ TEST_CASE("half-precision swiglu keeps the negative tail", "[cuda][activation][f
     DeviceBuffer<__half> device_out(gate.size());
     device_gate.copy_from_host(gate.data(), gate.size(), stream);
     device_up.copy_from_host(up.data(), up.size(), stream);
-    launch_swiglu_half(device_gate.data(), device_up.data(), device_out.data(), kCount,
-                       stream);
+    launch_swiglu_half(device_gate.data(), device_up.data(), device_out.data(), kCount, stream);
 
     std::vector<__half> output(gate.size());
     device_out.copy_to_host(output.data(), output.size(), stream);
@@ -182,6 +182,5 @@ TEST_CASE("an empty activation launch is a no-op", "[cuda][activation]") {
     CudaStream stream;
     REQUIRE_NOTHROW(launch_silu(nullptr, nullptr, 0, stream));
     REQUIRE_NOTHROW(launch_gelu(nullptr, nullptr, 0, stream));
-    REQUIRE_NOTHROW(
-        launch_swiglu(nullptr, nullptr, nullptr, 0, SwiGLUKernel::Vectorised, stream));
+    REQUIRE_NOTHROW(launch_swiglu(nullptr, nullptr, nullptr, 0, SwiGLUKernel::Vectorised, stream));
 }
