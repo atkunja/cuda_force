@@ -24,10 +24,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.engine import EngineClosedError, InferenceEngine
+from cudaforge.exposition import PROMETHEUS_CONTENT_TYPE, render_prometheus
 from cudaforge.ops import backend_report
 from cudaforge.runners import EchoRunner, TransformersRunner
 from inference.schemas import (
@@ -164,6 +165,24 @@ async def ready() -> JSONResponse:
 async def metrics() -> MetricsResponse:
     engine = _require_engine()
     return MetricsResponse(**engine.snapshot().to_dict())
+
+
+@app.get(
+    "/metrics/prometheus",
+    response_class=PlainTextResponse,
+    responses={200: {"content": {"text/plain": {}}}},
+)
+async def metrics_prometheus() -> PlainTextResponse:
+    """The same snapshot in the Prometheus text exposition format.
+
+    Kept on its own path rather than negotiated on `/metrics`: the JSON body is
+    a documented response model that clients already parse, and switching its
+    shape on an `Accept` header would break them silently.
+    """
+    engine = _require_engine()
+    return PlainTextResponse(
+        render_prometheus(engine.snapshot()), media_type=PROMETHEUS_CONTENT_TYPE
+    )
 
 
 @app.post(
