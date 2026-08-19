@@ -55,7 +55,9 @@ private:
     std::size_t total_ = 0;
 };
 
-Request make_request(std::uint64_t id) { return Request(id, "prompt", {}); }
+Request make_request(std::uint64_t id) {
+    return Request(id, "prompt", {});
+}
 
 RuntimeConfig test_config(std::size_t max_batch, std::chrono::microseconds wait) {
     RuntimeConfig config;
@@ -89,9 +91,9 @@ TEST_CASE("a lone request is released after max_wait", "[batcher]") {
     auto metrics = std::make_shared<Metrics>();
 
     {
-        DynamicBatcher batcher(test_config(16, 20ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(16, 20ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         REQUIRE(batcher.submit(make_request(1)));
         std::this_thread::sleep_for(120ms);
     }
@@ -110,9 +112,9 @@ TEST_CASE("a full batch is released without waiting", "[batcher]") {
     // on size, this test would take five seconds instead of milliseconds.
     const auto start = std::chrono::steady_clock::now();
     {
-        DynamicBatcher batcher(test_config(4, 5s),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(4, 5s), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         for (std::uint64_t i = 0; i < 4; ++i) {
             REQUIRE(batcher.submit(make_request(i)));
         }
@@ -134,9 +136,9 @@ TEST_CASE("no batch exceeds max_batch_size", "[batcher]") {
     auto collector = std::make_shared<BatchCollector>();
     auto metrics = std::make_shared<Metrics>();
     {
-        DynamicBatcher batcher(test_config(kMaxBatch, 2ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(kMaxBatch, 2ms),
+            [collector](Batch&& batch) { (*collector)(std::move(batch)); }, metrics);
         for (std::uint64_t i = 0; i < kRequests; ++i) {
             REQUIRE(batcher.submit(make_request(i)));
         }
@@ -157,9 +159,9 @@ TEST_CASE("the deadline is anchored to the oldest request", "[batcher]") {
     auto metrics = std::make_shared<Metrics>();
 
     {
-        DynamicBatcher batcher(test_config(1000, 30ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(1000, 30ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         std::atomic<bool> stop{false};
         std::thread trickle([&] {
             std::uint64_t id = 0;
@@ -186,9 +188,9 @@ TEST_CASE("shutdown drains queued requests", "[batcher][shutdown]") {
     auto metrics = std::make_shared<Metrics>();
 
     {
-        DynamicBatcher batcher(test_config(8, 500ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(8, 500ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         for (std::uint64_t i = 0; i < kRequests; ++i) {
             REQUIRE(batcher.submit(make_request(i)));
         }
@@ -208,12 +210,13 @@ TEST_CASE("a throwing handler does not stall the batcher", "[batcher]") {
     std::atomic<int> calls{0};
     auto metrics = std::make_shared<Metrics>();
     {
-        DynamicBatcher batcher(test_config(1, 1ms),
-                               [&calls](Batch&&) {
-                                   calls.fetch_add(1);
-                                   throw std::runtime_error("handler failure");
-                               },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(1, 1ms),
+            [&calls](Batch&&) {
+                calls.fetch_add(1);
+                throw std::runtime_error("handler failure");
+            },
+            metrics);
         for (std::uint64_t i = 0; i < 10; ++i) {
             REQUIRE(batcher.submit(make_request(i)));
         }
@@ -229,16 +232,16 @@ TEST_CASE("concurrent producers all get their requests batched", "[batcher][stre
     auto metrics = std::make_shared<Metrics>();
     ThreadAssert errors;
     {
-        DynamicBatcher batcher(test_config(16, 3ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(16, 3ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         std::vector<std::thread> producers;
         producers.reserve(kProducers);
         for (int p = 0; p < kProducers; ++p) {
             producers.emplace_back([&, p] {
                 for (int i = 0; i < kPerProducer; ++i) {
-                    errors.check(batcher.submit(make_request(
-                        static_cast<std::uint64_t>(p * kPerProducer + i))));
+                    errors.check(batcher.submit(
+                        make_request(static_cast<std::uint64_t>(p * kPerProducer + i))));
                 }
             });
         }

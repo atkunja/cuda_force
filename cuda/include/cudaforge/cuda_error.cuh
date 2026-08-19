@@ -45,8 +45,8 @@ namespace detail {
 [[noreturn]] inline void throw_cuda_error(cudaError_t status, const char* expression,
                                           const char* file, int line) {
     std::ostringstream message;
-    message << "CUDA error " << static_cast<int>(status) << " ("
-            << cudaGetErrorName(status) << "): " << cudaGetErrorString(status) << "\n"
+    message << "CUDA error " << static_cast<int>(status) << " (" << cudaGetErrorName(status)
+            << "): " << cudaGetErrorString(status) << "\n"
             << "  at " << file << ":" << line << "\n"
             << "  while evaluating: " << expression;
     throw CudaError(status, message.str());
@@ -60,13 +60,12 @@ namespace detail {
 /// surface thousands of lines later as an unrelated illegal access, because the
 /// failure is asynchronous and the context stays poisoned. Every call site in
 /// this project goes through this macro.
-#define CUDAFORGE_CHECK(expr)                                                       \
-    do {                                                                            \
-        const cudaError_t cudaforge_status_ = (expr);                               \
-        if (cudaforge_status_ != cudaSuccess) {                                     \
-            ::cudaforge::detail::throw_cuda_error(cudaforge_status_, #expr,         \
-                                                  __FILE__, __LINE__);              \
-        }                                                                           \
+#define CUDAFORGE_CHECK(expr)                                                                    \
+    do {                                                                                         \
+        const cudaError_t cudaforge_status_ = (expr);                                            \
+        if (cudaforge_status_ != cudaSuccess) {                                                  \
+            ::cudaforge::detail::throw_cuda_error(cudaforge_status_, #expr, __FILE__, __LINE__); \
+        }                                                                                        \
     } while (false)
 
 /// Checks a kernel launch.
@@ -83,10 +82,10 @@ namespace detail {
 /// synchronous check and rely on the next stream synchronisation to surface
 /// execution faults.
 #ifdef CUDAFORGE_DEBUG_SYNC
-#define CUDAFORGE_CHECK_LAUNCH(stream)                    \
-    do {                                                  \
-        CUDAFORGE_CHECK(cudaGetLastError());              \
-        CUDAFORGE_CHECK(cudaStreamSynchronize(stream));   \
+#define CUDAFORGE_CHECK_LAUNCH(stream)                  \
+    do {                                                \
+        CUDAFORGE_CHECK(cudaGetLastError());            \
+        CUDAFORGE_CHECK(cudaStreamSynchronize(stream)); \
     } while (false)
 #else
 #define CUDAFORGE_CHECK_LAUNCH(stream)       \

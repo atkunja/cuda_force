@@ -70,8 +70,8 @@ TEST_CASE("device timing reports a positive interval", "[cuda][scheduler]") {
     output.fill_zero(stream);
 
     start.record(stream);
-    launch_reduce_sum(input.data(), output.data(), input.size(),
-                      ReductionKernel::WarpOptimised, stream);
+    launch_reduce_sum(input.data(), output.data(), input.size(), ReductionKernel::WarpOptimised,
+                      stream);
     stop.record(stream);
     stream.synchronize();
 
@@ -94,8 +94,8 @@ TEST_CASE("chaining makes one stream wait for another", "[cuda][scheduler]") {
 
     DeviceBuffer<float> output(1);
     output.fill_zero(consumer.stream());
-    launch_reduce_sum(buffer.data(), output.data(), buffer.size(),
-                      ReductionKernel::WarpOptimised, consumer.stream());
+    launch_reduce_sum(buffer.data(), output.data(), buffer.size(), ReductionKernel::WarpOptimised,
+                      consumer.stream());
     consumer.synchronize();
 
     float result = -1.0F;

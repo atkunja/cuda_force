@@ -55,8 +55,8 @@ __global__ void dequantize_int8(const std::int8_t* __restrict__ input,
 
 /// Round trip without materialising the INT8 tensor. Used to measure the
 /// accuracy cost of the scheme; the quantised values stay in registers.
-__global__ void quantize_dequantize(const float* __restrict__ input,
-                                    float* __restrict__ output, int count) {
+__global__ void quantize_dequantize(const float* __restrict__ input, float* __restrict__ output,
+                                    int count) {
     __shared__ float shared[kWarpSize];
 
     const int base = static_cast<int>(blockIdx.x) * kQuantBlockSize;
@@ -88,8 +88,8 @@ void launch_quantize_int8(const float* input, std::int8_t* output, float* scales
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_dequantize_int8(const std::int8_t* input, const float* scales, float* output,
-                            int count, cudaStream_t stream) {
+void launch_dequantize_int8(const std::int8_t* input, const float* scales, float* output, int count,
+                            cudaStream_t stream) {
     if (count <= 0) {
         return;
     }
@@ -98,8 +98,7 @@ void launch_dequantize_int8(const std::int8_t* input, const float* scales, float
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_quantize_dequantize(const float* input, float* output, int count,
-                                cudaStream_t stream) {
+void launch_quantize_dequantize(const float* input, float* output, int count, cudaStream_t stream) {
     if (count <= 0) {
         return;
     }

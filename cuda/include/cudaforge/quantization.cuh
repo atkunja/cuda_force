@@ -37,19 +37,18 @@ inline constexpr int kQuantBlockSize = 64;
 /// directly rather than pretending this is equivalent.
 ///
 /// `scales` must have `ceil(count / kQuantBlockSize)` entries.
-void launch_quantize_int8(const float* input, std::int8_t* output, float* scales,
-                          int count, cudaStream_t stream);
+void launch_quantize_int8(const float* input, std::int8_t* output, float* scales, int count,
+                          cudaStream_t stream);
 
 /// Inverse of `launch_quantize_int8`. Lossy by construction: the round-trip
 /// error is bounded by half a quantisation step, i.e. `scale_b / 2`.
-void launch_dequantize_int8(const std::int8_t* input, const float* scales, float* output,
-                            int count, cudaStream_t stream);
+void launch_dequantize_int8(const std::int8_t* input, const float* scales, float* output, int count,
+                            cudaStream_t stream);
 
 /// Quantises and immediately dequantises, producing FP32 output on the INT8
 /// grid. This is the "fake quantisation" used to measure the accuracy cost of a
 /// quantisation scheme without changing any downstream kernel's dtype.
-void launch_quantize_dequantize(const float* input, float* output, int count,
-                                cudaStream_t stream);
+void launch_quantize_dequantize(const float* input, float* output, int count, cudaStream_t stream);
 
 /// Number of block scales `count` elements require.
 [[nodiscard]] int quant_scale_count(int count);

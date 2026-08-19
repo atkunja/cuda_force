@@ -107,8 +107,8 @@ __global__ void accumulate_lora(const float* __restrict__ p, const float* __rest
 /// does not.
 __global__ void lora_fused(const float* __restrict__ x, const float* __restrict__ w,
                            const float* __restrict__ a, const float* __restrict__ b,
-                           float* __restrict__ y, int batch, int in_features,
-                           int out_features, int rank, float scale) {
+                           float* __restrict__ y, int batch, int in_features, int out_features,
+                           int rank, float scale) {
     extern __shared__ float xa_tile[];  // [kTile][rank]
 
     const int row_base = static_cast<int>(blockIdx.x) * kTile;
@@ -144,8 +144,8 @@ __global__ void lora_fused(const float* __restrict__ x, const float* __restrict_
 
         float adapter = 0.0F;
         for (int r = 0; r < rank; ++r) {
-            adapter += xa_tile[local_row * rank + r] *
-                       b[static_cast<std::size_t>(r) * out_features + col];
+            adapter +=
+                xa_tile[local_row * rank + r] * b[static_cast<std::size_t>(r) * out_features + col];
         }
 
         y[static_cast<std::size_t>(row) * out_features + col] = frozen + scale * adapter;
@@ -157,8 +157,7 @@ int max_shared_memory_per_block() {
         int device = 0;
         CUDAFORGE_CHECK(cudaGetDevice(&device));
         int bytes = 0;
-        CUDAFORGE_CHECK(
-            cudaDeviceGetAttribute(&bytes, cudaDevAttrMaxSharedMemoryPerBlock, device));
+        CUDAFORGE_CHECK(cudaDeviceGetAttribute(&bytes, cudaDevAttrMaxSharedMemoryPerBlock, device));
         return bytes;
     }();
     return cached;
@@ -185,16 +184,15 @@ void launch_matmul(const float* a, const float* b, float* c, int m, int n, int k
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_lora_linear(const float* x, const float* w, const float* a, const float* b,
-                        float* y, float* workspace, int batch, int in_features,
-                        int out_features, int rank, float scale, LoRAKernel variant,
-                        cudaStream_t stream) {
+void launch_lora_linear(const float* x, const float* w, const float* a, const float* b, float* y,
+                        float* workspace, int batch, int in_features, int out_features, int rank,
+                        float scale, LoRAKernel variant, cudaStream_t stream) {
     if (batch <= 0 || in_features <= 0 || out_features <= 0 || rank <= 0) {
         return;
     }
 
-    const std::size_t fused_shared = static_cast<std::size_t>(kTile) *
-                                     static_cast<std::size_t>(rank) * sizeof(float);
+    const std::size_t fused_shared =
+        static_cast<std::size_t>(kTile) * static_cast<std::size_t>(rank) * sizeof(float);
     const bool fusable = variant == LoRAKernel::Fused &&
                          fused_shared <= static_cast<std::size_t>(max_shared_memory_per_block());
 
@@ -219,8 +217,7 @@ void launch_lora_linear(const float* x, const float* w, const float* a, const fl
     const dim3 block(kTile, kTile);
     const dim3 grid(static_cast<unsigned>(ceil_div(out_features, kTile)),
                     static_cast<unsigned>(ceil_div(batch, kTile)));
-    accumulate_lora<<<grid, block, 0, stream>>>(workspace, b, y, batch, out_features, rank,
-                                                scale);
+    accumulate_lora<<<grid, block, 0, stream>>>(workspace, b, y, batch, out_features, rank, scale);
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 

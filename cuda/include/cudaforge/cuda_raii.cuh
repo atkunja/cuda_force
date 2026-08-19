@@ -30,8 +30,7 @@ public:
     /// the valid range is device-specific and must come from
     /// `cudaDeviceGetStreamPriorityRange`.
     explicit CudaStream(int priority) {
-        CUDAFORGE_CHECK(
-            cudaStreamCreateWithPriority(&stream_, cudaStreamNonBlocking, priority));
+        CUDAFORGE_CHECK(cudaStreamCreateWithPriority(&stream_, cudaStreamNonBlocking, priority));
     }
 
     CudaStream(const CudaStream&) = delete;
@@ -50,7 +49,9 @@ public:
     ~CudaStream() { destroy(); }
 
     [[nodiscard]] cudaStream_t get() const noexcept { return stream_; }
-    operator cudaStream_t() const noexcept { return stream_; }  // NOLINT(google-explicit-constructor)
+    operator cudaStream_t() const noexcept {
+        return stream_;
+    }  // NOLINT(google-explicit-constructor)
 
     /// Blocks the calling host thread until every operation issued to this
     /// stream has completed. Scoped to one stream, so other streams keep
@@ -99,8 +100,8 @@ public:
     enum class Purpose : unsigned { Timing, Ordering };
 
     explicit CudaEvent(Purpose purpose = Purpose::Ordering) {
-        const unsigned flags = purpose == Purpose::Timing ? cudaEventDefault
-                                                          : cudaEventDisableTiming;
+        const unsigned flags =
+            purpose == Purpose::Timing ? cudaEventDefault : cudaEventDisableTiming;
         CUDAFORGE_CHECK(cudaEventCreateWithFlags(&event_, flags));
         timing_enabled_ = purpose == Purpose::Timing;
     }
@@ -109,8 +110,7 @@ public:
     CudaEvent& operator=(const CudaEvent&) = delete;
 
     CudaEvent(CudaEvent&& other) noexcept
-        : event_(std::exchange(other.event_, nullptr)),
-          timing_enabled_(other.timing_enabled_) {}
+        : event_(std::exchange(other.event_, nullptr)), timing_enabled_(other.timing_enabled_) {}
 
     CudaEvent& operator=(CudaEvent&& other) noexcept {
         if (this != &other) {
@@ -179,7 +179,7 @@ inline void stream_wait_event(cudaStream_t stream, const CudaEvent& event) {
 
 /// Owning device allocation, for buffers whose lifetime matches a scope.
 /// Buffers reused across batches go through `MemoryPool` instead.
-template <typename T>
+template<typename T>
 class DeviceBuffer {
 public:
     DeviceBuffer() = default;
@@ -251,7 +251,7 @@ private:
 /// Pinned memory is not free — it cannot be paged out, so over-allocating it
 /// degrades the whole system. Staging buffers are therefore sized to the
 /// maximum batch and reused, not allocated per request.
-template <typename T>
+template<typename T>
 class PinnedBuffer {
 public:
     PinnedBuffer() = default;

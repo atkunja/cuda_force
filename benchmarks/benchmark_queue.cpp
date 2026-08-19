@@ -77,8 +77,8 @@ Result run_case(std::size_t producers, std::size_t consumers, std::size_t capaci
     const double seconds = timer.elapsed_seconds();
 
     const std::uint64_t total = consumed.load();
-    return Result{producers, consumers, capacity, total, seconds,
-                  seconds > 0.0 ? static_cast<double>(total) / seconds : 0.0};
+    return Result{producers, consumers, capacity,
+                  total,     seconds,   seconds > 0.0 ? static_cast<double>(total) / seconds : 0.0};
 }
 
 }  // namespace

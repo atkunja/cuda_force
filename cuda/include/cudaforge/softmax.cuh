@@ -38,8 +38,8 @@ enum class SoftmaxKernel {
 /// terms contribute nothing to the sum.
 ///
 /// `input` and `output` may alias.
-void launch_softmax(const float* input, float* output, int rows, int cols,
-                    SoftmaxKernel variant, cudaStream_t stream);
+void launch_softmax(const float* input, float* output, int rows, int cols, SoftmaxKernel variant,
+                    cudaStream_t stream);
 
 /// Half-precision row-wise softmax.
 ///

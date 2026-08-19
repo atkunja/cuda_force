@@ -144,7 +144,7 @@ TEST_CASE("statistics track in-use and peak bytes", "[pool]") {
     REQUIRE(after.bytes_in_use == 0);
     REQUIRE(after.peak_bytes_in_use == 4 * 1024);  // peak is a high-water mark
     REQUIRE(after.free_block_count == 4);
-    REQUIRE(after.bytes_reserved == 4 * 1024);     // still held for reuse
+    REQUIRE(after.bytes_reserved == 4 * 1024);  // still held for reuse
 }
 
 TEST_CASE("reuse rate rises once the working set is warm", "[pool]") {

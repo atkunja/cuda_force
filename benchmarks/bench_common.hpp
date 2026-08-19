@@ -147,7 +147,7 @@ private:
 /// Keeps a computed value from being eliminated by the optimiser. Without this,
 /// a benchmark whose result is unused can be deleted wholesale and will report
 /// an impossibly good number.
-template <typename T>
+template<typename T>
 inline void keep(T&& value) {
     asm volatile("" : : "r,m"(value) : "memory");
 }

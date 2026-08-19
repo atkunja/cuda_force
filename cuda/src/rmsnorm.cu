@@ -43,9 +43,8 @@ __global__ void rmsnorm_naive(const float* __restrict__ input, const float* __re
 /// thread issues one 128-bit transaction where the scalar kernel issues four
 /// 32-bit ones. The reduction and the scale are unchanged.
 __global__ void rmsnorm_vectorised(const float4* __restrict__ input,
-                                   const float4* __restrict__ weight,
-                                   float4* __restrict__ output, int rows, int vec_cols,
-                                   int cols, float eps) {
+                                   const float4* __restrict__ weight, float4* __restrict__ output,
+                                   int rows, int vec_cols, int cols, float eps) {
     __shared__ float scratch[kWarpSize];
 
     const int row = static_cast<int>(blockIdx.x);

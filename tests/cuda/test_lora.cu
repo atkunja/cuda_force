@@ -48,9 +48,9 @@ std::vector<float> reference_lora(const std::vector<float>& x, const std::vector
 }
 
 std::vector<float> run_lora(const std::vector<float>& x, const std::vector<float>& w,
-                            const std::vector<float>& a, const std::vector<float>& b,
-                            int batch, int in_features, int out_features, int rank,
-                            float scale, LoRAKernel variant) {
+                            const std::vector<float>& a, const std::vector<float>& b, int batch,
+                            int in_features, int out_features, int rank, float scale,
+                            LoRAKernel variant) {
     CudaStream stream;
     DeviceBuffer<float> dx(x.size());
     DeviceBuffer<float> dw(w.size());
@@ -88,14 +88,11 @@ TEST_CASE("both lora variants match the reference", "[cuda][lora]") {
     // checks are exercised rather than assumed.
     for (const Shape shape : {Shape{1, 8, 4, 2}, Shape{4, 64, 32, 8}, Shape{7, 129, 65, 3},
                               Shape{16, 256, 256, 16}, Shape{33, 100, 50, 4}}) {
-        const auto x = random_vector(
-            static_cast<std::size_t>(shape.batch) * shape.in_features, 1);
-        const auto w = random_vector(
-            static_cast<std::size_t>(shape.in_features) * shape.out_features, 2);
-        const auto a = random_vector(
-            static_cast<std::size_t>(shape.in_features) * shape.rank, 3);
-        const auto b = random_vector(
-            static_cast<std::size_t>(shape.rank) * shape.out_features, 4);
+        const auto x = random_vector(static_cast<std::size_t>(shape.batch) * shape.in_features, 1);
+        const auto w =
+            random_vector(static_cast<std::size_t>(shape.in_features) * shape.out_features, 2);
+        const auto a = random_vector(static_cast<std::size_t>(shape.in_features) * shape.rank, 3);
+        const auto b = random_vector(static_cast<std::size_t>(shape.rank) * shape.out_features, 4);
         constexpr float kScale = 0.25F;
 
         const auto expected = reference_lora(x, w, a, b, shape.batch, shape.in_features,
@@ -128,8 +125,8 @@ TEST_CASE("a zero b matrix reduces lora to the frozen layer", "[cuda][lora]") {
     const auto expected = reference_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 1.0F);
     for (LoRAKernel variant : {LoRAKernel::Unfused, LoRAKernel::Fused}) {
         INFO("variant " << static_cast<int>(variant));
-        require_all_close(run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 1.0F, variant),
-                          expected, 1e-3F, 1e-3F);
+        require_all_close(run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 1.0F, variant), expected,
+                          1e-3F, 1e-3F);
     }
 }
 
@@ -144,15 +141,14 @@ TEST_CASE("the fused and unfused paths agree", "[cuda][lora]") {
     const auto a = random_vector(kIn * kRank, 23);
     const auto b = random_vector(kRank * kOut, 24);
 
-    require_all_close(
-        run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 0.5F, LoRAKernel::Fused),
-        run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 0.5F, LoRAKernel::Unfused),
-        /*relative=*/1e-4F, /*absolute=*/1e-4F);
+    require_all_close(run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 0.5F, LoRAKernel::Fused),
+                      run_lora(x, w, a, b, kBatch, kIn, kOut, kRank, 0.5F, LoRAKernel::Unfused),
+                      /*relative=*/1e-4F, /*absolute=*/1e-4F);
 }
 
 TEST_CASE("the tiled matmul matches a host reference", "[cuda][lora][matmul]") {
-    for (auto [m, n, k] : {std::tuple{1, 1, 1}, std::tuple{16, 16, 16},
-                           std::tuple{17, 33, 65}, std::tuple{128, 64, 256}}) {
+    for (auto [m, n, k] : {std::tuple{1, 1, 1}, std::tuple{16, 16, 16}, std::tuple{17, 33, 65},
+                           std::tuple{128, 64, 256}}) {
         const auto a = random_vector(static_cast<std::size_t>(m) * k, 41);
         const auto b = random_vector(static_cast<std::size_t>(k) * n, 42);
 

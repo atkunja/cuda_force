@@ -33,8 +33,8 @@ __global__ void reduce_sum_shared(const float* __restrict__ input, float* __rest
 
     const auto stride = static_cast<std::size_t>(blockDim.x) * gridDim.x;
     float local = 0.0F;
-    for (std::size_t i = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
-         i < count; i += stride) {
+    for (std::size_t i = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x; i < count;
+         i += stride) {
         local += input[i];
     }
 
@@ -63,8 +63,8 @@ __global__ void reduce_sum_warp(const float* __restrict__ input, float* __restri
 
     const auto stride = static_cast<std::size_t>(blockDim.x) * gridDim.x;
     float local = 0.0F;
-    for (std::size_t i = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
-         i < count; i += stride) {
+    for (std::size_t i = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x; i < count;
+         i += stride) {
         local += input[i];
     }
 
@@ -103,8 +103,7 @@ __global__ void row_sum(const float* __restrict__ input, float* __restrict__ out
 
     const float* row_data = input + static_cast<std::size_t>(row) * cols;
     float local = 0.0F;
-    for (int col = static_cast<int>(threadIdx.x); col < cols;
-         col += static_cast<int>(blockDim.x)) {
+    for (int col = static_cast<int>(threadIdx.x); col < cols; col += static_cast<int>(blockDim.x)) {
         local += row_data[col];
     }
 
@@ -121,16 +120,14 @@ int reduction_grid_size(std::size_t count, int block_size) {
     CUDAFORGE_CHECK(cudaGetDevice(&device));
 
     int sm_count = 0;
-    CUDAFORGE_CHECK(
-        cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device));
+    CUDAFORGE_CHECK(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, device));
 
     // Eight blocks per SM gives the scheduler enough independent work to hide
     // memory latency without creating so many blocks that launch and tail
     // effects dominate. The cap matters for small inputs, where a fixed grid
     // would launch blocks with nothing to do.
     const int by_occupancy = std::max(1, sm_count * 8);
-    const auto by_size =
-        static_cast<int>(ceil_div(count, static_cast<std::size_t>(block_size)));
+    const auto by_size = static_cast<int>(ceil_div(count, static_cast<std::size_t>(block_size)));
     return std::max(1, std::min(by_occupancy, std::max(1, by_size)));
 }
 
@@ -147,8 +144,7 @@ void launch_reduce_sum(const float* input, float* output, std::size_t count,
             // No grid-stride loop here: the naive variant is deliberately the
             // textbook one-thread-per-element formulation it is being compared
             // against.
-            const auto grid =
-                static_cast<int>(ceil_div(count, static_cast<std::size_t>(kBlock)));
+            const auto grid = static_cast<int>(ceil_div(count, static_cast<std::size_t>(kBlock)));
             reduce_sum_naive<<<grid, kBlock, 0, stream>>>(input, output, count);
             break;
         }
@@ -168,8 +164,7 @@ void launch_reduce_sum(const float* input, float* output, std::size_t count,
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_row_sum(const float* input, float* output, int rows, int cols,
-                    cudaStream_t stream) {
+void launch_row_sum(const float* input, float* output, int rows, int cols, cudaStream_t stream) {
     if (rows <= 0 || cols <= 0) {
         return;
     }

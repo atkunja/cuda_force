@@ -11,8 +11,8 @@
 #include <thread>
 #include <vector>
 
-using cudaforge::test::ThreadAssert;
 using cudaforge::ThreadPool;
+using cudaforge::test::ThreadAssert;
 using namespace std::chrono_literals;
 
 TEST_CASE("pool rejects a zero worker count", "[pool]") {

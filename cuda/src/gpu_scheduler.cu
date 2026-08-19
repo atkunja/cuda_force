@@ -52,8 +52,7 @@ void GpuScheduler::copy_to_device(const StreamLease& lease, void* device, const 
     if (bytes == 0) {
         return;
     }
-    CUDAFORGE_CHECK(
-        cudaMemcpyAsync(device, host, bytes, cudaMemcpyHostToDevice, lease.stream()));
+    CUDAFORGE_CHECK(cudaMemcpyAsync(device, host, bytes, cudaMemcpyHostToDevice, lease.stream()));
 
     std::lock_guard lock(stats_mutex_);
     stats_[lease.index()].bytes_to_device += bytes;
@@ -64,8 +63,7 @@ void GpuScheduler::copy_to_host(const StreamLease& lease, void* host, const void
     if (bytes == 0) {
         return;
     }
-    CUDAFORGE_CHECK(
-        cudaMemcpyAsync(host, device, bytes, cudaMemcpyDeviceToHost, lease.stream()));
+    CUDAFORGE_CHECK(cudaMemcpyAsync(host, device, bytes, cudaMemcpyDeviceToHost, lease.stream()));
 
     std::lock_guard lock(stats_mutex_);
     stats_[lease.index()].bytes_to_host += bytes;

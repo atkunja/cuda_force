@@ -23,8 +23,7 @@ QuantResult quantize(const std::vector<float>& input) {
     DeviceBuffer<float> device_scales(static_cast<std::size_t>(blocks));
 
     device_in.copy_from_host(input.data(), input.size(), stream);
-    launch_quantize_int8(device_in.data(), device_q.data(), device_scales.data(), count,
-                         stream);
+    launch_quantize_int8(device_in.data(), device_q.data(), device_scales.data(), count, stream);
 
     QuantResult result;
     result.values.resize(input.size());
@@ -43,8 +42,7 @@ std::vector<float> dequantize(const QuantResult& quantised, int count) {
 
     device_q.copy_from_host(quantised.values.data(), quantised.values.size(), stream);
     device_scales.copy_from_host(quantised.scales.data(), quantised.scales.size(), stream);
-    launch_dequantize_int8(device_q.data(), device_scales.data(), device_out.data(), count,
-                           stream);
+    launch_dequantize_int8(device_q.data(), device_scales.data(), device_out.data(), count, stream);
 
     std::vector<float> output(static_cast<std::size_t>(count));
     device_out.copy_to_host(output.data(), output.size(), stream);
@@ -65,8 +63,8 @@ TEST_CASE("round-trip error stays within half a quantisation step", "[cuda][quan
     // Symmetric absmax rounding cannot err by more than half a step, and the
     // step is the block's scale. Exceeding this is a bug, not merely loss.
     for (int count : {1, 63, 64, 65, 1000, 4096}) {
-        const auto input = random_vector(static_cast<std::size_t>(count),
-                                         static_cast<unsigned>(count), 5.0F);
+        const auto input =
+            random_vector(static_cast<std::size_t>(count), static_cast<unsigned>(count), 5.0F);
         const auto quantised = quantize(input);
         const auto restored = dequantize(quantised, count);
 

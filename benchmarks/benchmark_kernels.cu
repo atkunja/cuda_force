@@ -47,7 +47,7 @@ struct Timing {
 };
 
 /// Times a launch with CUDA events, discarding warmup runs.
-template <typename Launch>
+template<typename Launch>
 Timing time_kernel(cudaStream_t stream, Launch&& launch) {
     CudaEvent start(CudaEvent::Purpose::Timing);
     CudaEvent stop(CudaEvent::Purpose::Timing);
@@ -148,8 +148,7 @@ void benchmark_softmax(JsonWriter& writer, cudaStream_t stream) {
             });
             // One read and one write in the best case; the naive variant reads
             // three times, which is exactly what the comparison should expose.
-            emit(writer, "softmax", name,
-                 std::to_string(rows) + "x" + std::to_string(cols), timing,
+            emit(writer, "softmax", name, std::to_string(rows) + "x" + std::to_string(cols), timing,
                  effective_bandwidth(2 * elements * sizeof(float), timing.median_ms));
         }
     }
@@ -178,8 +177,7 @@ void benchmark_rmsnorm(JsonWriter& writer, cudaStream_t stream) {
             });
             // Input is read twice (once for the reduction, once to normalise)
             // and output written once.
-            emit(writer, "rmsnorm", name,
-                 std::to_string(rows) + "x" + std::to_string(cols), timing,
+            emit(writer, "rmsnorm", name, std::to_string(rows) + "x" + std::to_string(cols), timing,
                  effective_bandwidth(3 * elements * sizeof(float), timing.median_ms));
         }
     }
@@ -201,25 +199,22 @@ void benchmark_lora(JsonWriter& writer, cudaStream_t stream) {
 
     for (const Shape& shape : shapes) {
         DeviceBuffer<float> x(static_cast<std::size_t>(shape.batch) * shape.in_features);
-        DeviceBuffer<float> w(
-            static_cast<std::size_t>(shape.in_features) * shape.out_features);
+        DeviceBuffer<float> w(static_cast<std::size_t>(shape.in_features) * shape.out_features);
         DeviceBuffer<float> a(static_cast<std::size_t>(shape.in_features) * shape.rank);
         DeviceBuffer<float> b(static_cast<std::size_t>(shape.rank) * shape.out_features);
         DeviceBuffer<float> y(static_cast<std::size_t>(shape.batch) * shape.out_features);
-        DeviceBuffer<float> workspace(
-            static_cast<std::size_t>(shape.batch) * shape.rank);
+        DeviceBuffer<float> workspace(static_cast<std::size_t>(shape.batch) * shape.rank);
 
         for (DeviceBuffer<float>* buffer : {&x, &w, &a, &b, &y, &workspace}) {
             buffer->fill_zero(stream);
         }
 
-        const std::string label = std::to_string(shape.batch) + "x" +
-                                  std::to_string(shape.in_features) + "x" +
-                                  std::to_string(shape.out_features) + "r" +
-                                  std::to_string(shape.rank);
+        const std::string label =
+            std::to_string(shape.batch) + "x" + std::to_string(shape.in_features) + "x" +
+            std::to_string(shape.out_features) + "r" + std::to_string(shape.rank);
 
-        for (const auto& [variant, name] : {std::pair{LoRAKernel::Unfused, "unfused"},
-                                            std::pair{LoRAKernel::Fused, "fused"}}) {
+        for (const auto& [variant, name] :
+             {std::pair{LoRAKernel::Unfused, "unfused"}, std::pair{LoRAKernel::Fused, "fused"}}) {
             const Timing timing = time_kernel(stream, [&] {
                 launch_lora_linear(x.data(), w.data(), a.data(), b.data(), y.data(),
                                    workspace.data(), shape.batch, shape.in_features,
@@ -249,8 +244,7 @@ void benchmark_quantization(JsonWriter& writer, cudaStream_t stream) {
                                  quantise.median_ms));
 
         const Timing dequantise = time_kernel(stream, [&] {
-            launch_dequantize_int8(quantised.data(), scales.data(), restored.data(), count,
-                                   stream);
+            launch_dequantize_int8(quantised.data(), scales.data(), restored.data(), count, stream);
         });
         emit(writer, "dequantize_int8", "blockwise", std::to_string(count), dequantise,
              effective_bandwidth(static_cast<std::size_t>(count) * (sizeof(float) + 1),

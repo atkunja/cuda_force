@@ -51,8 +51,8 @@ struct CaseResult {
     double timeout_closure_fraction;
 };
 
-CaseResult run_case(std::size_t producers, std::size_t requests_per_producer,
-                    std::size_t max_batch, std::chrono::microseconds max_wait) {
+CaseResult run_case(std::size_t producers, std::size_t requests_per_producer, std::size_t max_batch,
+                    std::chrono::microseconds max_wait) {
     RuntimeConfig config;
     config.max_batch_size = max_batch;
     config.max_wait = max_wait;
@@ -66,8 +66,7 @@ CaseResult run_case(std::size_t producers, std::size_t requests_per_producer,
         DynamicBatcher batcher(
             config,
             [&](Batch&& batch) {
-                std::this_thread::sleep_for(kFixedBatchCost +
-                                            kPerRequestCost * batch.size());
+                std::this_thread::sleep_for(kFixedBatchCost + kPerRequestCost * batch.size());
                 executed.fetch_add(batch.size(), std::memory_order_relaxed);
             },
             metrics);

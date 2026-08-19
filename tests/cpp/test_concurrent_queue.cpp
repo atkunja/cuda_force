@@ -147,9 +147,8 @@ TEST_CASE("capacity is never exceeded under concurrent producers", "[queue][stre
         while (!stop.load(std::memory_order_relaxed)) {
             std::size_t depth = queue.size();
             std::size_t previous = max_observed.load(std::memory_order_relaxed);
-            while (depth > previous &&
-                   !max_observed.compare_exchange_weak(previous, depth,
-                                                       std::memory_order_relaxed)) {
+            while (depth > previous && !max_observed.compare_exchange_weak(
+                                           previous, depth, std::memory_order_relaxed)) {
             }
         }
     });
@@ -232,10 +231,9 @@ TEST_CASE("every produced item is consumed exactly once", "[queue][stress]") {
         consumer.join();
     }
 
-    const int total = std::accumulate(seen.begin(), seen.end(), 0,
-                                      [](int acc, const std::atomic<int>& slot) {
-                                          return acc + slot.load();
-                                      });
+    const int total =
+        std::accumulate(seen.begin(), seen.end(), 0,
+                        [](int acc, const std::atomic<int>& slot) { return acc + slot.load(); });
     REQUIRE(errors.failures() == 0);
     REQUIRE(total == kTotal);
     for (const std::atomic<int>& slot : seen) {

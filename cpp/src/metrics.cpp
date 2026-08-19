@@ -8,7 +8,9 @@ namespace {
 /// Nanoseconds are the recording unit; milliseconds are what a human reads.
 /// The conversion happens at the reporting boundary so no precision is lost in
 /// the histogram itself.
-double to_ms(std::uint64_t nanos) { return static_cast<double>(nanos) / 1e6; }
+double to_ms(std::uint64_t nanos) {
+    return static_cast<double>(nanos) / 1e6;
+}
 
 }  // namespace
 

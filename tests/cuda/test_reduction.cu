@@ -20,8 +20,8 @@ float sum_tolerance(std::size_t count, double magnitude) {
 }
 
 float run_reduction(const std::vector<float>& input, ReductionKernel variant) {
-    const auto output = run_on_device(
-        input, 1, [&](const float* in, float* out, cudaStream_t stream) {
+    const auto output =
+        run_on_device(input, 1, [&](const float* in, float* out, cudaStream_t stream) {
             launch_reduce_sum(in, out, input.size(), variant, stream);
         });
     return output[0];
@@ -64,8 +64,8 @@ TEST_CASE("a sum of ones is exact", "[cuda][reduction]") {
     // rounding for this input and any deviation is a genuine bug rather than
     // accumulated error.
     const std::vector<float> input(100'000, 1.0F);
-    for (ReductionKernel variant : {ReductionKernel::SharedMemory,
-                                    ReductionKernel::WarpOptimised}) {
+    for (ReductionKernel variant :
+         {ReductionKernel::SharedMemory, ReductionKernel::WarpOptimised}) {
         REQUIRE(run_reduction(input, variant) == 100'000.0F);
     }
 }
@@ -83,16 +83,15 @@ TEST_CASE("an empty reduction leaves the output untouched", "[cuda][reduction]")
 }
 
 TEST_CASE("row sums match the host", "[cuda][reduction]") {
-    for (auto [rows, cols] : {std::pair{1, 1}, std::pair{4, 17}, std::pair{33, 1023},
-                              std::pair{128, 512}}) {
+    for (auto [rows, cols] :
+         {std::pair{1, 1}, std::pair{4, 17}, std::pair{33, 1023}, std::pair{128, 512}}) {
         const auto input = random_vector(static_cast<std::size_t>(rows) * cols,
                                          static_cast<unsigned>(rows * cols));
 
-        const auto actual = run_on_device(
-            input, static_cast<std::size_t>(rows),
-            [&](const float* in, float* out, cudaStream_t stream) {
-                launch_row_sum(in, out, rows, cols, stream);
-            });
+        const auto actual = run_on_device(input, static_cast<std::size_t>(rows),
+                                          [&](const float* in, float* out, cudaStream_t stream) {
+                                              launch_row_sum(in, out, rows, cols, stream);
+                                          });
 
         std::vector<float> expected(static_cast<std::size_t>(rows));
         for (int row = 0; row < rows; ++row) {

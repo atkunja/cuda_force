@@ -1,7 +1,7 @@
 #pragma once
 
-#include <catch2/catch_test_macros.hpp>
 #include <cuda_runtime.h>
+#include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -40,8 +40,7 @@ inline double reference_sum(const std::vector<float>& values) {
                            [](double acc, float value) { return acc + value; });
 }
 
-inline std::vector<float> reference_softmax(const std::vector<float>& input, int rows,
-                                            int cols) {
+inline std::vector<float> reference_softmax(const std::vector<float>& input, int rows, int cols) {
     std::vector<float> output(input.size());
     for (int row = 0; row < rows; ++row) {
         const float* in = input.data() + static_cast<std::size_t>(row) * cols;
@@ -61,8 +60,8 @@ inline std::vector<float> reference_softmax(const std::vector<float>& input, int
 }
 
 inline std::vector<float> reference_rmsnorm(const std::vector<float>& input,
-                                            const std::vector<float>& weight, int rows,
-                                            int cols, float eps) {
+                                            const std::vector<float>& weight, int rows, int cols,
+                                            float eps) {
     std::vector<float> output(input.size());
     for (int row = 0; row < rows; ++row) {
         const float* in = input.data() + static_cast<std::size_t>(row) * cols;
@@ -72,8 +71,7 @@ inline std::vector<float> reference_rmsnorm(const std::vector<float>& input,
         for (int col = 0; col < cols; ++col) {
             sum_squares += static_cast<double>(in[col]) * in[col];
         }
-        const auto scale =
-            static_cast<float>(1.0 / std::sqrt(sum_squares / cols + eps));
+        const auto scale = static_cast<float>(1.0 / std::sqrt(sum_squares / cols + eps));
         for (int col = 0; col < cols; ++col) {
             out[col] = in[col] * scale * weight[col];
         }
@@ -91,9 +89,8 @@ inline bool close(float actual, float expected, float relative, float absolute) 
     return difference <= absolute + relative * std::fabs(expected);
 }
 
-inline void require_all_close(const std::vector<float>& actual,
-                              const std::vector<float>& expected, float relative,
-                              float absolute) {
+inline void require_all_close(const std::vector<float>& actual, const std::vector<float>& expected,
+                              float relative, float absolute) {
     REQUIRE(actual.size() == expected.size());
 
     std::size_t worst_index = 0;
@@ -108,14 +105,13 @@ inline void require_all_close(const std::vector<float>& actual,
 
     // Reporting the worst element rather than the first failure makes a
     // tolerance miss immediately actionable.
-    INFO("worst element " << worst_index << ": actual " << actual[worst_index]
-                          << " expected " << expected[worst_index] << " (difference "
-                          << worst_difference << ")");
+    INFO("worst element " << worst_index << ": actual " << actual[worst_index] << " expected "
+                          << expected[worst_index] << " (difference " << worst_difference << ")");
     REQUIRE(close(actual[worst_index], expected[worst_index], relative, absolute));
 }
 
 /// Round-trip a host vector through the device with the given kernel launch.
-template <typename Launch>
+template<typename Launch>
 std::vector<float> run_on_device(const std::vector<float>& input, std::size_t output_count,
                                  Launch&& launch) {
     CudaStream stream;

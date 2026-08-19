@@ -34,8 +34,7 @@ TEST_CASE("every softmax variant matches the host", "[cuda][softmax]") {
         const auto expected = reference_softmax(input, rows, cols);
 
         for (SoftmaxKernel variant : kVariants) {
-            INFO("rows " << rows << " cols " << cols << " variant "
-                         << static_cast<int>(variant));
+            INFO("rows " << rows << " cols " << cols << " variant " << static_cast<int>(variant));
             require_all_close(run_softmax(input, rows, cols, variant), expected,
                               /*relative=*/1e-4F, /*absolute=*/1e-6F);
         }
@@ -66,8 +65,7 @@ TEST_CASE("softmax is stable for logits that would overflow exp", "[cuda][softma
     constexpr int kRows = 2;
     constexpr int kCols = 4;
     const std::vector<float> input = {
-        1000.0F, 1000.0F, 1000.0F, 1000.0F,
-        -1000.0F, 0.0F, 500.0F, 1000.0F,
+        1000.0F, 1000.0F, 1000.0F, 1000.0F, -1000.0F, 0.0F, 500.0F, 1000.0F,
     };
 
     for (SoftmaxKernel variant : kVariants) {

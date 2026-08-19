@@ -84,7 +84,7 @@ public:
     /// `std::function` requires a copyable target and `std::packaged_task` is
     /// move-only. The indirection is one allocation per submission; for tasks
     /// coarse enough to be worth a thread hop, that is not the bottleneck.
-    template <typename F, typename... Args>
+    template<typename F, typename... Args>
     auto submit_with_result(F&& fn, Args&&... args)
         -> std::future<std::invoke_result_t<F, Args...>> {
         using Result = std::invoke_result_t<F, Args...>;

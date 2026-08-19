@@ -10,9 +10,8 @@ using namespace cudaforge::test;
 
 namespace {
 
-std::vector<float> run_rmsnorm(const std::vector<float>& input,
-                               const std::vector<float>& weight, int rows, int cols,
-                               float eps, RMSNormKernel variant) {
+std::vector<float> run_rmsnorm(const std::vector<float>& input, const std::vector<float>& weight,
+                               int rows, int cols, float eps, RMSNormKernel variant) {
     CudaStream stream;
     DeviceBuffer<float> device_in(input.size());
     DeviceBuffer<float> device_weight(weight.size());
@@ -41,13 +40,12 @@ TEST_CASE("rmsnorm matches the host reference", "[cuda][rmsnorm]") {
                               std::pair{8, 1023}, std::pair{16, 4096}, std::pair{3, 2049}}) {
         const auto input = random_vector(static_cast<std::size_t>(rows) * cols,
                                          static_cast<unsigned>(rows * 17 + cols));
-        const auto weight = random_vector(static_cast<std::size_t>(cols),
-                                          static_cast<unsigned>(cols));
+        const auto weight =
+            random_vector(static_cast<std::size_t>(cols), static_cast<unsigned>(cols));
         const auto expected = reference_rmsnorm(input, weight, rows, cols, kEps);
 
         for (RMSNormKernel variant : {RMSNormKernel::Naive, RMSNormKernel::Vectorised}) {
-            INFO("rows " << rows << " cols " << cols << " variant "
-                         << static_cast<int>(variant));
+            INFO("rows " << rows << " cols " << cols << " variant " << static_cast<int>(variant));
             require_all_close(run_rmsnorm(input, weight, rows, cols, kEps, variant), expected,
                               /*relative=*/1e-4F, /*absolute=*/1e-5F);
         }
@@ -63,8 +61,7 @@ TEST_CASE("the vectorised and scalar kernels agree", "[cuda][rmsnorm]") {
     const auto weight = random_vector(kCols, /*seed=*/29);
 
     require_all_close(run_rmsnorm(input, weight, kRows, kCols, 1e-6F, RMSNormKernel::Naive),
-                      run_rmsnorm(input, weight, kRows, kCols, 1e-6F,
-                                  RMSNormKernel::Vectorised),
+                      run_rmsnorm(input, weight, kRows, kCols, 1e-6F, RMSNormKernel::Vectorised),
                       /*relative=*/1e-5F, /*absolute=*/1e-6F);
 }
 
@@ -75,8 +72,7 @@ TEST_CASE("unit input with unit weight is the identity", "[cuda][rmsnorm]") {
     const std::vector<float> input(kRows * kCols, 1.0F);
     const std::vector<float> weight(kCols, 1.0F);
 
-    const auto output = run_rmsnorm(input, weight, kRows, kCols, 0.0F,
-                                    RMSNormKernel::Vectorised);
+    const auto output = run_rmsnorm(input, weight, kRows, kCols, 0.0F, RMSNormKernel::Vectorised);
     for (float value : output) {
         REQUIRE(close(value, 1.0F, 1e-5F, 1e-6F));
     }
@@ -95,10 +91,9 @@ TEST_CASE("rmsnorm is scale invariant", "[cuda][rmsnorm]") {
         scaled[i] = input[i] * 10.0F;
     }
 
-    require_all_close(
-        run_rmsnorm(scaled, weight, kRows, kCols, 1e-12F, RMSNormKernel::Vectorised),
-        run_rmsnorm(input, weight, kRows, kCols, 1e-12F, RMSNormKernel::Vectorised),
-        /*relative=*/1e-4F, /*absolute=*/1e-5F);
+    require_all_close(run_rmsnorm(scaled, weight, kRows, kCols, 1e-12F, RMSNormKernel::Vectorised),
+                      run_rmsnorm(input, weight, kRows, kCols, 1e-12F, RMSNormKernel::Vectorised),
+                      /*relative=*/1e-4F, /*absolute=*/1e-5F);
 }
 
 TEST_CASE("half-precision rmsnorm survives magnitudes that overflow fp16 squares",
@@ -124,8 +119,8 @@ TEST_CASE("half-precision rmsnorm survives magnitudes that overflow fp16 squares
 
     device_in.copy_from_host(host_in.data(), host_in.size(), stream);
     device_weight.copy_from_host(host_weight.data(), host_weight.size(), stream);
-    launch_rmsnorm_half(device_in.data(), device_weight.data(), device_out.data(), kRows,
-                        kCols, 1e-6F, stream);
+    launch_rmsnorm_half(device_in.data(), device_weight.data(), device_out.data(), kRows, kCols,
+                        1e-6F, stream);
 
     std::vector<__half> host_out(host_in.size());
     device_out.copy_to_host(host_out.data(), host_out.size(), stream);

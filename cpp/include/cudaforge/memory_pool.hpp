@@ -19,7 +19,7 @@ namespace cudaforge {
 /// caching, size-class and accounting logic is exercised against
 /// `HostAllocatorBackend` locally, and only the two-line device backend is
 /// hardware-dependent.
-template <typename B>
+template<typename B>
 concept AllocatorBackend = requires(B backend, void* pointer, std::size_t bytes) {
     { backend.allocate(bytes) } -> std::same_as<void*>;
     { backend.deallocate(pointer, bytes) } noexcept;
@@ -73,7 +73,7 @@ struct PoolStats {
 ///
 /// One mutex guards every free list and the statistics. Allocation is short and
 /// uncontended in practice because it happens once per batch, not per kernel.
-template <AllocatorBackend Backend>
+template<AllocatorBackend Backend>
 class MemoryPool {
 public:
     explicit MemoryPool(Backend backend = Backend{}, std::size_t min_block_bytes = 256)

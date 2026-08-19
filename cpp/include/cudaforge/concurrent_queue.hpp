@@ -73,7 +73,7 @@ enum class QueueStatus : std::uint8_t {
 /// deque is unchanged and no notification has been sent, so the queue is still
 /// consistent. Extraction moves out and then pops, so a throwing move leaves
 /// the element in place rather than losing it.
-template <typename T>
+template<typename T>
 class ConcurrentQueue {
 public:
     explicit ConcurrentQueue(std::size_t capacity) : capacity_(capacity) {
@@ -137,12 +137,12 @@ public:
 
     /// Bounded wait. `Timeout` is distinct from `Closed` so a worker can use the
     /// timeout as a heartbeat tick without mistaking it for shutdown.
-    template <typename Rep, typename Period>
+    template<typename Rep, typename Period>
     QueueStatus pop_for(T& out, const std::chrono::duration<Rep, Period>& timeout) {
         {
             std::unique_lock lock(mutex_);
-            const bool ready = not_empty_.wait_for(
-                lock, timeout, [this] { return closed_ || !buffer_.empty(); });
+            const bool ready =
+                not_empty_.wait_for(lock, timeout, [this] { return closed_ || !buffer_.empty(); });
             if (!ready) {
                 return QueueStatus::Timeout;
             }

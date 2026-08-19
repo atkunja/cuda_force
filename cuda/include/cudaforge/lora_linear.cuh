@@ -46,10 +46,9 @@ enum class LoRAKernel {
 /// variant, and is ignored by the fused one. Passing it in rather than
 /// allocating internally keeps the kernel off the allocator path, where a
 /// `cudaMalloc` would synchronise the device once per layer per token.
-void launch_lora_linear(const float* x, const float* w, const float* a, const float* b,
-                        float* y, float* workspace, int batch, int in_features,
-                        int out_features, int rank, float scale, LoRAKernel variant,
-                        cudaStream_t stream);
+void launch_lora_linear(const float* x, const float* w, const float* a, const float* b, float* y,
+                        float* workspace, int batch, int in_features, int out_features, int rank,
+                        float scale, LoRAKernel variant, cudaStream_t stream);
 
 /// Plain tiled matmul: `C[m, n] = A[m, k] B[k, n]`, row-major.
 ///

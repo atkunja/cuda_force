@@ -23,7 +23,9 @@ DynamicBatcher::DynamicBatcher(RuntimeConfig config, BatchHandler handler,
     worker_ = std::thread([this] { run(); });
 }
 
-DynamicBatcher::~DynamicBatcher() { shutdown(); }
+DynamicBatcher::~DynamicBatcher() {
+    shutdown();
+}
 
 bool DynamicBatcher::submit(Request request) {
     metrics_->record_received();
@@ -69,8 +71,7 @@ void DynamicBatcher::run() {
         metrics_->set_queue_depth(queue_.size());
 
         for (Request& request : batch.requests) {
-            metrics_->record_queue_delay(
-                static_cast<std::uint64_t>(request.queue_delay().count()));
+            metrics_->record_queue_delay(static_cast<std::uint64_t>(request.queue_delay().count()));
         }
 
         try {

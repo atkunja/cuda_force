@@ -110,8 +110,7 @@ public:
     void copy_to_device(const StreamLease& lease, void* device, const void* host,
                         std::size_t bytes);
 
-    void copy_to_host(const StreamLease& lease, void* host, const void* device,
-                      std::size_t bytes);
+    void copy_to_host(const StreamLease& lease, void* host, const void* device, std::size_t bytes);
 
     /// Makes `waiter` wait for `signaller`'s recorded completion event without
     /// blocking the host. This is the only cross-stream dependency mechanism

@@ -51,7 +51,7 @@ inline constexpr int kDefaultBlockSize = 256;
 /// 0xffffffff from a divergent branch is undefined behaviour on Volta and
 /// later, where lanes can genuinely be at different instructions, so callers
 /// must ensure the whole warp reaches this function.
-template <typename T>
+template<typename T>
 __device__ __forceinline__ T warp_reduce_sum(T value, unsigned mask = 0xffffffffU) {
 #pragma unroll
     for (int offset = kWarpSize / 2; offset > 0; offset /= 2) {
@@ -60,7 +60,7 @@ __device__ __forceinline__ T warp_reduce_sum(T value, unsigned mask = 0xffffffff
     return value;
 }
 
-template <typename T>
+template<typename T>
 __device__ __forceinline__ T warp_reduce_max(T value, unsigned mask = 0xffffffffU) {
 #pragma unroll
     for (int offset = kWarpSize / 2; offset > 0; offset /= 2) {
@@ -79,7 +79,7 @@ __device__ __forceinline__ T warp_reduce_max(T value, unsigned mask = 0xffffffff
 ///
 /// The result is broadcast back to all threads because the callers below need
 /// every thread to divide by the same sum.
-template <typename T>
+template<typename T>
 __device__ __forceinline__ T block_reduce_sum(T value, T* shared) {
     const int lane = threadIdx.x % kWarpSize;
     const int warp = static_cast<int>(threadIdx.x) / kWarpSize;
@@ -104,7 +104,7 @@ __device__ __forceinline__ T block_reduce_sum(T value, T* shared) {
     return shared[0];
 }
 
-template <typename T>
+template<typename T>
 __device__ __forceinline__ T block_reduce_max(T value, T* shared, T identity) {
     const int lane = threadIdx.x % kWarpSize;
     const int warp = static_cast<int>(threadIdx.x) / kWarpSize;

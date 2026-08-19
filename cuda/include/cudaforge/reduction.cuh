@@ -44,8 +44,7 @@ void launch_reduce_sum(const float* input, float* output, std::size_t count,
 /// Per-row sums of a `rows x cols` row-major matrix into `output[rows]`.
 /// One block per row, so a row is reduced entirely in registers and shared
 /// memory with no global atomics at all.
-void launch_row_sum(const float* input, float* output, int rows, int cols,
-                    cudaStream_t stream);
+void launch_row_sum(const float* input, float* output, int rows, int cols, cudaStream_t stream);
 
 /// Grid size used for the whole-array variants.
 ///

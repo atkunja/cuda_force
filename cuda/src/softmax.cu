@@ -11,8 +11,8 @@ namespace {
 
 /// Three global-memory passes. Kept as the baseline the other two are measured
 /// against: it is the shape a correct-but-unoptimised implementation takes.
-__global__ void softmax_naive(const float* __restrict__ input, float* __restrict__ output,
-                              int rows, int cols) {
+__global__ void softmax_naive(const float* __restrict__ input, float* __restrict__ output, int rows,
+                              int cols) {
     __shared__ float scratch[kWarpSize];
 
     const int row = static_cast<int>(blockIdx.x);
@@ -177,8 +177,7 @@ int max_shared_memory_per_block() {
         int device = 0;
         CUDAFORGE_CHECK(cudaGetDevice(&device));
         int bytes = 0;
-        CUDAFORGE_CHECK(cudaDeviceGetAttribute(&bytes, cudaDevAttrMaxSharedMemoryPerBlock,
-                                               device));
+        CUDAFORGE_CHECK(cudaDeviceGetAttribute(&bytes, cudaDevAttrMaxSharedMemoryPerBlock, device));
         return bytes;
     }();
     return cached;
@@ -186,8 +185,8 @@ int max_shared_memory_per_block() {
 
 }  // namespace
 
-void launch_softmax(const float* input, float* output, int rows, int cols,
-                    SoftmaxKernel variant, cudaStream_t stream) {
+void launch_softmax(const float* input, float* output, int rows, int cols, SoftmaxKernel variant,
+                    cudaStream_t stream) {
     if (rows <= 0 || cols <= 0) {
         return;
     }
