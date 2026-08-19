@@ -50,6 +50,7 @@ fi
 
 # --- CUDA ------------------------------------------------------------------
 run_stage "CUDA structural checks" "$PYTHON" scripts/check_cuda_sources.py cuda tests/cuda
+run_stage "Documentation links" "$PYTHON" scripts/check_docs.py .
 
 if command -v nvcc >/dev/null 2>&1 && command -v nvidia-smi >/dev/null 2>&1; then
   run_stage "CUDA build" ./scripts/build.sh --cuda
@@ -60,6 +61,11 @@ fi
 
 # --- Python ----------------------------------------------------------------
 run_stage "Python tests" "$PYTHON" -m pytest tests/python -q
+
+# Runs the examples as smoke tests. An example that no longer works is a
+# documentation bug with a working-code disguise.
+run_stage "Operator parity" "$PYTHON" examples/kernel_parity.py
+run_stage "Example: single request" "$PYTHON" examples/simple_inference.py --echo-runner
 
 if "$PYTHON" -c "import ruff" >/dev/null 2>&1 || command -v ruff >/dev/null 2>&1; then
   run_stage "ruff check" "$PYTHON" -m ruff check .
