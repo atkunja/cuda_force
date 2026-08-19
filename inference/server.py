@@ -23,7 +23,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response as FastAPIResponse
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from cudaforge.config import EngineConfig, GenerationConfig
@@ -188,9 +188,11 @@ async def metrics_prometheus() -> PlainTextResponse:
 @app.post(
     "/generate",
     response_model=GenerateResponse,
-    responses={503: {"description": "queue full or shutting down"}},
+    responses={503: {"description": "queue full, shutting down, or past its deadline"}},
 )
-async def generate(request: GenerateRequest) -> GenerateResponse:
+async def generate(
+    request: GenerateRequest, response: FastAPIResponse
+) -> GenerateResponse:
     engine = _require_engine()
 
     generation = GenerationConfig(
@@ -219,25 +221,34 @@ async def generate(request: GenerateRequest) -> GenerateResponse:
     # to accept further connections while this request is being generated —
     # calling .result() directly would block the entire server.
     loop = asyncio.get_running_loop()
-    response = await loop.run_in_executor(None, future.result, 300.0)
+    engine_response = await loop.run_in_executor(None, future.result, 300.0)
 
-    if not response.ok:
+    if not engine_response.ok:
         # A missed deadline is the runtime shedding load deliberately, not a
         # server fault. 503 tells the client to retry or back off; 500 would
         # suggest something is broken.
-        expired = "RequestExpired" in (response.error or "")
+        expired = "RequestExpired" in (engine_response.error or "")
         return JSONResponse(
             status_code=503 if expired else 500,
-            content={"detail": response.error, "request_id": response.request_id},
+            content={
+                "detail": engine_response.error,
+                "request_id": engine_response.request_id,
+            },
+            headers={"X-Request-ID": engine_response.request_id},
         )
 
+    # Echoed as a header as well as in the body, so a client can correlate a
+    # request with a server log line without parsing the payload — which it
+    # cannot do at all for the error responses above.
+    response.headers["X-Request-ID"] = engine_response.request_id
+
     return GenerateResponse(
-        request_id=response.request_id,
-        text=response.text,
-        prompt_tokens=response.prompt_tokens,
-        generated_tokens=response.generated_tokens,
-        queue_time_ms=response.queue_time * 1e3,
-        inference_time_ms=response.inference_time * 1e3,
-        total_latency_ms=response.total_latency * 1e3,
-        batch_size=response.batch_size,
+        request_id=engine_response.request_id,
+        text=engine_response.text,
+        prompt_tokens=engine_response.prompt_tokens,
+        generated_tokens=engine_response.generated_tokens,
+        queue_time_ms=engine_response.queue_time * 1e3,
+        inference_time_ms=engine_response.inference_time * 1e3,
+        total_latency_ms=engine_response.total_latency * 1e3,
+        batch_size=engine_response.batch_size,
     )
