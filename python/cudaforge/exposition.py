@@ -58,6 +58,42 @@ def _format_value(value: float | int) -> str:
     return repr(float(value))
 
 
+def _escape_label(value: str) -> str:
+    """Escape a label value per the exposition format.
+
+    Backslash, double quote and newline are the three characters that must be
+    escaped; a raw quote in a model name would otherwise truncate the metric and
+    the scrape would fail on the whole body, not just that line.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _render_info(snapshot: MetricsSnapshot) -> list[str]:
+    """Render the configuration as an info metric.
+
+    The idiomatic way to expose constant, non-numeric facts: a gauge fixed at 1
+    carrying the values as labels, so a dashboard can group or filter by model
+    and batching configuration. Emitting them as metric *values* would be wrong
+    — a model name is not a number, and a batch size is a setting rather than a
+    measurement.
+    """
+    labels = {
+        key: str(snapshot.extra.get(key, ""))
+        for key in ("runner", "max_batch_size", "max_wait_us")
+        if key in snapshot.extra
+    }
+    if not labels:
+        return []
+
+    rendered = ",".join(f'{key}="{_escape_label(value)}"' for key, value in labels.items())
+    name = f"{_PREFIX}_build_info"
+    return [
+        f"# HELP {name} Engine configuration, as labels on a constant.",
+        f"# TYPE {name} gauge",
+        f"{name}{{{rendered}}} 1",
+    ]
+
+
 def render_prometheus(snapshot: MetricsSnapshot) -> str:
     """Render a snapshot in the Prometheus text exposition format.
 
@@ -78,6 +114,8 @@ def render_prometheus(snapshot: MetricsSnapshot) -> str:
         lines.append(f"# HELP {name} {description}")
         lines.append(f"# TYPE {name} gauge")
         lines.append(f"{name} {_format_value(payload.get(field, 0))}")
+
+    lines.extend(_render_info(snapshot))
 
     return "\n".join(lines) + "\n"
 
