@@ -48,6 +48,7 @@ def build_extensions() -> tuple[list, dict]:
     if CUDA_HOME is not None:
         sources += [
             "cuda/src/activations.cu",
+            "cuda/src/fused_norm.cu",
             "cuda/src/reduction.cu",
             "cuda/src/softmax.cu",
             "cuda/src/rmsnorm.cu",

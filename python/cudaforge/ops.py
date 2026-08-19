@@ -168,6 +168,13 @@ def _lora_linear_reference(
     return x @ weight + scale * ((x @ lora_a) @ lora_b)
 
 
+def _fused_residual_rmsnorm_reference(
+    x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor, eps: float
+) -> tuple[torch.Tensor, torch.Tensor]:
+    summed = x + residual
+    return _rmsnorm_reference(summed, weight, eps), summed
+
+
 def _silu_reference(x: torch.Tensor) -> torch.Tensor:
     return torch.nn.functional.silu(x)
 
@@ -306,6 +313,60 @@ def lora_linear(
     ):
         return torch.ops.cudaforge.lora_linear(x, weight, lora_a, lora_b, scale)
     return _lora_linear_reference(x, weight, lora_a, lora_b, scale)
+
+
+def fused_residual_rmsnorm(
+    x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor, eps: float = 1e-6
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Residual add followed by RMSNorm, in one pass.
+
+    Every transformer block is ``x = x + sublayer(norm(x))``, so a residual add
+    is always immediately followed by the next block's normalisation. Fusing
+    them computes the sum once and keeps the row resident for the reduction
+    instead of writing it, reading it back for the sum of squares, and reading
+    it a third time to scale.
+
+    Args:
+        x: the sublayer output, ``[rows, cols]``.
+        residual: the skip connection, same shape.
+        weight: ``[cols]`` learned gain.
+        eps: added inside the square root.
+
+    Returns:
+        ``(normalised, residual_out)``. Both are needed: the first feeds the
+        next sublayer, the second is what the *following* residual connection
+        adds to. Returning only the first would force the caller to recompute
+        the sum.
+
+    Raises:
+        ValueError: if the shapes disagree.
+    """
+    if x.shape != residual.shape:
+        raise ValueError(
+            f"x and residual must have the same shape, got {tuple(x.shape)} "
+            f"and {tuple(residual.shape)}"
+        )
+    if weight.ndim != 1 or weight.shape[0] != x.shape[-1]:
+        raise ValueError(
+            f"weight must be 1-D of length {x.shape[-1]}, got {tuple(weight.shape)}"
+        )
+    if x.numel() == 0:
+        return x.clone(), residual.clone()
+
+    x = x.contiguous()
+    residual = residual.contiguous()
+    weight = weight.contiguous()
+
+    if (
+        _dispatch_available("fused_residual_rmsnorm", x, residual, weight)
+        and x.ndim == 2
+        and x.dtype == torch.float32
+    ):
+        normalised, summed = torch.ops.cudaforge.fused_residual_rmsnorm(
+            x, residual, weight, eps
+        )
+        return normalised, summed
+    return _fused_residual_rmsnorm_reference(x, residual, weight, eps)
 
 
 def silu(x: torch.Tensor) -> torch.Tensor:

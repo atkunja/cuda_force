@@ -25,6 +25,7 @@
 #include <c10/cuda/CUDAStream.h>
 
 #include "cudaforge/activations.cuh"
+#include "cudaforge/fused_norm.cuh"
 #include "cudaforge/lora_linear.cuh"
 #include "cudaforge/quantization.cuh"
 #include "cudaforge/reduction.cuh"
@@ -123,6 +124,32 @@ torch::Tensor lora_linear_cuda(const torch::Tensor& x, const torch::Tensor& w,
                        batch, in_features, out_features, rank, static_cast<float>(scale),
                        LoRAKernel::Fused, current_stream());
     return output;
+}
+
+std::vector<torch::Tensor> fused_residual_rmsnorm_cuda(const torch::Tensor& x,
+                                                       const torch::Tensor& residual,
+                                                       const torch::Tensor& weight,
+                                                       double eps) {
+    check_2d(x, "x");
+    check_float32(x, "x");
+    check_float32(residual, "residual");
+    check_float32(weight, "weight");
+    check_last_dim_contiguous(x, "x");
+    check_last_dim_contiguous(residual, "residual");
+    check_last_dim_contiguous(weight, "weight");
+    TORCH_CHECK(x.sizes() == residual.sizes(), "x and residual must have the same shape, got ",
+                x.sizes(), " and ", residual.sizes());
+    TORCH_CHECK(weight.dim() == 1 && weight.size(0) == x.size(1),
+                "weight must be 1-D of length ", x.size(1), ", got ", weight.sizes());
+
+    torch::Tensor output = torch::empty_like(x);
+    torch::Tensor residual_out = torch::empty_like(x);
+    launch_fused_residual_rmsnorm(x.data_ptr<float>(), residual.data_ptr<float>(),
+                                  weight.data_ptr<float>(), output.data_ptr<float>(),
+                                  residual_out.data_ptr<float>(),
+                                  static_cast<int>(x.size(0)), static_cast<int>(x.size(1)),
+                                  static_cast<float>(eps), current_stream());
+    return {output, residual_out};
 }
 
 torch::Tensor silu_cuda(const torch::Tensor& input) {
@@ -236,6 +263,16 @@ torch::Tensor sum_cpu(const torch::Tensor& input) {
     return input.sum();
 }
 
+std::vector<torch::Tensor> fused_residual_rmsnorm_cpu(const torch::Tensor& x,
+                                                      const torch::Tensor& residual,
+                                                      const torch::Tensor& weight,
+                                                      double eps) {
+    TORCH_CHECK(x.sizes() == residual.sizes(), "x and residual must have the same shape, got ",
+                x.sizes(), " and ", residual.sizes());
+    const torch::Tensor summed = x + residual;
+    return {rmsnorm_cpu(summed, weight, eps), summed};
+}
+
 torch::Tensor silu_cpu(const torch::Tensor& input) {
     return torch::silu(input);
 }
@@ -313,6 +350,9 @@ TORCH_LIBRARY(cudaforge, m) {
     m.def("silu(Tensor input) -> Tensor");
     m.def("gelu(Tensor input) -> Tensor");
     m.def("swiglu(Tensor gate, Tensor up) -> Tensor");
+    m.def(
+        "fused_residual_rmsnorm(Tensor x, Tensor residual, Tensor weight, float eps) "
+        "-> Tensor[]");
     m.def("quantize_int8(Tensor input) -> Tensor[]");
     m.def("dequantize_int8(Tensor quantised, Tensor scales) -> Tensor");
 }
@@ -347,6 +387,7 @@ TORCH_LIBRARY_IMPL(cudaforge, CPU, m) {
     m.impl("silu", &cudaforge::bindings::silu_cpu);
     m.impl("gelu", &cudaforge::bindings::gelu_cpu);
     m.impl("swiglu", &cudaforge::bindings::swiglu_cpu);
+    m.impl("fused_residual_rmsnorm", &cudaforge::bindings::fused_residual_rmsnorm_cpu);
     m.impl("quantize_int8", &cudaforge::bindings::quantize_int8_cpu);
     m.impl("dequantize_int8", &cudaforge::bindings::dequantize_int8_cpu);
 }
@@ -360,6 +401,7 @@ TORCH_LIBRARY_IMPL(cudaforge, CUDA, m) {
     m.impl("silu", &cudaforge::bindings::silu_cuda);
     m.impl("gelu", &cudaforge::bindings::gelu_cuda);
     m.impl("swiglu", &cudaforge::bindings::swiglu_cuda);
+    m.impl("fused_residual_rmsnorm", &cudaforge::bindings::fused_residual_rmsnorm_cuda);
     m.impl("quantize_int8", &cudaforge::bindings::quantize_int8_cuda);
     m.impl("dequantize_int8", &cudaforge::bindings::dequantize_int8_cuda);
 }
