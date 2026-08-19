@@ -112,3 +112,28 @@ def test_metrics_expose_the_expiry_counter(client):
     client.post("/generate", json={"prompt": "hello"})
     payload = client.get("/metrics").json()
     assert payload["requests_expired"] == 0
+
+
+def test_ready_reports_accepting_when_idle(client):
+    response = client.get("/ready")
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["ready"] is True
+    assert payload["queue_depth"] == 0
+    assert payload["queue_capacity"] > 0
+    assert payload["saturation"] == 0.0
+
+
+def test_ready_is_separate_from_health(client):
+    # Liveness and readiness answer different questions: a full queue means
+    # "take me out of rotation", not "restart me".
+    assert client.get("/health").status_code == 200
+    assert client.get("/ready").status_code == 200
+    assert set(client.get("/ready").json()) != set(client.get("/health").json())
+
+
+def test_readiness_is_in_the_openapi_schema(client):
+    schema = client.get("/openapi.json").json()
+    assert "/ready" in schema["paths"]
+    assert "503" in schema["paths"]["/ready"]["get"]["responses"]
