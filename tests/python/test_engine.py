@@ -367,3 +367,15 @@ def test_metrics_survive_a_mix_of_success_and_failure():
     assert snapshot.requests_completed == succeeded
     assert snapshot.requests_failed == failed
     assert snapshot.tokens_generated == succeeded * 3
+
+
+def test_the_snapshot_carries_labels_for_the_info_metric():
+    # These become Prometheus labels, so a dashboard can group by model and
+    # configuration rather than by instance.
+    with make_engine(max_batch_size=12) as engine:
+        extra = engine.snapshot().extra
+
+    assert extra["model"]
+    assert extra["device"] in {"cpu", "mps"} or extra["device"].startswith("cuda")
+    assert extra["max_batch_size"] == 12
+    assert "EchoRunner" in extra["runner"]
