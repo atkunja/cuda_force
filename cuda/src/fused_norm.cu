@@ -20,8 +20,7 @@ namespace {
 /// but the ordering matters: adding then squaring, not squaring then adding.
 __global__ void fused_residual_rmsnorm(const float* __restrict__ input,
                                        const float* __restrict__ residual,
-                                       const float* __restrict__ weight,
-                                       float* __restrict__ output,
+                                       const float* __restrict__ weight, float* __restrict__ output,
                                        float* __restrict__ residual_out, int rows, int cols,
                                        float eps) {
     __shared__ float scratch[kWarpSize];
@@ -63,9 +62,9 @@ __global__ void fused_residual_rmsnorm(const float* __restrict__ input,
 
 }  // namespace
 
-void launch_fused_residual_rmsnorm(const float* input, const float* residual,
-                                   const float* weight, float* output, float* residual_out,
-                                   int rows, int cols, float eps, cudaStream_t stream) {
+void launch_fused_residual_rmsnorm(const float* input, const float* residual, const float* weight,
+                                   float* output, float* residual_out, int rows, int cols,
+                                   float eps, cudaStream_t stream) {
     if (rows <= 0 || cols <= 0) {
         return;
     }

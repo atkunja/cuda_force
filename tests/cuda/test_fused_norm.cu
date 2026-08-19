@@ -27,9 +27,9 @@ FusedResult run_fused(const std::vector<float>& input, const std::vector<float>&
     device_residual.copy_from_host(residual.data(), residual.size(), stream);
     device_weight.copy_from_host(weight.data(), weight.size(), stream);
 
-    launch_fused_residual_rmsnorm(device_in.data(), device_residual.data(),
-                                  device_weight.data(), device_out.data(),
-                                  device_residual_out.data(), rows, cols, eps, stream);
+    launch_fused_residual_rmsnorm(device_in.data(), device_residual.data(), device_weight.data(),
+                                  device_out.data(), device_residual_out.data(), rows, cols, eps,
+                                  stream);
 
     FusedResult result;
     result.normalised.resize(input.size());
@@ -51,8 +51,8 @@ TEST_CASE("the fused kernel matches add-then-normalise", "[cuda][fused]") {
         const auto count = static_cast<std::size_t>(rows) * cols;
         const auto input = random_vector(count, static_cast<unsigned>(rows * 13 + cols));
         const auto residual = random_vector(count, static_cast<unsigned>(rows * 29 + cols));
-        const auto weight = random_vector(static_cast<std::size_t>(cols),
-                                          static_cast<unsigned>(cols) + 7);
+        const auto weight =
+            random_vector(static_cast<std::size_t>(cols), static_cast<unsigned>(cols) + 7);
 
         std::vector<float> summed(count);
         for (std::size_t i = 0; i < count; ++i) {
@@ -93,8 +93,8 @@ TEST_CASE("the fused kernel agrees with the separate rmsnorm kernel", "[cuda][fu
     DeviceBuffer<float> device_out(summed.size());
     device_sum.copy_from_host(summed.data(), summed.size(), stream);
     device_weight.copy_from_host(weight.data(), weight.size(), stream);
-    launch_rmsnorm(device_sum.data(), device_weight.data(), device_out.data(), kRows, kCols,
-                   kEps, RMSNormKernel::Naive, stream);
+    launch_rmsnorm(device_sum.data(), device_weight.data(), device_out.data(), kRows, kCols, kEps,
+                   RMSNormKernel::Naive, stream);
 
     std::vector<float> separate(summed.size());
     device_out.copy_to_host(separate.data(), separate.size(), stream);
@@ -135,6 +135,6 @@ TEST_CASE("the operands are symmetric", "[cuda][fused]") {
 
 TEST_CASE("an empty fused launch is a no-op", "[cuda][fused]") {
     CudaStream stream;
-    REQUIRE_NOTHROW(launch_fused_residual_rmsnorm(nullptr, nullptr, nullptr, nullptr, nullptr,
-                                                  0, 0, 1e-6F, stream));
+    REQUIRE_NOTHROW(launch_fused_residual_rmsnorm(nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0,
+                                                  1e-6F, stream));
 }

@@ -128,8 +128,7 @@ torch::Tensor lora_linear_cuda(const torch::Tensor& x, const torch::Tensor& w,
 
 std::vector<torch::Tensor> fused_residual_rmsnorm_cuda(const torch::Tensor& x,
                                                        const torch::Tensor& residual,
-                                                       const torch::Tensor& weight,
-                                                       double eps) {
+                                                       const torch::Tensor& weight, double eps) {
     check_2d(x, "x");
     check_float32(x, "x");
     check_float32(residual, "residual");
@@ -139,16 +138,15 @@ std::vector<torch::Tensor> fused_residual_rmsnorm_cuda(const torch::Tensor& x,
     check_last_dim_contiguous(weight, "weight");
     TORCH_CHECK(x.sizes() == residual.sizes(), "x and residual must have the same shape, got ",
                 x.sizes(), " and ", residual.sizes());
-    TORCH_CHECK(weight.dim() == 1 && weight.size(0) == x.size(1),
-                "weight must be 1-D of length ", x.size(1), ", got ", weight.sizes());
+    TORCH_CHECK(weight.dim() == 1 && weight.size(0) == x.size(1), "weight must be 1-D of length ",
+                x.size(1), ", got ", weight.sizes());
 
     torch::Tensor output = torch::empty_like(x);
     torch::Tensor residual_out = torch::empty_like(x);
-    launch_fused_residual_rmsnorm(x.data_ptr<float>(), residual.data_ptr<float>(),
-                                  weight.data_ptr<float>(), output.data_ptr<float>(),
-                                  residual_out.data_ptr<float>(),
-                                  static_cast<int>(x.size(0)), static_cast<int>(x.size(1)),
-                                  static_cast<float>(eps), current_stream());
+    launch_fused_residual_rmsnorm(
+        x.data_ptr<float>(), residual.data_ptr<float>(), weight.data_ptr<float>(),
+        output.data_ptr<float>(), residual_out.data_ptr<float>(), static_cast<int>(x.size(0)),
+        static_cast<int>(x.size(1)), static_cast<float>(eps), current_stream());
     return {output, residual_out};
 }
 
@@ -265,8 +263,7 @@ torch::Tensor sum_cpu(const torch::Tensor& input) {
 
 std::vector<torch::Tensor> fused_residual_rmsnorm_cpu(const torch::Tensor& x,
                                                       const torch::Tensor& residual,
-                                                      const torch::Tensor& weight,
-                                                      double eps) {
+                                                      const torch::Tensor& weight, double eps) {
     TORCH_CHECK(x.sizes() == residual.sizes(), "x and residual must have the same shape, got ",
                 x.sizes(), " and ", residual.sizes());
     const torch::Tensor summed = x + residual;

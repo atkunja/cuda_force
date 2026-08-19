@@ -35,8 +35,8 @@ namespace cudaforge {
 /// happens twice per layer, at every layer, for every token.
 ///
 /// `weight` has `cols` entries. `residual_out` may alias `residual`.
-void launch_fused_residual_rmsnorm(const float* input, const float* residual,
-                                   const float* weight, float* output, float* residual_out,
-                                   int rows, int cols, float eps, cudaStream_t stream);
+void launch_fused_residual_rmsnorm(const float* input, const float* residual, const float* weight,
+                                   float* output, float* residual_out, int rows, int cols,
+                                   float eps, cudaStream_t stream);
 
 }  // namespace cudaforge
