@@ -145,9 +145,7 @@ def test_a_status_split_across_lines_is_accepted(tmp_path):
     ],
 )
 def test_every_accepted_status_form_is_recognised(tmp_path, body):
-    assert "unchecked-status" not in findings_for(
-        tmp_path, f"void f() {{ void* p; {body} }}"
-    )
+    assert "unchecked-status" not in findings_for(tmp_path, f"void f() {{ void* p; {body} }}")
 
 
 # --- warp primitives -------------------------------------------------------
@@ -196,14 +194,17 @@ def test_an_unconditional_barrier_is_accepted(tmp_path):
 def test_violations_inside_comments_are_ignored(tmp_path):
     # The real sources discuss cudaDeviceSynchronize at length in comments
     # explaining why it is not used. Flagging prose would make the rule useless.
-    assert findings_for(
-        tmp_path,
-        """
+    assert (
+        findings_for(
+            tmp_path,
+            """
         // Never call cudaDeviceSynchronize() here.
         /* cudaMalloc(&p, 1024); would be unchecked. */
         void f() {}
         """,
-    ) == []
+        )
+        == []
+    )
 
 
 def test_line_numbers_survive_block_comments(tmp_path):

@@ -136,8 +136,8 @@ the hardware supports it.
 Order matters around clipping:
 
 ```python
-scaler.unscale_(optimizer)                        # 1. remove the scale factor
-torch.nn.utils.clip_grad_norm_(trainable, 1.0)    # 2. then clip
+scaler.unscale_(optimizer)  # 1. remove the scale factor
+torch.nn.utils.clip_grad_norm_(trainable, 1.0)  # 2. then clip
 scaler.step(optimizer)
 ```
 
