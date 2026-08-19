@@ -33,6 +33,13 @@ target_include_directories(cudaforge_tests PRIVATE ${CMAKE_SOURCE_DIR}/benchmark
 
 cudaforge_apply_sanitizer(cudaforge_tests)
 
+# Not linked into the test binary: this is a standalone harness a Python test
+# drives, so the two batcher implementations can be compared on the same
+# scenario rather than each being checked only against its own expectations.
+add_executable(batcher_scenario batcher_scenario.cpp)
+target_link_libraries(batcher_scenario PRIVATE cudaforge::runtime cudaforge_warnings)
+cudaforge_apply_sanitizer(batcher_scenario)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(cudaforge_tests)
