@@ -1,0 +1,36 @@
+# Single-GPU LoRA run on a real model and dataset.
+#
+# Sized for a 16 GB card. The knobs that carry the memory cost are
+# batch_size, max_seq_length and lora.rank, in that order.
+
+model_name: gpt2
+output_dir: checkpoints/gpt2-lora
+
+dataset_name: wikitext
+dataset_config: wikitext-2-raw-v1
+dataset_split: train
+text_field: text
+
+max_seq_length: 512
+batch_size: 4
+# Effective batch is 4 x 8 = 32. Accumulation buys the convergence behaviour of
+# a batch of 32 at the activation memory of a batch of 4.
+gradient_accumulation_steps: 8
+learning_rate: 0.0002
+weight_decay: 0.0
+warmup_ratio: 0.03
+epochs: 1
+seed: 42
+
+mixed_precision: true
+gradient_checkpointing: false
+
+logging_steps: 20
+save_steps: 500
+
+lora:
+  rank: 16
+  # alpha = 2 * rank keeps the effective scale at 2.0 as rank changes.
+  alpha: 32
+  dropout: 0.05
+  target_modules: ["c_attn", "c_proj"]
