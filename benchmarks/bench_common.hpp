@@ -134,7 +134,9 @@ private:
         }
     }
 
-    [[nodiscard]] std::string indent() const { return std::string(depth_ * 2, ' '); }
+    [[nodiscard]] std::string indent() const {
+        return std::string(static_cast<std::size_t>(depth_) * 2, ' ');
+    }
     static std::string quote(const std::string& value) { return "\"" + value + "\""; }
 
     std::ostream& out_;
