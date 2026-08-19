@@ -1,5 +1,7 @@
 #include "cudaforge/memory_pool.hpp"
 
+#include "thread_assert.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -10,6 +12,7 @@
 using cudaforge::HostAllocatorBackend;
 using cudaforge::HostMemoryPool;
 using cudaforge::MemoryPool;
+using cudaforge::test::ThreadAssert;
 
 namespace {
 
@@ -205,6 +208,7 @@ TEST_CASE("concurrent allocation and release is safe", "[pool][stress]") {
     constexpr int kPerThread = 500;
 
     HostMemoryPool pool;
+    ThreadAssert errors;
     std::vector<std::thread> threads;
     threads.reserve(kThreads);
     for (int t = 0; t < kThreads; ++t) {
@@ -212,7 +216,9 @@ TEST_CASE("concurrent allocation and release is safe", "[pool][stress]") {
             for (int i = 0; i < kPerThread; ++i) {
                 const std::size_t bytes = 256UL << ((t + i) % 5);
                 void* block = pool.allocate(bytes);
-                REQUIRE(block != nullptr);
+                if (!errors.check(block != nullptr)) {
+                    continue;
+                }
                 std::memset(block, t, bytes);
                 pool.deallocate(block);
             }
@@ -222,6 +228,7 @@ TEST_CASE("concurrent allocation and release is safe", "[pool][stress]") {
         thread.join();
     }
 
+    REQUIRE(errors.failures() == 0);
     const auto stats = pool.stats();
     REQUIRE(stats.allocation_count == kThreads * kPerThread);
     REQUIRE(stats.free_count == kThreads * kPerThread);
