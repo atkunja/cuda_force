@@ -92,3 +92,59 @@ nothing without a reference. GB/s can be compared against the device's
 theoretical peak, which the CUDA harness reads from device properties and
 includes in its output. A kernel at 80% of peak is essentially done, regardless
 of how its time compares to another implementation.
+
+## What to look at
+
+### Concurrency (`bench_queue`)
+
+Sweeps producers x consumers x capacity. The interesting quantity is not peak
+throughput but **where it stops scaling** — one mutex serialises every push and
+pop, so beyond some thread count the queue becomes the bottleneck and adding
+threads makes things worse. If that point sits below your target concurrency,
+the fix is sharding the queue, not removing the lock.
+
+### Batching (`bench_scheduler`, `benchmark_batching.py`)
+
+Sweeps arrival concurrency against `max_batch_size` and `max_wait_us`. Four
+numbers matter together:
+
+| Column | Reading |
+| --- | --- |
+| `requests_per_second` | throughput |
+| `average_batch_size` | how much aggregation is actually happening |
+| `timeout_closure_fraction` | near 1.0 means arrivals never fill a batch — the wait is pure added latency |
+| `queue_delay_p99_ms` | the batcher's own contribution to tail latency |
+
+Throughput that has flattened while p99 keeps climbing means the batch is
+already large enough. A `timeout_closure_fraction` near 1.0 with small batches
+means lowering `max_wait_us` costs nothing and saves latency.
+
+Execution is simulated with a sleep unless `--model` is passed, so these
+describe the **scheduler**, not model throughput. That separation is deliberate:
+it isolates the variable under study and keeps the benchmark runnable without a
+GPU. The output says so.
+
+### Memory (`bench_memory`)
+
+On the host backend the wall-clock saving is modest, because `malloc` already
+caches. The numbers that carry over are `reuse_rate` and the ratio of
+`backend_allocations` to `pool_allocations`: on the device backend each avoided
+call is a `cudaMalloc` that would have synchronised the device. That is the
+actual argument for the pool, and it cannot be measured on this host.
+
+### CUDA kernels (`bench_kernels`)
+
+Compares naive against optimised for every kernel, with effective bandwidth
+against the device's theoretical peak. Requires an NVIDIA GPU; no such run has
+been performed for this repository.
+
+## Reporting results
+
+If you run these on real hardware, include:
+
+* GPU model and driver version (the harness records both),
+* CUDA toolkit version,
+* the full JSON, not a selected figure,
+* whether `using_custom_kernels` was true.
+
+A speedup quoted without the baseline's configuration is not a measurement.
