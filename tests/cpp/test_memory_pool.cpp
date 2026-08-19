@@ -239,3 +239,95 @@ TEST_CASE("the backend name is exposed for reporting", "[pool]") {
     REQUIRE(std::string(HostMemoryPool::backend_name()) == "host");
     REQUIRE(std::string(HostAllocatorBackend::name()) == "host");
 }
+
+// --- allocation failure ----------------------------------------------------
+
+namespace {
+
+/// Backend that refuses allocations after a configured number of successes.
+/// Device OOM is the realistic case: `cudaMalloc` returns an error rather than
+/// throwing, and the pool has to turn that into something callers can act on.
+class FailingBackend {
+public:
+    struct State {
+        std::atomic<int> allocations_before_failure{0};
+        std::atomic<std::uint64_t> deallocations{0};
+    };
+
+    explicit FailingBackend(State* state) : state_(state) {}
+
+    [[nodiscard]] void* allocate(std::size_t bytes) const {
+        if (state_->allocations_before_failure.fetch_sub(1) <= 0) {
+            return nullptr;  // as cudaMalloc failure is surfaced
+        }
+        return std::malloc(bytes);
+    }
+
+    void deallocate(void* pointer, std::size_t /*bytes*/) const noexcept {
+        state_->deallocations.fetch_add(1);
+        std::free(pointer);
+    }
+
+    [[nodiscard]] static const char* name() { return "failing"; }
+};
+
+}  // namespace
+
+TEST_CASE("a backend failure surfaces as bad_alloc", "[pool][failure]") {
+    // Returning null to the caller would be worse than throwing: a null device
+    // pointer passed to a kernel is an illegal access thousands of lines later.
+    FailingBackend::State state;
+    state.allocations_before_failure = 0;
+    MemoryPool<FailingBackend> pool{FailingBackend{&state}};
+
+    REQUIRE_THROWS_AS(pool.allocate(1024), std::bad_alloc);
+}
+
+TEST_CASE("the pool is usable after a failed allocation", "[pool][failure]") {
+    FailingBackend::State state;
+    state.allocations_before_failure = 0;
+    MemoryPool<FailingBackend> pool{FailingBackend{&state}};
+
+    REQUIRE_THROWS_AS(pool.allocate(1024), std::bad_alloc);
+
+    // The failure must not have left the mutex held or the accounting skewed.
+    state.allocations_before_failure = 1;
+    void* block = pool.allocate(1024);
+    REQUIRE(block != nullptr);
+    REQUIRE(pool.stats().bytes_in_use == 1024);
+    pool.deallocate(block);
+    REQUIRE(pool.stats().bytes_in_use == 0);
+}
+
+TEST_CASE("a failed allocation does not inflate the statistics", "[pool][failure]") {
+    FailingBackend::State state;
+    state.allocations_before_failure = 0;
+    MemoryPool<FailingBackend> pool{FailingBackend{&state}};
+
+    REQUIRE_THROWS_AS(pool.allocate(4096), std::bad_alloc);
+
+    const auto stats = pool.stats();
+    REQUIRE(stats.bytes_reserved == 0);
+    REQUIRE(stats.bytes_in_use == 0);
+    REQUIRE(stats.backend_allocations == 0);
+    // The attempt is still counted; it happened.
+    REQUIRE(stats.allocation_count == 1);
+}
+
+TEST_CASE("trimming then retrying is a viable recovery", "[pool][failure]") {
+    // The documented response to device OOM: release cached blocks and retry.
+    FailingBackend::State state;
+    state.allocations_before_failure = 1;
+    MemoryPool<FailingBackend> pool{FailingBackend{&state}};
+
+    void* first = pool.allocate(4096);
+    REQUIRE(first != nullptr);
+    pool.deallocate(first);
+
+    // A different size class, so the free list cannot satisfy it.
+    REQUIRE_THROWS_AS(pool.allocate(1 << 20), std::bad_alloc);
+
+    pool.trim();
+    REQUIRE(state.deallocations.load() == 1);
+    REQUIRE(pool.stats().bytes_reserved == 0);
+}
