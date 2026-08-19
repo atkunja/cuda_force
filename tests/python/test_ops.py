@@ -249,3 +249,104 @@ def test_backend_report_is_self_consistent():
 def test_cuda_availability_flag_agrees_with_torch():
     if not torch.cuda.is_available():
         assert not ops.CUDA_KERNELS_AVAILABLE
+
+
+# --- activations -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("shape", [(1,), (64,), (4, 17), (8, 4096), (3, 1023)])
+def test_silu_matches_torch(shape):
+    x = torch.randn(*shape)
+    torch.testing.assert_close(ops.silu(x), torch.nn.functional.silu(x))
+
+
+def test_silu_matches_its_definition():
+    x = torch.randn(256)
+    torch.testing.assert_close(ops.silu(x), x * torch.sigmoid(x), rtol=1e-5, atol=1e-6)
+
+
+def test_silu_is_zero_at_zero():
+    assert ops.silu(torch.zeros(8)).abs().max() == 0.0
+
+
+def test_silu_does_not_vanish_for_negative_inputs():
+    # The property that displaced ReLU: the gradient is non-zero on the negative
+    # side, so units do not become permanently inactive.
+    x = torch.tensor([-4.0, -2.0, -1.0], requires_grad=True)
+    ops.silu(x).sum().backward()
+    assert (x.grad.abs() > 0).all()
+
+
+@pytest.mark.parametrize("shape", [(1,), (64,), (4, 17), (8, 4096)])
+def test_gelu_matches_the_tanh_approximation(shape):
+    # The tanh form, not the exact erf form: GPT-2 and BERT were trained against
+    # this curve, and substituting the exact version is not a free change.
+    x = torch.randn(*shape)
+    torch.testing.assert_close(
+        ops.gelu(x), torch.nn.functional.gelu(x, approximate="tanh"), rtol=1e-5, atol=1e-6
+    )
+
+
+def test_gelu_differs_from_the_exact_form_by_a_small_but_real_amount():
+    x = torch.linspace(-3, 3, 512)
+    difference = (ops.gelu(x) - torch.nn.functional.gelu(x, approximate="none")).abs().max()
+    assert 0 < difference < 1e-2
+
+
+@pytest.mark.parametrize("shape", [(1,), (64,), (4, 17), (8, 4096), (2, 3, 128)])
+def test_swiglu_matches_its_definition(shape):
+    gate = torch.randn(*shape)
+    up = torch.randn(*shape)
+    torch.testing.assert_close(
+        ops.swiglu(gate, up), torch.nn.functional.silu(gate) * up, rtol=1e-5, atol=1e-6
+    )
+
+
+def test_swiglu_with_a_unit_up_projection_is_silu():
+    gate = torch.randn(128)
+    torch.testing.assert_close(ops.swiglu(gate, torch.ones(128)), ops.silu(gate))
+
+
+def test_swiglu_is_linear_in_the_up_projection():
+    gate = torch.randn(128)
+    up = torch.randn(128)
+    torch.testing.assert_close(
+        ops.swiglu(gate, 2 * up), 2 * ops.swiglu(gate, up), rtol=1e-5, atol=1e-6
+    )
+
+
+def test_swiglu_rejects_mismatched_shapes():
+    with pytest.raises(ValueError, match="same shape"):
+        ops.swiglu(torch.randn(4, 8), torch.randn(4, 16))
+
+
+def test_swiglu_rejects_mismatched_dtypes():
+    with pytest.raises(ValueError, match="same dtype"):
+        ops.swiglu(torch.randn(8), torch.randn(8, dtype=torch.float64))
+
+
+def test_swiglu_promotes_half_inputs_for_the_sigmoid():
+    # exp() of a moderately negative input underflows a 10-bit mantissa long
+    # before it underflows float32, which would flatten the negative tail.
+    gate = torch.linspace(-20, 20, 256, dtype=torch.float16)
+    up = torch.ones(256, dtype=torch.float16)
+
+    result = ops.swiglu(gate, up)
+    expected = (torch.nn.functional.silu(gate.float()) * up.float()).half()
+
+    assert result.dtype == torch.float16
+    assert torch.isfinite(result).all()
+    torch.testing.assert_close(result, expected, rtol=1e-2, atol=1e-3)
+
+
+def test_activations_handle_non_contiguous_input():
+    x = torch.randn(64, 4).t()
+    assert not x.is_contiguous()
+    torch.testing.assert_close(ops.silu(x), torch.nn.functional.silu(x.contiguous()))
+
+
+def test_activations_of_empty_tensors_are_empty():
+    empty = torch.empty(0)
+    assert ops.silu(empty).numel() == 0
+    assert ops.gelu(empty).numel() == 0
+    assert ops.swiglu(empty, empty).numel() == 0
