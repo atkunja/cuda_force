@@ -18,8 +18,11 @@ Writes timestamped JSON here:
 | `cpp-queue-*.json` | `bench_queue` | C++ compiler |
 | `cpp-scheduler-*.json` | `bench_scheduler` | C++ compiler |
 | `cpp-memory-*.json` | `bench_memory` | C++ compiler |
+| `cpp-histogram-*.json` | `bench_histogram` | C++ compiler |
+| `cpp-kv_cache-*.json` | `bench_kv_cache` | C++ compiler |
 | `operators-*.json` | `benchmark_kernels.py` | Python |
 | `batching-*.json` | `benchmark_batching.py` | Python |
+| `http-*.json` | `benchmark_server.py` | a running server |
 | `cuda-kernels-*.json` | `bench_kernels` | **NVIDIA GPU** |
 
 A Markdown summary is written alongside them:

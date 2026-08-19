@@ -24,7 +24,7 @@ if [[ ! -x build/benchmarks/bench_queue ]]; then
   ./scripts/build.sh >/dev/null
 fi
 
-for bench in queue scheduler memory histogram; do
+for bench in queue scheduler memory histogram kv_cache; do
   binary="build/benchmarks/bench_${bench}"
   if [[ -x "$binary" ]]; then
     echo "==> $bench"
