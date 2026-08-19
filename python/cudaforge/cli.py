@@ -111,9 +111,14 @@ def serve(argv: list[str] | None = None) -> int:
 
     import uvicorn  # imported lazily: optional dependency
 
-    os.environ["CUDAFORGE_MODEL"] = args.model
-    os.environ["CUDAFORGE_MAX_BATCH"] = str(args.max_batch_size)
-    os.environ["CUDAFORGE_MAX_WAIT_US"] = str(args.max_wait_us)
+    # Resolved through the same path as `bench`, so a --config file is honoured
+    # and flags override it identically. Passing args.model straight through
+    # would silently ignore the config file's model.
+    config = _config_from(args)
+
+    os.environ["CUDAFORGE_MODEL"] = config.model_name
+    os.environ["CUDAFORGE_MAX_BATCH"] = str(config.max_batch_size)
+    os.environ["CUDAFORGE_MAX_WAIT_US"] = str(config.max_wait_us)
     if args.echo_runner:
         os.environ["CUDAFORGE_ECHO_RUNNER"] = "1"
 
