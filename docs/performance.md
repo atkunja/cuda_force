@@ -46,6 +46,33 @@ have at most eight requests in flight. That is the batcher behaving correctly,
 and it is why `average_batch_size` must be read alongside client concurrency
 rather than against the configured limit.
 
+### Where the bounded queue stops scaling
+
+| Field | |
+| --- | --- |
+| Baseline | one producer, one consumer |
+| Bottleneck | a single mutex serialises every push and pop |
+| Change | none — this measures the limit rather than removing it |
+| **Measured** | throughput falls to **32% of peak** by 8 producers and 8 consumers |
+
+Capacity 16, 20,000 items per producer, on 18 hardware threads:
+
+| Producers × consumers | Items/second | Of peak |
+| --- | --- | --- |
+| 1 × 1 | 2,387,169 | 100% |
+| 2 × 2 | 1,749,756 | 73% |
+| 4 × 4 | 1,368,231 | 57% |
+| 8 × 8 | 774,341 | 32% |
+
+This is the measurement behind the claim that the mutex is not on a hot path
+worth optimising *for this workload*: the queue is crossed once per request, and
+even at 8×8 it sustains 774k items/second — orders of magnitude above any
+plausible request rate. If a workload ever approached that, the fix is sharding
+the queue, not removing the lock; a lock-free formulation would still need
+somewhere for blocked producers to wait.
+
+Reproduce with `./build/benchmarks/bench_queue`.
+
 ### Memory pool reuse
 
 | Field | |

@@ -49,10 +49,16 @@ the ABA problem, and would still need somewhere for blocked producers to wait.
 For a queue crossed once per request — not once per kernel — the mutex is not
 on any hot path worth optimising.
 
-The measurable claim is in `benchmarks/benchmark_queue.cpp`, which sweeps
-producer and consumer counts and shows where the single lock stops scaling. If
-that point sits below the target concurrency, the fix is sharding the queue,
-not removing the lock.
+That claim is measured rather than asserted. Sweeping producer and consumer
+counts on 18 hardware threads, throughput falls from 2.39M items/second at 1×1
+to 774k at 8×8 — 32% of peak, which is the single mutex becoming the bottleneck.
+
+774k items/second is still orders of magnitude above any plausible request rate,
+which is the actual argument: the queue is crossed once per request, not once
+per kernel. If a workload ever approached that ceiling, the fix is sharding the
+queue, not removing the lock — a lock-free formulation would still need
+somewhere for blocked producers to wait. Full numbers in
+[performance.md](performance.md#where-the-bounded-queue-stops-scaling).
 
 ## Why condition variables, not polling
 
