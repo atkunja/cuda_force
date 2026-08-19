@@ -162,3 +162,145 @@ def test_gradient_accumulation_matches_a_single_large_step():
 
 def test_lora_target_modules_default_to_attention_projections():
     assert "c_attn" in LoRAConfig().target_modules
+
+
+# --- the training loop itself ----------------------------------------------
+
+
+@pytest.fixture
+def stub_model() -> StubCausalLM:
+    """A stub with a frozen "base" and a trainable "adapter".
+
+    Mirrors LoRA's parameter layout so the loop's assumption — that only
+    trainable parameters reach the optimiser — is actually exercised.
+    """
+    torch.manual_seed(0)
+    model = StubCausalLM()
+    model.embed.weight.requires_grad_(False)
+    return model
+
+
+def test_the_loop_runs_and_advances_state(tmp_path, stub_model, loader):
+    config = TrainingConfig(
+        output_dir=str(tmp_path),
+        epochs=1,
+        batch_size=2,
+        learning_rate=1e-3,
+        mixed_precision=False,
+        logging_steps=0,
+    )
+    state = train(config, model=stub_model, loader=loader)
+
+    assert state.step > 0
+    assert state.tokens_seen > 0
+    assert state.best_loss < float("inf")
+
+
+def test_the_loop_only_updates_trainable_parameters(tmp_path, stub_model, loader):
+    frozen_before = stub_model.embed.weight.detach().clone()
+    trainable_before = stub_model.head.weight.detach().clone()
+
+    config = TrainingConfig(
+        output_dir=str(tmp_path),
+        epochs=1,
+        learning_rate=1e-2,
+        mixed_precision=False,
+        logging_steps=0,
+    )
+    train(config, model=stub_model, loader=loader)
+
+    # Passing frozen parameters to the optimiser would allocate Adam state for
+    # them and give away most of LoRA's memory advantage — and would move them.
+    torch.testing.assert_close(stub_model.embed.weight, frozen_before)
+    assert not torch.allclose(stub_model.head.weight, trainable_before)
+
+
+def test_a_model_with_no_trainable_parameters_is_rejected(tmp_path, loader):
+    # Silently training a model with no adapters attached produces a run that
+    # looks successful and updates nothing.
+    model = StubCausalLM()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+
+    config = TrainingConfig(output_dir=str(tmp_path), epochs=1, mixed_precision=False)
+    with pytest.raises(RuntimeError, match="no trainable parameters"):
+        train(config, model=model, loader=loader)
+
+
+def test_max_steps_caps_the_run(tmp_path, stub_model, loader):
+    config = TrainingConfig(
+        output_dir=str(tmp_path),
+        epochs=10,
+        max_steps=3,
+        mixed_precision=False,
+        logging_steps=0,
+    )
+    state = train(config, model=stub_model, loader=loader)
+    assert state.step == 3
+
+
+def test_accumulation_reduces_the_optimiser_step_count(tmp_path, loader):
+    def run(accumulation: int) -> int:
+        torch.manual_seed(0)
+        model = StubCausalLM()
+        config = TrainingConfig(
+            output_dir=str(tmp_path),
+            epochs=1,
+            gradient_accumulation_steps=accumulation,
+            mixed_precision=False,
+            logging_steps=0,
+        )
+        return train(config, model=model, loader=loader).step
+
+    # Four micro-batches per optimiser step means a quarter of the steps.
+    assert run(1) == 4 * run(4)
+
+
+def test_the_run_writes_a_checkpoint_and_its_config(tmp_path, stub_model, loader):
+    config = TrainingConfig(
+        output_dir=str(tmp_path), epochs=1, mixed_precision=False, logging_steps=0
+    )
+    train(config, model=stub_model, loader=loader)
+
+    assert (tmp_path / "training_config.json").is_file()
+    assert (tmp_path / "final" / "state.json").is_file()
+
+    state = json.loads((tmp_path / "final" / "state.json").read_text())
+    assert state["step"] > 0
+    assert state["eval_loss"] is not None
+
+
+def test_periodic_checkpoints_are_written(tmp_path, stub_model, loader):
+    config = TrainingConfig(
+        output_dir=str(tmp_path),
+        epochs=1,
+        save_steps=2,
+        mixed_precision=False,
+        logging_steps=0,
+    )
+    train(config, model=stub_model, loader=loader)
+    assert (tmp_path / "step-2").is_dir()
+
+
+def test_supplying_a_model_without_a_loader_is_rejected(tmp_path, stub_model):
+    config = TrainingConfig(output_dir=str(tmp_path), epochs=1, mixed_precision=False)
+    with pytest.raises(ValueError, match="supply a loader"):
+        train(config, model=stub_model)
+
+
+def test_two_seeded_runs_produce_the_same_result(tmp_path, loader):
+    def run() -> float:
+        torch.manual_seed(0)
+        model = StubCausalLM()
+        config = TrainingConfig(
+            output_dir=str(tmp_path),
+            epochs=1,
+            seed=1234,
+            mixed_precision=False,
+            logging_steps=0,
+        )
+        return train(config, model=model, loader=loader).best_loss
+
+    # Missing a seed is the usual reason two runs with identical configs
+    # diverge, and it is invisible until someone tries to reproduce a result.
+    assert run() == pytest.approx(run())
