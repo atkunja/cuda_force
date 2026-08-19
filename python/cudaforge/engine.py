@@ -258,6 +258,21 @@ class InferenceEngine:
         self._executor.submit(self._execute, batch)
 
     def _execute(self, batch: Batch) -> None:
+        # Re-checked here, not only at dequeue. The batcher forms batches far
+        # faster than they execute, so under load the backlog accumulates in the
+        # executor's queue rather than in the request queue — and a request can
+        # sit there long past its deadline having been dequeued promptly. This
+        # is the check that actually protects capacity.
+        live = [request for request in batch.requests if not request.expired()]
+        if len(live) != len(batch.requests):
+            for request in batch.requests:
+                if request.expired():
+                    self._metrics.record_expired()
+                    self._expire(request)
+            batch.requests = live
+        if not live:
+            return
+
         started = time.monotonic()
         try:
             results = self._runner.generate(
