@@ -87,6 +87,18 @@ development host has no NVIDIA GPU.
 - Fourteen documents, including a concepts index mapping every claim to the code
   that implements it.
 
+### Measured on the development host
+
+No GPU was involved in any of these:
+
+- Dynamic batching: 3.52x throughput at unchanged p50/p99 (16 clients).
+- Paged KV cache: 13.2x more concurrent sequences than a contiguous cache on
+  chat-shaped traffic; 25.8x on short prompts; 1.0x when every sequence reaches
+  the limit.
+- Latency histogram: 4.95% worst-case error against a documented 6.25% bound.
+- Metrics overhead: 16.38 → 1.76 µs per record after retuning the window.
+- HTTP: client p99 279 ms against server p99 1.03 ms — the gap is transport.
+
 ### Known limitations
 
 Recorded in full in [PROJECT_STATUS.md](PROJECT_STATUS.md). The significant
