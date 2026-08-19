@@ -75,7 +75,8 @@ Ordered by the question someone would actually ask.
 | Why vectorise with `float4`? | `rmsnorm_vectorised` | [cuda-kernels.md](cuda-kernels.md#vectorisation) |
 | When is `float4` unsafe? | `vectorisable()` alignment check | same |
 | What is kernel fusion, and when does it pay? | `lora_fused` | [cuda-kernels.md](cuda-kernels.md#why-fusion-pays-here) |
-| Why FP32 accumulators for FP16 data? | `rmsnorm_half`, `softmax_half` | [cuda-kernels.md](cuda-kernels.md#fp16-overflow) |
+| Why FP32 accumulators for FP16 data? | `rmsnorm_reduced`, `softmax_reduced` | [cuda-kernels.md](cuda-kernels.md#fp16-overflow) |
+| BF16 versus FP16, and why both? | [`reduced_precision.cuh`](../cuda/include/cudaforge/reduced_precision.cuh) | [cuda-kernels.md](cuda-kernels.md#fp16-and-bf16) |
 | What is occupancy, and is more always better? | `kDefaultBlockSize` comment | [gpu-execution.md](gpu-execution.md#occupancy-is-a-means-not-an-end) |
 | How is grid size chosen? | `reduction_grid_size` | [gpu-execution.md](gpu-execution.md#grid-size) |
 | What is SwiGLU and why fuse it? | [`activations.cu`](../cuda/src/activations.cu) | [cuda-kernels.md](cuda-kernels.md#swiglu-and-why-it-is-a-kernel-at-all) |

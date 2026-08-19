@@ -27,6 +27,8 @@ development host has no NVIDIA GPU.
   and FP16 paths.
 - Fused residual add + RMSNorm, emitting both the normalised output and the
   carried residual in one pass.
+- BF16 paths for RMSNorm, softmax and SwiGLU, sharing one templated kernel body
+  with the FP16 versions — the dtype `EngineConfig` prefers on Ampere and later.
 - Optional NVTX range annotations for Nsight Systems, compiled out by default.
 - Block-wise symmetric INT8 quantise, dequantise and fake-quantise.
 - `GpuScheduler`: round-robin stream leases, event-based cross-stream chaining,

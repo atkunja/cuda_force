@@ -438,6 +438,51 @@ size and throws.
 Both were found by reading rather than by running, which is the only tool
 available for CUDA on this host — and is the reason the structural checks exist.
 
+## FP16 and BF16
+
+Both 16-bit formats are supported, and the difference between them is not
+cosmetic:
+
+| | Exponent | Mantissa | Max | Smallest normal |
+| --- | --- | --- | --- | --- |
+| FP16 | 5 bits | 10 bits | 65,504 | 6.1e-5 |
+| BF16 | 8 bits | 7 bits | 3.4e38 | 1.2e-38 |
+| FP32 | 8 bits | 23 bits | 3.4e38 | 1.2e-38 |
+
+BF16 has **float32's exponent range** with three fewer mantissa bits. That trade
+is why it displaced FP16 on Ampere and later: activations span many orders of
+magnitude, and running out of *range* produces infinities that poison everything
+downstream, whereas running out of *precision* merely adds noise.
+
+Concretely: an activation of magnitude 300 squares to 90,000 — infinite in FP16,
+unremarkable in BF16. `EngineConfig.resolve_dtype` therefore prefers bfloat16
+wherever the hardware supports it, and the kernels have to match, or the
+configured dtype has no kernel behind it.
+
+### Arithmetic is FP32 for both
+
+BF16's 7-bit mantissa is *worse* than FP16's for accumulation: a sum stops
+making progress after a few hundred terms rather than a few thousand. Both
+formats are therefore storage-only here, with every reduction in FP32. That
+costs nothing on a bandwidth-bound kernel, where the bytes moved — not the width
+of the adder — set the time.
+
+### One kernel, two instantiations
+
+`reduced_precision.cuh` provides conversion traits, and each kernel is templated
+over the storage type:
+
+```cuda
+template <typename T>
+__global__ void rmsnorm_reduced(const T* input, ...) {
+    using Convert = ReducedPrecision<T>;
+    // ... conversions through Convert; accumulator is float either way
+}
+```
+
+Two copies of the same kernel body would drift — the FP32-accumulator rule is
+exactly the kind of detail that gets fixed in one and forgotten in the other.
+
 ## Autograd
 
 The kernels are **inference-only**. No backward kernels exist for them.

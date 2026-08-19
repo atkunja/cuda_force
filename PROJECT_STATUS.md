@@ -30,10 +30,10 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | Component | Description |
 | --- | --- |
 | Reduction | Naive atomic, shared-memory tree, warp-shuffle; plus a row-wise variant. |
-| Softmax | Naive, shared-memory, online recurrence, FP16; capacity-aware fallback. |
-| RMSNorm | Scalar, `float4` vectorised with alignment checks and fallback, FP16 with FP32 accumulation. |
+| Softmax | Naive, shared-memory, online recurrence, FP16 and BF16; capacity-aware fallback. |
+| RMSNorm | Scalar, `float4` vectorised with alignment checks and fallback, plus FP16 and BF16 with FP32 accumulation. |
 | LoRA linear | Tiled matmul with bank-conflict padding; unfused and fused paths. |
-| Activations | SiLU, GELU (tanh form), and SwiGLU in scalar, vectorised and FP16 paths. |
+| Activations | SiLU, GELU (tanh form), and SwiGLU in scalar, vectorised, FP16 and BF16 paths. |
 | Fused residual + RMSNorm | Single-pass residual add and normalisation, emitting both the normalised output and the carried residual. |
 | Quantisation | Block-wise symmetric INT8 quantise, dequantise and fake-quantise. |
 | `GpuScheduler` | Round-robin stream leases, event-based cross-stream chaining, async copies, per-stream accounting. |
