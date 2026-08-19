@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import torch
 
@@ -116,11 +116,18 @@ class TransformersRunner:
     token last for every row.
     """
 
+    # `Any` rather than a transformers type: the injection points are
+    # deliberately duck-typed so a test can supply a minimal stand-in, and
+    # naming a concrete class here would defeat that while adding no safety —
+    # transformers' own annotations for these are already inconsistent.
+    _model: Any
+    _tokenizer: Any
+
     def __init__(
         self,
         config: EngineConfig,
-        model: object | None = None,
-        tokenizer: object | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
     ) -> None:
         """Load the model named by `config`, or use the ones supplied.
 
