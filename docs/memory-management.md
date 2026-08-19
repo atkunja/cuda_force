@@ -83,3 +83,56 @@ the work that referenced it completes. This pool returns a block to the free
 list immediately, which means **a caller must not free a buffer while a kernel
 using it is still in flight.** In this codebase that is enforced structurally:
 buffers are freed after the owning stream has been synchronised.
+
+## Pinned host memory
+
+`cudaMemcpyAsync` from pageable memory is not actually asynchronous. The driver
+cannot DMA from memory the OS might page out, so it stages the transfer through
+an internal pinned buffer — which serialises the copy against the host thread
+and against the stream.
+
+Only page-locked memory allows a true DMA transfer that overlaps kernel
+execution. That is the entire premise of the stream scheduler's copy/compute
+pipelining, so `PinnedBuffer` is not an optimisation here; without it the
+scheduler's overlap does not happen at all.
+
+Pinned memory is not free. It cannot be paged out, so over-allocating it
+degrades the whole system, not just this process. Staging buffers are therefore
+sized to the maximum batch and reused, never allocated per request — which is
+what `MemoryPool<PinnedAllocatorBackend>` is for.
+
+## Testing without a GPU
+
+The pool is templated on a backend supplying raw allocation, and the caching,
+size-class and accounting logic sits entirely above that boundary:
+
+```cpp
+template <AllocatorBackend B> class MemoryPool { ... };
+
+class HostAllocatorBackend    { /* malloc / free       */ };
+class DeviceAllocatorBackend  { /* cudaMalloc / cudaFree   */ };
+class PinnedAllocatorBackend  { /* cudaHostAlloc / cudaFreeHost */ };
+```
+
+Every behaviour worth asserting — reuse, size-class sharing, peak tracking,
+trim, foreign-pointer rejection, thread safety — is tested against
+`HostAllocatorBackend` on the development machine. Only the two-line device
+backend is hardware-dependent, and it is exercised in `tests/cuda`.
+
+The `AllocatorBackend` concept makes the contract explicit, so a backend that
+does not satisfy it fails at the template's constraint rather than deep inside
+instantiation.
+
+## Metrics worth watching
+
+| Metric | What it tells you |
+| --- | --- |
+| `reuse_rate` | fraction served from a free list. Should approach 1.0 after warmup; if it does not, shapes are varying more than expected |
+| `backend_allocations` | driver calls made. Each one is a device synchronisation |
+| `peak_bytes_in_use` | high-water mark; what the workload actually needs |
+| `bytes_reserved` | held by the pool. `bytes_reserved - peak_bytes_in_use` is memory the pool is hoarding |
+
+A large gap between `bytes_reserved` and `peak_bytes_in_use` means the pool is
+holding size classes the workload has stopped using. `trim()` releases them —
+useful before a phase that needs the memory for something else, such as loading
+a second model.
