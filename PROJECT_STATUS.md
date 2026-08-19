@@ -18,7 +18,7 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | --- | --- |
 | `ConcurrentQueue<T>` | Bounded MPMC queue. Mutex + two condition variables, predicate waits, blocking and non-blocking push/pop, bounded-wait pop, idempotent shutdown that drains before reporting closed. |
 | `ThreadPool` | Fixed workers over a bounded task queue. Futures via `packaged_task`, relaxed-atomic counters, exception isolation per task, graceful drain on destruction. |
-| `DynamicBatcher` | Single-threaded batch formation. Closes on `max_batch_size` or on the *oldest* request's deadline. Handler exceptions isolated. |
+| `DynamicBatcher` | Single-threaded batch formation. Closes on `max_batch_size` or on the *oldest* request's deadline. Drops requests past their own deadline. Handler exceptions isolated. |
 | `MemoryPool<Backend>` | Size-class caching allocator, concept-constrained backend, allocation accounting, `trim()`, foreign-pointer rejection. |
 | `LatencyHistogram` | Fixed-memory log-linear buckets, 16 sub-buckets per magnitude, bounded 6.25% relative error, exact mean. |
 | `Metrics` | Counters plus queue-delay and latency percentiles, JSON serialisation. |
@@ -55,7 +55,8 @@ perplexity evaluation. Three configs (CPU-runnable, single-GPU, QLoRA).
 
 ### Inference — `python/cudaforge/`, `inference/`
 
-Concurrent engine with future-based results, load shedding, warmup, graceful
+Concurrent engine with future-based results, load shedding, deadline-aware
+dropping checked both at dequeue and before execution, warmup, and a graceful
 shutdown that settles every outstanding future. FastAPI server with `/health`,
 `/metrics`, `/generate`, boundary validation, and an event loop that stays free
 during generation.
@@ -121,6 +122,14 @@ Recorded because each was found by a test that was written to look for it:
 6. **19 late-binding closures** in the benchmark harness, each capturing the
    loop variable rather than its value.
 7. **Missing includes** for `<chrono>`, `<cstdint>`, `<cstddef>`, `<stdexcept>`.
+8. **Deadline checks in the wrong place.** Checking only at batcher dequeue
+   dropped nothing under load, because the backlog accumulates behind the worker
+   pool rather than in the request queue. Found by a test that saturated the
+   executor and expected drops.
+9. **Wrong anchor slugs in the documentation checker**, which collapsed runs of
+   whitespace where GitHub emits one hyphen per space.
+10. **Line numbers off in the CUDA checker**, which attributed a statement to a
+    preceding blank or comment line.
 
 ---
 
