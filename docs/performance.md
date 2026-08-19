@@ -100,7 +100,7 @@ argument for `cudaforge-bench` and `benchmark_server.py` being separate tools.
 
 | Field | |
 | --- | --- |
-| Baseline | 118 C++ tests, 28,585 assertions |
+| Baseline | 140 C++ tests, 49,230 assertions |
 | **Measured** | clean under ThreadSanitizer, AddressSanitizer and UndefinedBehaviorSanitizer |
 
 ASan surfaced a real defect during development: concurrency tests were calling
