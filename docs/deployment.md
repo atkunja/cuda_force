@@ -103,6 +103,13 @@ GET /metrics             JSON, for a human
 GET /metrics/prometheus  text exposition, for a scraper
 ```
 
+`cudaforge_build_info` carries the model, runner and batching configuration as
+labels on a constant, so a dashboard can group by them:
+
+```promql
+cudaforge_latency_p99_ms * on() group_left(runner) cudaforge_build_info
+```
+
 Alerts worth having, in rough order of value:
 
 | Alert | Condition | Why |
