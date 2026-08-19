@@ -1,0 +1,82 @@
+name: python
+
+# CPU-only. GitHub-hosted runners have no NVIDIA hardware, so anything marked
+# `cuda` is skipped by conftest.py rather than failed — a suite that goes red on
+# every run trains people to ignore it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor and the current release. Testing only the newest would let a
+        # 3.11-only syntax slip past the declared requires-python.
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # CPU wheels: the default index pulls the CUDA build, which is ~2 GB
+          # of libraries this runner can never use.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,serve]"
+
+      - name: Report the active backend
+        # Printed first so a run that silently fell back is obvious in the log
+        # rather than inferred from timings.
+        run: python -c "from cudaforge.ops import backend_report; print(backend_report())"
+
+      - name: Tests
+        run: pytest tests/python -q
+
+      - name: Examples
+        run: |
+          python examples/simple_inference.py --echo-runner
+          python examples/concurrent_requests.py --clients 4 --requests-per-client 5
+
+      - name: Benchmarks (smoke)
+        run: |
+          python benchmarks/benchmark_kernels.py --warmup 2 --runs 5 > /dev/null
+          python benchmarks/benchmark_batching.py \
+            --clients 2 --batch-sizes 1 8 --waits-us 1000 --requests-per-client 5 > /dev/null
+
+  train:
+    # Separated because it installs transformers, peft and datasets, which the
+    # matrix above does not need and which dominate install time.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,train]"
+
+      - name: Tiny fine-tune
+        # The tiny config needs no dataset download, so this is a genuine
+        # end-to-end check of the pipeline rather than a config parse.
+        run: python -m training.train --config training/configs/tiny.yaml
