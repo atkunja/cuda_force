@@ -119,3 +119,98 @@ Recorded because each was found by a test that was written to look for it:
 6. **19 late-binding closures** in the benchmark harness, each capturing the
    loop variable rather than its value.
 7. **Missing includes** for `<chrono>`, `<cstdint>`, `<cstddef>`, `<stdexcept>`.
+
+---
+
+## Requires NVIDIA hardware — implemented, not executed
+
+Nothing below has run. It is written, reviewed, structurally checked, and unit
+tested against references that *did* run — but no line of it has been compiled
+by `nvcc` or executed on a GPU as part of this work.
+
+| Component | What is unverified |
+| --- | --- |
+| All `.cu` kernels | compilation and execution |
+| `tests/cuda/*` (30+ cases) | every assertion in them |
+| `GpuScheduler` | runtime stream overlap and event ordering |
+| `MemoryPool<DeviceAllocatorBackend>` | device allocation behaviour |
+| `PinnedBuffer` | page-locked allocation and DMA overlap |
+| PyTorch CUDA extension | the `CUDAExtension` build path |
+| `benchmarks/benchmark_kernels.cu` | every number it would produce |
+| Nsight profiles | all of them |
+| QLoRA / bitsandbytes | the 4-bit path |
+| `examples/distributed_train.py` | DDP and NCCL |
+| Dockerfile and compose services | image build and GPU passthrough |
+
+**No GPU performance number was fabricated.** Where one would normally appear,
+this repository states that it was not measured.
+
+## Known limitations
+
+Real ones, not hedges:
+
+1. **The tiled matmul is not competitive with cuBLAS.** It exists to make the
+   shared-memory argument concrete. Production code should call cuBLAS.
+2. **The memory pool is not stream-ordered.** A buffer must not be freed while a
+   kernel using it is in flight. `cudaMallocAsync` solves this; this pool does
+   not.
+3. **The INT8 kernel is not NF4.** It is uniform symmetric INT8. The QLoRA path
+   calls bitsandbytes directly.
+4. **No KV cache.** Each request re-runs its prompt. This is the largest
+   available performance win and is not implemented.
+5. **Batches are static once formed.** No continuous batching, so a batch runs
+   until its longest member finishes.
+6. **Single-device serving.** DDP covers training only.
+7. **`benchmark_kernels.py` on a CPU host compares PyTorch to PyTorch.** The
+   output says so, in the results file.
+8. **Two `type: ignore` comments** in `runners.py`, both for inconsistencies in
+   the transformers 5.x stubs, both documented at the site.
+
+## Recommended GPU validation
+
+On a Linux machine with an NVIDIA GPU and CUDA 12.x:
+
+```bash
+git clone https://github.com/atkunja/cuda_force.git && cd cuda_force
+./scripts/setup.sh && source .venv/bin/activate
+
+# 1. Does it build?
+./scripts/build.sh --cuda
+
+# 2. Are the kernels correct? This is the important one — every kernel is
+#    compared against a double-precision host reference over awkward shapes.
+./build-cuda/tests/cuda/cudaforge_cuda_tests
+
+# 3. Does the extension build and dispatch to CUDA?
+pip install -e . --no-build-isolation
+python -c "from cudaforge.ops import backend_report; print(backend_report())"
+pytest tests/python -q          # cuda-marked tests now run instead of skipping
+
+# 4. What are the numbers?
+./build-cuda/benchmarks/bench_kernels > benchmarks/results/cuda-kernels.json
+
+# 5. Where does the time actually go?
+./scripts/profile.sh
+
+# 6. Does it train?
+python -m training.train --config training/configs/lora_gpt2.yaml
+```
+
+Step 2 is the one that matters. If those assertions pass, the kernels compute
+what they claim to compute; everything after that is performance.
+
+## Future improvements
+
+Ordered by expected value:
+
+1. **Paged KV cache** — the largest single win, and the main thing between this
+   and a serious serving runtime.
+2. **Continuous batching** — admit new requests mid-generation.
+3. **Stream-ordered allocation** — adopt `cudaMallocAsync` semantics and remove
+   limitation 2.
+4. **Tensor-core matmul** — via CUTLASS rather than by hand.
+5. **Speculative decoding.**
+6. **Tensor-parallel inference** across GPUs.
+7. **Persistent kernels** for the small elementwise ops.
+8. **GPU-measured benchmarks** — the harness is complete; only hardware is
+   missing.
