@@ -350,3 +350,83 @@ def test_activations_of_empty_tensors_are_empty():
     assert ops.silu(empty).numel() == 0
     assert ops.gelu(empty).numel() == 0
     assert ops.swiglu(empty, empty).numel() == 0
+
+
+# --- fused residual + rmsnorm ---------------------------------------------
+
+
+@pytest.mark.parametrize("shape", [(1, 1), (1, 64), (4, 17), (8, 4096), (33, 1023)])
+def test_fused_residual_rmsnorm_matches_the_unfused_sequence(shape):
+    x = torch.randn(*shape)
+    residual = torch.randn(*shape)
+    weight = torch.randn(shape[-1])
+
+    normalised, summed = ops.fused_residual_rmsnorm(x, residual, weight)
+
+    expected_sum = x + residual
+    expected_norm = ops.rmsnorm(expected_sum, weight)
+
+    torch.testing.assert_close(summed, expected_sum)
+    torch.testing.assert_close(normalised, expected_norm, rtol=1e-5, atol=1e-6)
+
+
+def test_the_residual_output_is_the_plain_sum():
+    # It is what the *following* residual connection adds to, so it must be the
+    # un-normalised sum — returning the normalised value would silently change
+    # the model.
+    x = torch.randn(4, 32)
+    residual = torch.randn(4, 32)
+    _, summed = ops.fused_residual_rmsnorm(x, residual, torch.ones(32))
+    torch.testing.assert_close(summed, x + residual)
+
+
+def test_a_zero_residual_reduces_to_plain_rmsnorm():
+    x = torch.randn(4, 64)
+    weight = torch.randn(64)
+    normalised, _ = ops.fused_residual_rmsnorm(x, torch.zeros(4, 64), weight)
+    torch.testing.assert_close(normalised, ops.rmsnorm(x, weight), rtol=1e-5, atol=1e-6)
+
+
+def test_the_operands_are_symmetric():
+    # Addition commutes, so swapping them must not change the result.
+    x = torch.randn(4, 32)
+    residual = torch.randn(4, 32)
+    weight = torch.randn(32)
+
+    first, _ = ops.fused_residual_rmsnorm(x, residual, weight)
+    second, _ = ops.fused_residual_rmsnorm(residual, x, weight)
+    torch.testing.assert_close(first, second, rtol=1e-5, atol=1e-6)
+
+
+def test_fused_residual_rmsnorm_rejects_mismatched_shapes():
+    with pytest.raises(ValueError, match="same shape"):
+        ops.fused_residual_rmsnorm(torch.randn(4, 8), torch.randn(4, 16), torch.ones(8))
+
+
+def test_fused_residual_rmsnorm_rejects_a_bad_weight():
+    with pytest.raises(ValueError, match="weight"):
+        ops.fused_residual_rmsnorm(torch.randn(4, 8), torch.randn(4, 8), torch.ones(16))
+
+
+def test_two_fused_blocks_compose_like_a_transformer_stack():
+    # The pattern the kernel exists for: each block's residual output feeds the
+    # next block's residual input.
+    torch.manual_seed(0)
+    hidden = torch.randn(4, 64)
+    residual = torch.zeros(4, 64)
+    weight = torch.ones(64)
+
+    fused_state = (hidden, residual)
+    unfused_residual = residual.clone()
+    unfused_hidden = hidden.clone()
+
+    for _ in range(3):
+        normalised, carried = ops.fused_residual_rmsnorm(*fused_state[:2], weight)
+        fused_state = (normalised, carried)
+
+        summed = unfused_hidden + unfused_residual
+        unfused_hidden = ops.rmsnorm(summed, weight)
+        unfused_residual = summed
+
+    torch.testing.assert_close(fused_state[0], unfused_hidden, rtol=1e-4, atol=1e-5)
+    torch.testing.assert_close(fused_state[1], unfused_residual, rtol=1e-4, atol=1e-5)
