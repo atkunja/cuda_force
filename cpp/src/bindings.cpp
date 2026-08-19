@@ -330,7 +330,13 @@ TORCH_LIBRARY(cudaforge, m) {
 // in `cudaforge.ops`, which are ordinary ATen compositions and differentiate
 // normally, or the PEFT/transformers path that `training/` uses.
 TORCH_LIBRARY_IMPL(cudaforge, Autograd, m) {
-    m.fallback(torch::autograd::autogradNotImplementedFallback());
+    // Registered per operator rather than as a namespace fallback: the
+    // dispatcher only accepts fallbacks that apply globally, and claiming the
+    // Autograd key for every namespace would be wildly out of scope.
+    for (const char* name : {"rmsnorm", "softmax", "lora_linear", "sum", "silu", "gelu",
+                             "swiglu", "quantize_int8", "dequantize_int8"}) {
+        m.impl(name, torch::autograd::autogradNotImplementedFallback());
+    }
 }
 
 TORCH_LIBRARY_IMPL(cudaforge, CPU, m) {
