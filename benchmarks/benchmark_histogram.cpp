@@ -155,9 +155,9 @@ int main(int argc, char** argv) {
         writer.end_array();
         writer.field("worst_relative_error", worst_error);
         // The claim this benchmark exists to check.
-        writer.field("within_documented_bound",
-                     std::string(worst_error <= 1.0 / LatencyHistogram::kSubBuckets ? "true"
-                                                                                    : "false"));
+        writer.field(
+            "within_documented_bound",
+            std::string(worst_error <= 1.0 / LatencyHistogram::kSubBuckets ? "true" : "false"));
         writer.array_element_end();
     }
 
