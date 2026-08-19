@@ -1,6 +1,7 @@
 #include "cudaforge/lora_linear.cuh"
 
 #include <algorithm>
+#include <stdexcept>
 
 #include "cudaforge/cuda_error.cuh"
 #include "cudaforge/cuda_utils.cuh"

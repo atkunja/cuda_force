@@ -2,6 +2,8 @@
 
 #include <cuda_runtime.h>
 
+#include <cstddef>
+
 namespace cudaforge {
 
 enum class LoRAKernel {
