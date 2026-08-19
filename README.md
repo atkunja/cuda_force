@@ -94,6 +94,7 @@ Each stage decouples a rate mismatch. Details in
 - Two-stage block reductions (2 barriers, not log N)
 - Kernel fusion for the LoRA adapter path
 - Numerically stable softmax and FP32 accumulators
+- Explicit autograd guard: no silently wrong gradients
 - CUDA streams and events; **zero** `cudaDeviceSynchronize`
 - Pinned host memory for genuine async copies
 - Caching device allocator over size classes
@@ -135,6 +136,7 @@ shapes, and a benchmark harness.
 | **Softmax** | naive · shared-memory · online | the online (max, sum) recurrence — no row-length limit, one fewer pass |
 | **RMSNorm** | scalar · `float4` · FP16 | 128-bit transactions, plus alignment checks with a real fallback |
 | **LoRA linear** | unfused · fused | keeping the `batch × rank` intermediate out of global memory |
+| **Activations** | SiLU · GELU · SwiGLU, scalar and `float4` | fusing `silu(gate) * up` to the minimum possible memory traffic |
 | **Quantise** | block-wise INT8 | round-trip error provably under `scale / 2` |
 
 Full reasoning in [docs/cuda-kernels.md](docs/cuda-kernels.md).

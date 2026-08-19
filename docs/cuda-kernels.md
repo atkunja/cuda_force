@@ -306,6 +306,76 @@ this is equivalent.
 The error bound this scheme does guarantee is half a quantisation step —
 `scale_b / 2` — and both the CUDA and Python test suites assert exactly that.
 
+## Kernel F — Activations
+
+SiLU, GELU and SwiGLU. Elementwise, entirely bandwidth-bound, and the clearest
+possible case for fusion.
+
+### SwiGLU and why it is a kernel at all
+
+The LLaMA-family feed-forward block computes two projections of the same input
+and multiplies the gated one elementwise:
+
+```
+FFN(x) = (silu(x W_gate) * (x W_up)) W_down
+```
+
+Written with framework primitives, `silu(gate) * up` is three passes over
+memory: compute the activation, write it, read it back, multiply, write again.
+The arithmetic — one sigmoid and two multiplies per element — is free by
+comparison.
+
+Fused, it is one read of each input and one write. That is the theoretical
+minimum for this operation, which means the fused kernel is within a small
+factor of the hardware limit no matter how much more effort goes into it. The
+`float4` variant then quarters the number of memory instructions for the same
+bytes.
+
+| Form | Global traffic |
+| --- | --- |
+| Framework primitives | 2 reads + 1 write + 1 read + 1 write |
+| Fused scalar | 2 reads + 1 write |
+| Fused `float4` | same bytes, a quarter of the instructions |
+
+### Why FP32 for the sigmoid
+
+FP16 has enough *range* for these values, but `exp` of a moderately negative
+input underflows a 10-bit mantissa long before it underflows FP32. The result
+is that the activation's negative tail flattens to exactly zero — not a crash,
+just a quietly different function. The sigmoid is therefore evaluated in FP32
+and the product stored back as FP16.
+
+### GELU: tanh, not erf
+
+The tanh approximation, because that is what GPT-2 and BERT were trained
+against. Substituting the exact erf form changes outputs by more than the
+numerical difference suggests, since the weights were fitted against this
+particular curve. `tests/python/test_ops.py` asserts that the two forms differ
+measurably — so the choice cannot be silently reverted.
+
+## Autograd
+
+The kernels are **inference-only**. No backward kernels exist for them.
+
+That is a deliberate scope decision — the training path uses PEFT and
+transformers, not these operators — but it needed handling, because PyTorch's
+default for a custom operator with no registered autograd kernel is to warn
+once and then produce **silently incorrect gradients**. Training would converge
+to something, just not to the right thing, with nothing pointing at the cause.
+
+Two mechanisms address it:
+
+1. `TORCH_LIBRARY_IMPL(cudaforge, Autograd, ...)` registers
+   `autogradNotImplementedFallback` for every operator, so differentiating
+   through one raises with the operator's name.
+2. `cudaforge.ops` checks whether a backward pass is expected — grad mode on and
+   any operand requiring grad — and routes to the reference implementation,
+   which is an ordinary ATen composition and differentiates correctly.
+
+The result is identical either way; only the implementation and the presence of
+a gradient differ. `tests/python/test_autograd.py` covers both, including a
+`gradcheck` against the numerical derivative.
+
 ## Error handling
 
 Every CUDA runtime call goes through `CUDAFORGE_CHECK`. Silently ignoring a

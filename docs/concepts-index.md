@@ -78,6 +78,9 @@ Ordered by the question someone would actually ask.
 | Why FP32 accumulators for FP16 data? | `rmsnorm_half`, `softmax_half` | [cuda-kernels.md](cuda-kernels.md#fp16-overflow) |
 | What is occupancy, and is more always better? | `kDefaultBlockSize` comment | [gpu-execution.md](gpu-execution.md#occupancy-is-a-means-not-an-end) |
 | How is grid size chosen? | `reduction_grid_size` | [gpu-execution.md](gpu-execution.md#grid-size) |
+| What is SwiGLU and why fuse it? | [`activations.cu`](../cuda/src/activations.cu) | [cuda-kernels.md](cuda-kernels.md#swiglu-and-why-it-is-a-kernel-at-all) |
+| Why tanh GELU rather than erf? | `gelu_tanh` | [cuda-kernels.md](cuda-kernels.md#gelu-tanh-not-erf) |
+| Can you backprop through these kernels? | the Autograd registration in [`bindings.cpp`](../cpp/src/bindings.cpp) | [cuda-kernels.md](cuda-kernels.md#autograd) |
 
 ## Memory
 
