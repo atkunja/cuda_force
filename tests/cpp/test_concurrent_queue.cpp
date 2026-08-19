@@ -240,3 +240,114 @@ TEST_CASE("every produced item is consumed exactly once", "[queue][stress]") {
         REQUIRE(slot.load() == 1);
     }
 }
+
+// --- exception safety ------------------------------------------------------
+
+namespace {
+
+/// Throws on the Nth move, so a failure can be placed at a chosen point in a
+/// sequence of queue operations.
+struct ThrowingOnMove {
+    static inline int moves_until_throw = -1;  // -1 disables
+    int value = 0;
+
+    ThrowingOnMove() = default;
+    explicit ThrowingOnMove(int v) : value(v) {}
+
+    ThrowingOnMove(const ThrowingOnMove&) = default;
+    ThrowingOnMove& operator=(const ThrowingOnMove&) = default;
+
+    ThrowingOnMove(ThrowingOnMove&& other) : value(other.value) { maybe_throw(); }
+
+    ThrowingOnMove& operator=(ThrowingOnMove&& other) {
+        value = other.value;
+        maybe_throw();
+        return *this;
+    }
+
+    static void maybe_throw() {
+        if (moves_until_throw < 0) {
+            return;
+        }
+        if (moves_until_throw-- == 0) {
+            throw std::runtime_error("move failed");
+        }
+    }
+
+    static void arm(int after_moves) { moves_until_throw = after_moves; }
+    static void disarm() { moves_until_throw = -1; }
+};
+
+}  // namespace
+
+TEST_CASE("a throwing move during push leaves the queue consistent", "[queue][exceptions]") {
+    ConcurrentQueue<ThrowingOnMove> queue(4);
+    ThrowingOnMove::disarm();
+
+    REQUIRE(queue.push(ThrowingOnMove{1}) == QueueStatus::Ok);
+    const std::size_t before = queue.size();
+
+    // Insertion is the last step under the lock. If it throws, the deque is
+    // unchanged and no notification has been sent, so the queue is still usable.
+    ThrowingOnMove::arm(1);
+    REQUIRE_THROWS_AS(queue.push(ThrowingOnMove{2}), std::runtime_error);
+    ThrowingOnMove::disarm();
+
+    REQUIRE(queue.size() == before);
+
+    ThrowingOnMove out;
+    REQUIRE(queue.pop(out) == QueueStatus::Ok);
+    REQUIRE(out.value == 1);
+    REQUIRE(queue.empty());
+}
+
+TEST_CASE("the queue is usable after a failed push", "[queue][exceptions]") {
+    ConcurrentQueue<ThrowingOnMove> queue(4);
+
+    ThrowingOnMove::arm(0);
+    REQUIRE_THROWS_AS(queue.push(ThrowingOnMove{7}), std::runtime_error);
+    ThrowingOnMove::disarm();
+
+    // The failure must not have left the mutex locked or the queue closed.
+    REQUIRE_FALSE(queue.closed());
+    REQUIRE(queue.push(ThrowingOnMove{9}) == QueueStatus::Ok);
+
+    ThrowingOnMove out;
+    REQUIRE(queue.pop(out) == QueueStatus::Ok);
+    REQUIRE(out.value == 9);
+}
+
+TEST_CASE("shutdown after a failed push still releases waiters", "[queue][exceptions]") {
+    ConcurrentQueue<ThrowingOnMove> queue(2);
+
+    ThrowingOnMove::arm(0);
+    REQUIRE_THROWS_AS(queue.push(ThrowingOnMove{1}), std::runtime_error);
+    ThrowingOnMove::disarm();
+
+    std::atomic<QueueStatus> observed{QueueStatus::Ok};
+    std::thread consumer([&] {
+        ThrowingOnMove value;
+        observed = queue.pop(value);
+    });
+
+    std::this_thread::sleep_for(20ms);
+    queue.shutdown();
+    consumer.join();
+
+    REQUIRE(observed.load() == QueueStatus::Closed);
+}
+
+TEST_CASE("a queue of unique_ptr transfers ownership exactly once", "[queue][exceptions]") {
+    // Ownership must not be duplicated or dropped by the internal moves.
+    ConcurrentQueue<std::unique_ptr<int>> queue(4);
+    auto value = std::make_unique<int>(11);
+    const int* address = value.get();
+
+    REQUIRE(queue.push(std::move(value)) == QueueStatus::Ok);
+    REQUIRE(value == nullptr);  // moved from
+
+    std::unique_ptr<int> out;
+    REQUIRE(queue.pop(out) == QueueStatus::Ok);
+    REQUIRE(out.get() == address);
+    REQUIRE(*out == 11);
+}
