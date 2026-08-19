@@ -24,7 +24,7 @@ namespace cudaforge {
 class LatencyHistogram {
 public:
     static constexpr std::size_t kSubBuckets = 16;
-    static constexpr std::size_t kMagnitudes = 40;  // covers 1ns .. ~18 minutes
+    static constexpr std::size_t kMagnitudes = 40;  // covers 1ns .. ~2.4 hours
     static constexpr std::size_t kBucketCount = kSubBuckets * kMagnitudes;
 
     void record(std::uint64_t value_ns) {
