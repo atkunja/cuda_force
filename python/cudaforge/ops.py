@@ -150,6 +150,26 @@ def _lora_linear_reference(
     return x @ weight + scale * ((x @ lora_a) @ lora_b)
 
 
+def _silu_reference(x: torch.Tensor) -> torch.Tensor:
+    return torch.nn.functional.silu(x)
+
+
+def _swiglu_reference(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+    # Computed in float32 for half inputs, matching the kernel: exp() of a
+    # moderately negative input underflows a 10-bit mantissa long before it
+    # underflows float32, which would flatten the activation's negative tail.
+    if gate.dtype in (torch.float16, torch.bfloat16):
+        return (torch.nn.functional.silu(gate.float()) * up.float()).to(gate.dtype)
+    return torch.nn.functional.silu(gate) * up
+
+
+def _gelu_reference(x: torch.Tensor) -> torch.Tensor:
+    # The tanh approximation, not the exact erf form: GPT-2 and BERT were
+    # trained against this curve, and substituting the exact version changes
+    # outputs by more than the numerical difference suggests.
+    return torch.nn.functional.gelu(x, approximate="tanh")
+
+
 def _quantize_int8_reference(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     flat = x.reshape(-1).float()
     padding = (-flat.numel()) % QUANT_BLOCK_SIZE
@@ -264,6 +284,60 @@ def lora_linear(
     if _dispatch_available("lora_linear", x) and x.ndim == 2 and x.dtype == torch.float32:
         return torch.ops.cudaforge.lora_linear(x, weight, lora_a, lora_b, scale)
     return _lora_linear_reference(x, weight, lora_a, lora_b, scale)
+
+
+def silu(x: torch.Tensor) -> torch.Tensor:
+    """SiLU (swish): ``x * sigmoid(x)``."""
+    if x.numel() == 0:
+        return x.clone()
+
+    x = x.contiguous()
+    if _dispatch_available("silu", x) and x.dtype == torch.float32:
+        return torch.ops.cudaforge.silu(x)
+    return _silu_reference(x)
+
+
+def gelu(x: torch.Tensor) -> torch.Tensor:
+    """GELU, tanh approximation — the form GPT-2 and BERT were trained with."""
+    if x.numel() == 0:
+        return x.clone()
+
+    x = x.contiguous()
+    if _dispatch_available("gelu", x) and x.dtype == torch.float32:
+        return torch.ops.cudaforge.gelu(x)
+    return _gelu_reference(x)
+
+
+def swiglu(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+    """SwiGLU: ``silu(gate) * up``, the LLaMA-family feed-forward activation.
+
+    Fusing the activation with the multiply takes the operation from three
+    passes over memory to one read of each input and one write — the minimum
+    possible for this computation, and the whole reason it is a kernel rather
+    than two framework calls.
+
+    Args:
+        gate: the gate projection, any shape.
+        up: the up projection, matching ``gate`` exactly.
+
+    Raises:
+        ValueError: if the shapes or dtypes differ.
+    """
+    if gate.shape != up.shape:
+        raise ValueError(
+            f"gate and up must have the same shape, got {tuple(gate.shape)} "
+            f"and {tuple(up.shape)}"
+        )
+    if gate.dtype != up.dtype:
+        raise ValueError(f"gate and up must have the same dtype, got {gate.dtype} and {up.dtype}")
+    if gate.numel() == 0:
+        return gate.clone()
+
+    gate = gate.contiguous()
+    up = up.contiguous()
+    if _dispatch_available("swiglu", gate) and gate.dtype == torch.float32:
+        return torch.ops.cudaforge.swiglu(gate, up)
+    return _swiglu_reference(gate, up)
 
 
 def sum_reduce(x: torch.Tensor) -> torch.Tensor:
