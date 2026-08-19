@@ -19,6 +19,7 @@ add_executable(cudaforge_tests
   test_dynamic_batcher.cpp
   test_memory_pool.cpp
   test_config.cpp
+  test_launch_config.cpp
 )
 
 target_link_libraries(cudaforge_tests
