@@ -1,0 +1,23 @@
+# Build artefacts rebuilt inside the image, and caches that would bloat the
+# context without being used.
+build/
+build-*/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Outputs, not inputs.
+checkpoints/
+profiles/
+benchmarks/results/*.json
+*.nsys-rep
+*.ncu-rep
+
+.git/
+.github/
+.DS_Store
