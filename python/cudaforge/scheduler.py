@@ -262,7 +262,9 @@ class DynamicBatcher:
     def _collect(self) -> Batch | None:
         """Block for the first request, then fill until size or deadline.
 
-        Returns None once the queue is closed and drained.
+        Returns None once the queue is closed and drained. The batch is never
+        empty: the loop below discards expired requests until it finds a live
+        one, so every batch handed to the handler has at least one member.
         """
         while True:
             first = self._queue.get()

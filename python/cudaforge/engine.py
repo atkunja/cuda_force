@@ -258,8 +258,6 @@ class InferenceEngine:
         self._executor.submit(self._execute, batch)
 
     def _execute(self, batch: Batch) -> None:
-        if batch.empty:
-            return
         started = time.monotonic()
         try:
             results = self._runner.generate(
