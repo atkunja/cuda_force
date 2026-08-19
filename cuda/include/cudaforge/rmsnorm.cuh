@@ -59,7 +59,6 @@ void launch_rmsnorm_half(const __half* input, const __half* weight, __half* outp
 /// `EngineConfig.resolve_dtype` prefers bfloat16 wherever the hardware supports
 /// it.
 void launch_rmsnorm_bf16(const __nv_bfloat16* input, const __nv_bfloat16* weight,
-                         __nv_bfloat16* output, int rows, int cols, float eps,
-                         cudaStream_t stream);
+                         __nv_bfloat16* output, int rows, int cols, float eps, cudaStream_t stream);
 
 }  // namespace cudaforge

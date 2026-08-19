@@ -85,7 +85,7 @@ __global__ void rmsnorm_vectorised(const float4* __restrict__ input,
 /// Templated over the storage type so FP16 and BF16 share one implementation.
 /// Only the conversions differ; the accumulator is FP32 either way — see
 /// reduced_precision.cuh for why that is not negotiable for either format.
-template <typename T>
+template<typename T>
 __global__ void rmsnorm_reduced(const T* __restrict__ input, const T* __restrict__ weight,
                                 T* __restrict__ output, int rows, int cols, float eps) {
     using Convert = ReducedPrecision<T>;
@@ -111,8 +111,7 @@ __global__ void rmsnorm_reduced(const T* __restrict__ input, const T* __restrict
     const float scale = rsqrtf(sum_squares / static_cast<float>(cols) + eps);
 
     for (int col = tid; col < cols; col += step) {
-        const float value =
-            Convert::to_float(row_in[col]) * scale * Convert::to_float(weight[col]);
+        const float value = Convert::to_float(row_in[col]) * scale * Convert::to_float(weight[col]);
         row_out[col] = Convert::from_float(value);
     }
 }

@@ -65,8 +65,8 @@ void launch_swiglu_half(const __half* gate, const __half* up, __half* output, in
 ///
 /// This is the path an Ampere-or-later deployment takes, since
 /// `EngineConfig.resolve_dtype` prefers bfloat16 wherever it is supported.
-void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up,
-                        __nv_bfloat16* output, int count, cudaStream_t stream);
+void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up, __nv_bfloat16* output,
+                        int count, cudaStream_t stream);
 
 /// GELU, tanh approximation — the activation used by GPT-2 and BERT.
 ///

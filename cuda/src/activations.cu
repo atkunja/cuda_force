@@ -178,8 +178,8 @@ void launch_swiglu_half(const __half* gate, const __half* up, __half* output, in
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
-void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up,
-                        __nv_bfloat16* output, int count, cudaStream_t stream) {
+void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up, __nv_bfloat16* output,
+                        int count, cudaStream_t stream) {
     if (count <= 0) {
         return;
     }

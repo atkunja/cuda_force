@@ -140,7 +140,7 @@ __global__ void softmax_online(const float* __restrict__ input, float* __restric
 /// Reduced-precision storage, FP32 arithmetic, templated so FP16 and BF16 share
 /// one implementation. Neither format can hold the accumulator: FP16's mantissa
 /// stops making progress after ~2048 terms and BF16's after a few hundred.
-template <typename T>
+template<typename T>
 __global__ void softmax_reduced(const T* __restrict__ input, T* __restrict__ output, int rows,
                                 int cols) {
     using Convert = ReducedPrecision<T>;

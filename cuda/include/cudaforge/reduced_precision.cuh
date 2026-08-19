@@ -36,21 +36,17 @@ namespace cudaforge {
 /// formats are therefore storage-only here, with reductions in FP32. That costs
 /// nothing on a bandwidth-bound kernel, where the bytes moved — not the width
 /// of the adder — set the time.
-template <typename T>
+template<typename T>
 struct ReducedPrecision;
 
-template <>
+template<>
 struct ReducedPrecision<__half> {
-    __device__ __forceinline__ static float to_float(__half value) {
-        return __half2float(value);
-    }
-    __device__ __forceinline__ static __half from_float(float value) {
-        return __float2half(value);
-    }
+    __device__ __forceinline__ static float to_float(__half value) { return __half2float(value); }
+    __device__ __forceinline__ static __half from_float(float value) { return __float2half(value); }
     static constexpr const char* name() { return "fp16"; }
 };
 
-template <>
+template<>
 struct ReducedPrecision<__nv_bfloat16> {
     __device__ __forceinline__ static float to_float(__nv_bfloat16 value) {
         return __bfloat162float(value);
