@@ -98,9 +98,7 @@ def test_openapi_schema_is_served(client):
 
 
 def test_a_deadline_is_accepted(client):
-    response = client.post(
-        "/generate", json={"prompt": "hello", "deadline_seconds": 5.0}
-    )
+    response = client.post("/generate", json={"prompt": "hello", "deadline_seconds": 5.0})
     assert response.status_code == 200
 
 

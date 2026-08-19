@@ -6,6 +6,7 @@ Symptoms, in the order they are usually hit.
 
 ```python
 from cudaforge.ops import backend_report
+
 print(backend_report())
 ```
 

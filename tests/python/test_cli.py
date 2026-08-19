@@ -51,10 +51,14 @@ def test_bench_honours_the_batching_arguments(capsys):
     cli.bench(
         [
             "--echo-runner",
-            "--clients", "1",
-            "--requests-per-client", "2",
-            "--max-batch-size", "7",
-            "--max-wait-us", "1234",
+            "--clients",
+            "1",
+            "--requests-per-client",
+            "2",
+            "--max-batch-size",
+            "7",
+            "--max-wait-us",
+            "1234",
             "--json",
         ]
     )
@@ -69,10 +73,14 @@ def test_queue_capacity_is_raised_to_fit_the_batch(capsys):
     exit_code = cli.bench(
         [
             "--echo-runner",
-            "--clients", "1",
-            "--requests-per-client", "1",
-            "--max-batch-size", "64",
-            "--queue-capacity", "8",
+            "--clients",
+            "1",
+            "--requests-per-client",
+            "1",
+            "--max-batch-size",
+            "64",
+            "--queue-capacity",
+            "8",
             "--json",
         ]
     )
