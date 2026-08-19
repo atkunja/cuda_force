@@ -235,6 +235,31 @@ torch::Tensor sum_cpu(const torch::Tensor& input) {
     return input.sum();
 }
 
+torch::Tensor silu_cpu(const torch::Tensor& input) {
+    return torch::silu(input);
+}
+
+torch::Tensor gelu_cpu(const torch::Tensor& input) {
+    // The tanh approximation, matching the kernel and matching what GPT-2 and
+    // BERT were trained against. The exact erf form changes outputs by more
+    // than the numerical difference suggests, because the weights were fitted
+    // against this curve.
+    return torch::gelu(input, "tanh");
+}
+
+torch::Tensor swiglu_cpu(const torch::Tensor& gate, const torch::Tensor& up) {
+    TORCH_CHECK(gate.sizes() == up.sizes(), "gate and up must have the same shape, got ",
+                gate.sizes(), " and ", up.sizes());
+    // Half inputs are promoted: exp() of a moderately negative input underflows
+    // a 10-bit mantissa long before it underflows float32, which would flatten
+    // the activation's negative tail.
+    if (gate.scalar_type() == torch::kHalf || gate.scalar_type() == torch::kBFloat16) {
+        return (torch::silu(gate.to(torch::kFloat32)) * up.to(torch::kFloat32))
+            .to(gate.scalar_type());
+    }
+    return torch::silu(gate) * up;
+}
+
 std::vector<torch::Tensor> quantize_int8_cpu(const torch::Tensor& input) {
     const auto count = input.numel();
     const auto block = static_cast<std::int64_t>(64);
