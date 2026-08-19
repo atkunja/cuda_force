@@ -1,5 +1,7 @@
 #include "cudaforge/thread_pool.hpp"
 
+#include "thread_assert.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
@@ -9,6 +11,7 @@
 #include <thread>
 #include <vector>
 
+using cudaforge::test::ThreadAssert;
 using cudaforge::ThreadPool;
 using namespace std::chrono_literals;
 
@@ -107,6 +110,7 @@ TEST_CASE("many producers submit concurrently without loss", "[pool][stress]") {
     constexpr int kPerProducer = 500;
 
     std::atomic<int> counter{0};
+    ThreadAssert errors;
     {
         ThreadPool pool(6, /*queue_capacity=*/64);
         std::vector<std::thread> producers;
@@ -114,7 +118,7 @@ TEST_CASE("many producers submit concurrently without loss", "[pool][stress]") {
         for (int p = 0; p < kProducers; ++p) {
             producers.emplace_back([&] {
                 for (int i = 0; i < kPerProducer; ++i) {
-                    REQUIRE(pool.submit([&counter] { counter.fetch_add(1); }));
+                    errors.check(pool.submit([&counter] { counter.fetch_add(1); }));
                 }
             });
         }
@@ -122,6 +126,7 @@ TEST_CASE("many producers submit concurrently without loss", "[pool][stress]") {
             producer.join();
         }
     }
+    REQUIRE(errors.failures() == 0);
     REQUIRE(counter.load() == kProducers * kPerProducer);
 }
 
