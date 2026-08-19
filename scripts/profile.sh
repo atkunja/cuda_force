@@ -20,8 +20,14 @@ fi
 
 BINARY="build-cuda/benchmarks/bench_kernels"
 if [[ ! -x "$BINARY" ]]; then
-  echo "==> building CUDA benchmarks"
-  ./scripts/build.sh --cuda >/dev/null
+  # Built with NVTX so the timeline is labelled by phase. Without it, a gap
+  # between kernels cannot be attributed to formation, transfer or the host.
+  echo "==> building CUDA benchmarks with NVTX"
+  cmake -S . -B build-cuda -G Ninja \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCUDAFORGE_ENABLE_CUDA=ON \
+    -DCUDAFORGE_ENABLE_NVTX=ON >/dev/null
+  cmake --build build-cuda --parallel >/dev/null
 fi
 
 # --- Nsight Systems: timeline ----------------------------------------------
