@@ -10,3 +10,6 @@ target_link_libraries(bench_memory PRIVATE cudaforge::runtime cudaforge_warnings
 
 add_executable(bench_queue benchmark_queue.cpp)
 target_link_libraries(bench_queue PRIVATE cudaforge::runtime cudaforge_warnings)
+
+add_executable(bench_histogram benchmark_histogram.cpp)
+target_link_libraries(bench_histogram PRIVATE cudaforge::runtime cudaforge_warnings)
