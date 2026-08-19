@@ -13,10 +13,12 @@ from cudaforge.engine import EngineClosedError, InferenceEngine, Response
 from cudaforge.metrics import LatencyHistogram, MetricsRegistry, MetricsSnapshot
 from cudaforge.ops import (
     CUDA_KERNELS_AVAILABLE,
+    KERNEL_DTYPES,
     backend_report,
     dequantize_int8,
     fused_residual_rmsnorm,
     gelu,
+    kernel_supports,
     lora_linear,
     quantize_int8,
     rmsnorm,
@@ -32,6 +34,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "CUDA_KERNELS_AVAILABLE",
+    "KERNEL_DTYPES",
     "Batch",
     "BatchTrigger",
     "DynamicBatcher",
@@ -52,6 +55,7 @@ __all__ = [
     "dequantize_int8",
     "fused_residual_rmsnorm",
     "gelu",
+    "kernel_supports",
     "lora_linear",
     "quantize_int8",
     "rmsnorm",

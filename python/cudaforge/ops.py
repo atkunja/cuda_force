@@ -65,6 +65,14 @@ _EXTENSION_LOADED, _CUDA_COMPILED, _LOAD_MESSAGE = _load_extension()
 #: GPU still cannot run them.
 CUDA_KERNELS_AVAILABLE: bool = _CUDA_COMPILED and torch.cuda.is_available()
 
+#: Storage dtypes the CUDA kernels have a path for. Anything else falls back to
+#: the reference implementation, which handles every dtype ATen does.
+#:
+#: bfloat16 is included because `EngineConfig.resolve_dtype` prefers it on
+#: Ampere and later — a configured dtype with no kernel behind it would silently
+#: take the fallback and look like a slow kernel.
+KERNEL_DTYPES: frozenset[torch.dtype] = frozenset({torch.float32, torch.float16, torch.bfloat16})
+
 if not CUDA_KERNELS_AVAILABLE:
     _LOG.info("cudaforge: %s", _LOAD_MESSAGE)
 
@@ -87,6 +95,15 @@ class BackendReport:
         path = "custom CUDA kernels" if self.using_custom_kernels else "PyTorch reference"
         device = self.device_name or "cpu"
         return f"cudaforge: {path} on {device} ({self.message})"
+
+
+def kernel_supports(dtype: torch.dtype) -> bool:
+    """True when a CUDA kernel exists for this storage dtype.
+
+    Worth checking before benchmarking: an unsupported dtype takes the reference
+    path and produces a timing that says nothing about the kernel.
+    """
+    return dtype in KERNEL_DTYPES
 
 
 def backend_report() -> BackendReport:
