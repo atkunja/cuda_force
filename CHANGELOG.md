@@ -27,6 +27,7 @@ development host has no NVIDIA GPU.
   and FP16 paths.
 - Fused residual add + RMSNorm, emitting both the normalised output and the
   carried residual in one pass.
+- Optional NVTX range annotations for Nsight Systems, compiled out by default.
 - Block-wise symmetric INT8 quantise, dequantise and fake-quantise.
 - `GpuScheduler`: round-robin stream leases, event-based cross-stream chaining,
   asynchronous copies, per-stream accounting.
@@ -65,12 +66,19 @@ development host has no NVIDIA GPU.
   and `/generate`, request-id echo, and 503 on shed or expired requests.
 - LoRA/QLoRA fine-tuning pipeline with an explicit training loop, packed causal
   LM datasets, token-weighted perplexity, and adapter-only checkpoints.
-- Prometheus text exposition with correct counter/gauge typing.
+- Prometheus text exposition with correct counter/gauge typing, on its own path
+  so the JSON response model is unchanged.
+- `/ready` as a readiness signal distinct from `/health` liveness.
+- Deadline-aware admission: requests past their deadline are dropped rather than
+  executed, checked both at dequeue and immediately before execution.
+- Serving configs (latency, balanced, throughput) loadable by the CLI and by the
+  server, with flag and environment overrides.
 
 ### Added — tooling
 
 - `check_cuda_sources.py`: structural CUDA rules enforceable without a toolkit.
 - `check_docs.py`: Markdown link and anchor validation.
+- `check_references.py`: validation of file paths named in prose.
 - Benchmarks for the queue, batcher, memory pool, latency histogram, operators,
   end-to-end batching, the HTTP server, and CUDA kernels, plus a dependency-free
   Markdown summariser for their output.
