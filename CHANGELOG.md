@@ -23,6 +23,8 @@ development host has no NVIDIA GPU.
   fallback, and FP16 with FP32 accumulation.
 - LoRA linear: tiled matmul with bank-conflict padding, plus fused and unfused
   adapter paths.
+- Activations: SiLU, GELU (tanh form) and fused SwiGLU, in scalar, `float4`
+  and FP16 paths.
 - Block-wise symmetric INT8 quantise, dequantise and fake-quantise.
 - `GpuScheduler`: round-robin stream leases, event-based cross-stream chaining,
   asynchronous copies, per-stream accounting.
@@ -49,6 +51,9 @@ development host has no NVIDIA GPU.
 
 - Operators dispatching to the compiled extension or to reference PyTorch
   implementations, with `backend_report()` reporting which path is active.
+- An explicit autograd guard: differentiating through a kernel raises rather
+  than producing silently incorrect gradients, and calls that need gradients are
+  routed to the differentiable reference automatically.
 - `InferenceEngine`: concurrent submission, dynamic batching, future-based
   results, load shedding, deadline-aware dropping, graceful shutdown that
   settles every outstanding future.
