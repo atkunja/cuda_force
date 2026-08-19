@@ -289,6 +289,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)-7s %(message)s",
         stream=sys.stdout,
     )
+    # The hub client logs an INFO line per HTTP request, which buries the
+    # training output it is interleaved with. Raised to WARNING unless the
+    # caller explicitly asked for verbose output.
+    if not args.verbose:
+        for noisy in ("httpx", "httpcore", "urllib3", "filelock", "huggingface_hub"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
 
     config = TrainingConfig.from_yaml(args.config) if args.config else TrainingConfig()
     for field, value in (
