@@ -287,9 +287,12 @@ TEST_CASE("a throwing move during push leaves the queue consistent", "[queue][ex
     REQUIRE(queue.push(ThrowingOnMove{1}) == QueueStatus::Ok);
     const std::size_t before = queue.size();
 
-    // Insertion is the last step under the lock. If it throws, the deque is
-    // unchanged and no notification has been sent, so the queue is still usable.
-    ThrowingOnMove::arm(1);
+    // Guaranteed copy elision means the temporary is constructed directly into
+    // push's by-value parameter, so the *first* move is the insertion into the
+    // deque. Insertion is the last step under the lock: if it throws, the deque
+    // is unchanged and no notification has been sent, so the queue is still
+    // consistent.
+    ThrowingOnMove::arm(0);
     REQUIRE_THROWS_AS(queue.push(ThrowingOnMove{2}), std::runtime_error);
     ThrowingOnMove::disarm();
 
