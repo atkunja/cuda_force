@@ -116,31 +116,56 @@ class TransformersRunner:
     token last for every row.
     """
 
-    def __init__(self, config: EngineConfig) -> None:
+    def __init__(
+        self,
+        config: EngineConfig,
+        model: object | None = None,
+        tokenizer: object | None = None,
+    ) -> None:
+        """Load the model named by `config`, or use the ones supplied.
+
+        The injection points exist so the batching, padding and decode logic can
+        be tested without a network round trip. What is under test here is this
+        class's own handling — left padding, per-row truncation, token counting
+        — not transformers' generation, and a test that downloads weights is a
+        test that fails offline.
+        """
+        self._config = config
+        self._device = config.resolve_device()
+        self._dtype = config.resolve_dtype()
+
+        if model is not None and tokenizer is not None:
+            self._tokenizer = tokenizer
+            self._model = model
+            self._model.eval()
+            self._configure_tokenizer()
+            return
+
         from transformers import (  # imported lazily: optional dependency
             AutoModelForCausalLM,
             AutoTokenizer,
         )
 
-        self._config = config
-        self._device = config.resolve_device()
-        self._dtype = config.resolve_dtype()
-
         self._tokenizer = AutoTokenizer.from_pretrained(config.model_name)
+        self._configure_tokenizer()
+
+        model_obj = AutoModelForCausalLM.from_pretrained(config.model_name, dtype=self._dtype)
+        # `PreTrainedModel.to` is wrapped by a decorator whose annotation types
+        # the first argument as a model rather than a device, so a correct call
+        # is rejected. The suppression is upstream's, not this code's.
+        self._model = model_obj.to(self._device)  # type: ignore[arg-type]
+        self._model.eval()
+
+    def _configure_tokenizer(self) -> None:
         if self._tokenizer.pad_token_id is None:
             # Many causal LMs ship without a pad token. Reusing EOS is the
             # standard remedy; the attention mask keeps it from being attended
             # to, so it does not affect the output.
             self._tokenizer.pad_token = self._tokenizer.eos_token
+        # Batched generation needs left padding: a causal model continues from
+        # the final position of each row, so right padding would ask it to
+        # continue from a pad token.
         self._tokenizer.padding_side = "left"
-
-        model = AutoModelForCausalLM.from_pretrained(config.model_name, dtype=self._dtype)
-        # `PreTrainedModel.to` is wrapped by a decorator whose annotation types
-        # the first argument as a model rather than a device, so a correct call
-        # is rejected. The suppression is upstream's, not this code's; the
-        # behaviour is covered by the runner tests.
-        self._model = model.to(self._device)  # type: ignore[arg-type]
-        self._model.eval()
 
     def warmup(self, iterations: int) -> None:
         for _ in range(max(iterations, 0)):
