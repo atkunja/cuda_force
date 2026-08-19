@@ -126,3 +126,83 @@ TEST_CASE("concurrent recording loses no counts", "[metrics][stress]") {
     REQUIRE(snapshot.requests_completed == kThreads * kPerThread);
     REQUIRE(snapshot.tokens_generated == 2 * kThreads * kPerThread);
 }
+
+// --- json shape ------------------------------------------------------------
+
+namespace {
+
+/// Balanced-delimiter check, enough to catch every way this emitter could
+/// realistically break without adding a JSON parser as a test dependency.
+bool json_is_balanced(const std::string& text) {
+    int braces = 0;
+    bool in_string = false;
+    char previous = '\0';
+
+    for (const char c : text) {
+        if (in_string) {
+            if (c == '"' && previous != '\\') {
+                in_string = false;
+            }
+        } else if (c == '"') {
+            in_string = true;
+        } else if (c == '{') {
+            ++braces;
+        } else if (c == '}') {
+            if (--braces < 0) {
+                return false;
+            }
+        }
+        previous = c;
+    }
+    return braces == 0 && !in_string;
+}
+
+}  // namespace
+
+TEST_CASE("metrics json is structurally balanced", "[metrics][json]") {
+    Metrics metrics;
+    metrics.record_received();
+    metrics.record_completion(1'234'567, 8);
+    metrics.record_batch(4, true);
+    metrics.record_expired();
+    REQUIRE(json_is_balanced(cudaforge::to_json(metrics.snapshot())));
+}
+
+TEST_CASE("an empty snapshot still renders valid json", "[metrics][json]") {
+    const std::string json = cudaforge::to_json(Metrics{}.snapshot());
+    REQUIRE(json_is_balanced(json));
+    REQUIRE(json.find("\"requests_received\": 0") != std::string::npos);
+}
+
+TEST_CASE("every counter appears in the json", "[metrics][json]") {
+    // The field names are a contract shared with the Python registry so a
+    // dashboard need not know which runtime produced a snapshot.
+    const std::string json = cudaforge::to_json(Metrics{}.snapshot());
+    for (const char* field : {"requests_received", "requests_completed", "requests_failed",
+                              "requests_rejected", "requests_expired", "batches_processed",
+                              "batches_closed_by_size", "batches_closed_by_timeout",
+                              "average_batch_size", "queue_depth", "tokens_generated",
+                              "uptime_seconds", "requests_per_second", "tokens_per_second",
+                              "queue_delay_ms", "latency_ms"}) {
+        INFO("field " << field);
+        REQUIRE(json.find(std::string("\"") + field + "\"") != std::string::npos);
+    }
+}
+
+TEST_CASE("durations are reported in milliseconds", "[metrics][json]") {
+    // Nanoseconds are the recording unit; milliseconds are what a human reads,
+    // and the conversion happens only at the reporting boundary.
+    Metrics metrics;
+    metrics.record_completion(2'000'000, 1);  // 2 ms
+
+    const std::string json = cudaforge::to_json(metrics.snapshot());
+    REQUIRE(json.find("\"max\": 2.0") != std::string::npos);
+}
+
+TEST_CASE("nested latency objects are present", "[metrics][json]") {
+    const std::string json = cudaforge::to_json(Metrics{}.snapshot());
+    REQUIRE(json.find("\"p50\"") != std::string::npos);
+    REQUIRE(json.find("\"p95\"") != std::string::npos);
+    REQUIRE(json.find("\"p99\"") != std::string::npos);
+    REQUIRE(json.find("\"mean\"") != std::string::npos);
+}
