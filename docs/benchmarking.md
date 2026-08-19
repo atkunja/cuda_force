@@ -22,6 +22,7 @@ Where a GPU comparison would normally appear, this repository says so instead.
 | `benchmark_batching.py` | Python | yes |
 | `benchmark_kernels.py` | Python | yes, but see the caveat below |
 | `benchmark_server.py` | a running server | yes |
+| `benchmark_metrics.py` | Python | yes |
 | `bench_kernels` (CUDA) | NVIDIA GPU | **no** |
 
 `benchmark_kernels.py` on a CPU-only host compares the reference

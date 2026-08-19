@@ -22,6 +22,7 @@ Writes timestamped JSON here:
 | `cpp-kv_cache-*.json` | `bench_kv_cache` | C++ compiler |
 | `operators-*.json` | `benchmark_kernels.py` | Python |
 | `batching-*.json` | `benchmark_batching.py` | Python |
+| `metrics-*.json` | `benchmark_metrics.py` | Python |
 | `http-*.json` | `benchmark_server.py` | a running server |
 | `cuda-kernels-*.json` | `bench_kernels` | **NVIDIA GPU** |
 

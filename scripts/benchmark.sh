@@ -39,6 +39,10 @@ echo "==> operator comparison"
 "$PYTHON" benchmarks/benchmark_kernels.py \
   --output "$RESULTS/operators-${STAMP}.json"
 
+echo "==> metrics overhead"
+"$PYTHON" benchmarks/benchmark_metrics.py \
+  --output "$RESULTS/metrics-${STAMP}.json"
+
 echo "==> batching sweep"
 "$PYTHON" benchmarks/benchmark_batching.py \
   --output "$RESULTS/batching-${STAMP}.json"

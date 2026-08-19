@@ -253,12 +253,42 @@ def summarize_kv_cache(payload: dict[str, Any]) -> str:
     return "".join(out)
 
 
+def summarize_metrics(payload: dict[str, Any]) -> str:
+    out = ["### Metrics overhead\n"]
+    if note := payload.get("note"):
+        out.append(f"\n{note}\n\n")
+
+    out.append(
+        table(
+            ["window", "µs/record", "records/s"],
+            [
+                [
+                    f"{window['capacity']:,}",
+                    f"{window['microseconds_per_record']:.2f}",
+                    f"{window['records_per_second']:,.0f}",
+                ]
+                for window in payload.get("windows", [])
+            ],
+        )
+    )
+
+    registry = payload.get("registry", {})
+    if registry:
+        out.append(
+            f"\nRegistry: **{registry['microseconds_per_request']:.2f} µs per request** "
+            f"for both histograms. Snapshot: "
+            f"{payload.get('snapshot_median_us', 0.0):.2f} µs median.\n"
+        )
+    return "".join(out)
+
+
 SUMMARIES = {
     "cuda_kernels": summarize_cuda_kernels,
     "dynamic_batching": summarize_batching,
     "operators": summarize_operators,
     "latency_histogram": summarize_histogram,
     "kv_cache_occupancy": summarize_kv_cache,
+    "metrics_overhead": summarize_metrics,
 }
 
 
