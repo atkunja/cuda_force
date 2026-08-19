@@ -91,3 +91,62 @@ launching one block per tile would create far more blocks than the device can
 hold resident and pay scheduling overhead for no additional parallelism. The
 size is also capped by the input, so a tiny array does not launch blocks with
 nothing to do.
+
+## Kernel B — Softmax
+
+Row-wise `exp(x_i - m) / sum(exp(x_j - m))`.
+
+### Numerical stability is not optional
+
+The textbook definition overflows for inputs above roughly 88 in FP32, and
+attention logits routinely exceed that. Subtracting the row maximum first is an
+exact identity — the `exp(-m)` factor cancels — but it makes the largest
+argument to `exp` equal to 0, so the largest term is exactly 1 and nothing
+overflows. Underflow of very negative terms to zero is harmless: they contribute
+nothing to the sum.
+
+`tests/cuda/test_softmax.cu` feeds logits of ±1000 to every variant and requires
+finite output. Without the shift, all of them produce NaN.
+
+### Three variants, three tradeoffs
+
+| Variant | Global traffic | Row length limit | Notes |
+| --- | --- | --- | --- |
+| Naive | 3 reads + 1 write | none | separate max, sum and normalise passes |
+| Shared memory | 1 read + 1 write | fits in shared memory | stages the row on-chip |
+| Online | 2 reads + 1 write | none | maintains max and sum together |
+
+The naive version is not a strawman — it is what a correct first implementation
+looks like, and it is memory-bound at three times the minimum possible traffic.
+That factor of three *is* the optimisation opportunity.
+
+### Online softmax
+
+Each thread maintains a running `(max, sum)` pair. When a larger element
+appears, the accumulated sum is rescaled by `exp(old_max - new_max)` so it stays
+expressed relative to the current maximum:
+
+```cuda
+if (value > running_max) {
+    running_sum *= __expf(running_max - value);
+    running_max  = value;
+}
+running_sum += __expf(value - running_max);
+```
+
+Combining two such pairs is the same operation, which is what makes the
+reduction across threads valid. This removes the separate max pass, and because
+nothing is cached the row length is unbounded — unlike the shared-memory
+variant, whose capacity limit the launcher detects and falls back from rather
+than failing the launch.
+
+This is the same recurrence FlashAttention uses to avoid materialising the
+attention matrix, applied to the simpler standalone case.
+
+### FP16
+
+Storage is FP16; accumulation is FP32. An FP16 accumulator has a 10-bit
+mantissa, so summing more than about 2048 terms of similar magnitude stops
+making progress — each addition rounds away — and the resulting distribution is
+visibly wrong. Widening the accumulator costs nothing on a bandwidth-bound
+kernel.
