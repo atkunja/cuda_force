@@ -6,7 +6,8 @@ set(CUDAFORGE_BENCHMARKS
   bench_scheduler:benchmark_scheduler.cpp
   bench_memory:benchmark_memory.cpp
   bench_queue:benchmark_queue.cpp
-  bench_histogram:benchmark_histogram.cpp)
+  bench_histogram:benchmark_histogram.cpp
+  bench_kv_cache:benchmark_kv_cache.cpp)
 
 foreach(entry IN LISTS CUDAFORGE_BENCHMARKS)
   string(REPLACE ":" ";" parts "${entry}")
