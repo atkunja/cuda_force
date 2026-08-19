@@ -112,6 +112,25 @@ must agree is the *policy*:
 
 Skipped with a stated reason when the harness has not been built.
 
+### Shared constants and defaults
+
+Several values are defined twice, once per language, because neither can import
+the other's. A divergence would not fail to compile — it would produce a
+numerical mismatch or a behaviour difference that the documentation then
+describes wrongly for one of the two runtimes.
+
+`tests/python/test_constant_parity.py` reads the C++ headers and compares:
+
+| Shared | Consequence of drift |
+| --- | --- |
+| `kQuantBlockSize` | different block scales, so different dequantised values |
+| `kWarpSize`, `kDefaultBlockSize` | the warp primitives assume 32 at compile time |
+| Every batching default | `docs/concurrency.md` describes one policy for both |
+| Every metrics field name | a dashboard would need to know which runtime produced a snapshot |
+
+Textual comparison, deliberately: the alternative is a build-time code
+generator, which is more machinery than a handful of constants justifies.
+
 ## Tolerances
 
 CUDA tests compare against a **double-precision** host reference — the
