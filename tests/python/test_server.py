@@ -137,3 +137,21 @@ def test_readiness_is_in_the_openapi_schema(client):
     schema = client.get("/openapi.json").json()
     assert "/ready" in schema["paths"]
     assert "503" in schema["paths"]["/ready"]["get"]["responses"]
+
+
+def test_prometheus_endpoint_serves_the_text_format(client):
+    client.post("/generate", json={"prompt": "hello", "max_new_tokens": 4})
+    response = client.get("/metrics/prometheus")
+
+    assert response.status_code == 200
+    assert "version=0.0.4" in response.headers["content-type"]
+    assert "# TYPE cudaforge_requests_completed_total counter" in response.text
+    assert "cudaforge_requests_completed_total 1" in response.text
+
+
+def test_the_json_metrics_endpoint_is_unchanged_by_the_prometheus_one(client):
+    # The JSON body is a documented response model that clients parse; adding
+    # the text format must not alter it.
+    payload = client.get("/metrics").json()
+    assert isinstance(payload, dict)
+    assert "requests_completed" in payload
