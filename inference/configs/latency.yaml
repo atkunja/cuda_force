@@ -1,0 +1,28 @@
+# Tuned for tail latency.
+#
+# A small batch and a short wait: no request is held long waiting for company,
+# at the cost of throughput. Appropriate for interactive traffic where p99 is
+# what users feel.
+#
+#   cudaforge-serve --config inference/configs/latency.yaml
+
+model_name: gpt2
+device: auto
+dtype: auto
+
+max_batch_size: 4
+# Roughly the single-request service time. Below this the batcher almost never
+# fills a batch and the wait buys nothing; above it the added delay costs more
+# than the throughput it returns.
+max_wait_us: 1000
+queue_capacity: 256
+worker_threads: 4
+cuda_streams: 4
+
+max_prompt_chars: 4096
+warmup_iterations: 3
+
+generation:
+  max_new_tokens: 64
+  temperature: 0.7
+  top_p: 0.95
