@@ -47,7 +47,8 @@ def _load_extension() -> tuple[bool, bool, str]:
         return False, False, "extension not built; using reference implementations"
 
     try:
-        from cudaforge import _C  # imported lazily: optional dependency
+        # The compiled extension has no stubs; it is built, not shipped as source.
+        from cudaforge import _C  # type: ignore[attr-defined]
     except ImportError as error:
         return False, False, f"extension present but failed to load: {error}"
 
@@ -252,10 +253,17 @@ def lora_linear(
             f"[{lora_a.shape[1]}, {weight.shape[1]}], got {tuple(lora_b.shape)}"
         )
 
-    tensors = [t.contiguous() for t in (x, weight, lora_a, lora_b)]
+    # Named rather than unpacked from a list: unpacking hides the arity from the
+    # type checker, and a four-tensor call with a trailing float is exactly the
+    # shape a positional mistake would slip through.
+    x = x.contiguous()
+    weight = weight.contiguous()
+    lora_a = lora_a.contiguous()
+    lora_b = lora_b.contiguous()
+
     if _dispatch_available("lora_linear", x) and x.ndim == 2 and x.dtype == torch.float32:
-        return torch.ops.cudaforge.lora_linear(*tensors, scale)
-    return _lora_linear_reference(*tensors, scale)
+        return torch.ops.cudaforge.lora_linear(x, weight, lora_a, lora_b, scale)
+    return _lora_linear_reference(x, weight, lora_a, lora_b, scale)
 
 
 def sum_reduce(x: torch.Tensor) -> torch.Tensor:
