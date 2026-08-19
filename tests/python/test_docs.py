@@ -93,3 +93,76 @@ def test_the_repository_documentation_has_no_broken_links():
         check=False,
     )
     assert result.returncode == 0, result.stdout
+
+
+# --- documented file paths -------------------------------------------------
+
+
+def check_references_module():
+    sys.path.insert(0, str(REPO_ROOT / "scripts"))
+    import check_references
+
+    return check_references
+
+
+def test_a_named_file_that_is_missing_is_reported(tmp_path):
+    checker = check_references_module()
+    page = tmp_path / "page.md"
+    page.write_text("See `src/nowhere.py` for details.", encoding="utf-8")
+    problems = checker.check_file(page, tmp_path)
+    assert len(problems) == 1
+    assert "nowhere.py" in problems[0]
+
+
+def test_a_named_file_that_exists_is_accepted(tmp_path):
+    checker = check_references_module()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "here.py").write_text("", encoding="utf-8")
+    page = tmp_path / "page.md"
+    page.write_text("See `src/here.py`.", encoding="utf-8")
+    assert checker.check_file(page, tmp_path) == []
+
+
+def test_prose_in_backticks_is_not_mistaken_for_a_path(tmp_path):
+    # The checker must be conservative: flagging ordinary code spans would make
+    # it noise, and noise gets disabled.
+    checker = check_references_module()
+    page = tmp_path / "page.md"
+    page.write_text(
+        "Use `max_batch_size`, call `pool.allocate()`, run `a/b` and `-flag/x`.",
+        encoding="utf-8",
+    )
+    assert checker.check_file(page, tmp_path) == []
+
+
+def test_urls_are_not_treated_as_paths(tmp_path):
+    checker = check_references_module()
+    page = tmp_path / "page.md"
+    page.write_text("See `https://example.com/thing.py`.", encoding="utf-8")
+    assert checker.check_file(page, tmp_path) == []
+
+
+def test_globs_are_not_treated_as_paths(tmp_path):
+    checker = check_references_module()
+    page = tmp_path / "page.md"
+    page.write_text("Run over `tests/**/*.py`.", encoding="utf-8")
+    assert checker.check_file(page, tmp_path) == []
+
+
+def test_paths_inside_code_fences_are_ignored(tmp_path):
+    # A fenced block is a command to run, not a claim about the tree.
+    checker = check_references_module()
+    page = tmp_path / "page.md"
+    page.write_text("```bash\ncat `src/nowhere.py`\n```\n", encoding="utf-8")
+    assert checker.check_file(page, tmp_path) == []
+
+
+def test_the_repository_documentation_names_only_real_paths():
+    result = subprocess.run(
+        [sys.executable, "scripts/check_references.py", "."],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout
