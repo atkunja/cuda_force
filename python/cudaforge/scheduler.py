@@ -243,8 +243,9 @@ class DynamicBatcher:
             try:
                 self._handler(batch)
             except Exception:  # noqa: BLE001
-                # The handler is caller-supplied. Otherwise one bad batch stalls every subsequent request until
-                # shutdown. The failure is counted and the loop continues.
+                # The handler is caller-supplied. Without this, one bad batch
+                # would stall every subsequent request until shutdown. The
+                # failure is counted and the loop continues.
                 self._metrics.record_failed()
 
     def _drop_if_expired(self, request: Request) -> bool:
