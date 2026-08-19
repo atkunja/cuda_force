@@ -167,7 +167,13 @@ public:
     [[nodiscard]] static const char* backend_name() { return Backend::name(); }
 
 private:
-    static std::size_t round_up(std::size_t bytes) { return std::bit_ceil(bytes); }
+    /// Rounds to a power of two, but never below the minimum block size.
+    /// Without the floor, a workload allocating many 8-byte scratch buffers
+    /// would create size classes far below any useful granularity and defeat
+    /// reuse across slightly different shapes.
+    [[nodiscard]] std::size_t round_up(std::size_t bytes) const {
+        return std::max(min_block_bytes_, std::bit_ceil(bytes));
+    }
 
     void note_checkout(void* pointer, std::size_t block_bytes) {
         live_blocks_[pointer] = block_bytes;
