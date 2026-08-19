@@ -1,0 +1,76 @@
+# Service definitions for the CUDA image.
+#
+#   docker compose run --rm test        run the full test suite on the GPU
+#   docker compose run --rm bench       run the benchmarks, results to ./benchmarks/results
+#   docker compose up serve             start the HTTP server on :8000
+#   docker compose run --rm train       run the tiny fine-tune
+#
+# Every service needs the NVIDIA Container Toolkit on the host. Without it the
+# `deploy.resources.reservations.devices` block fails and the container will not
+# start — which is the correct behaviour: silently running on CPU would make any
+# resulting number meaningless.
+
+x-cuda-service: &cuda-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: cudaforge:latest
+  # Model downloads land here rather than in the image, so rebuilding does not
+  # re-download and the layer cache stays small.
+  volumes:
+    - ./benchmarks/results:/opt/cudaforge/benchmarks/results
+    - ./checkpoints:/opt/cudaforge/checkpoints
+    - hf-cache:/home/cudaforge/.cache/huggingface
+  environment:
+    - NVIDIA_VISIBLE_DEVICES=all
+    - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+services:
+  test:
+    <<: *cuda-service
+    command: >
+      bash -c "./build/tests/cpp/cudaforge_tests &&
+               ./build/tests/cuda/cudaforge_cuda_tests &&
+               python3 -m pytest tests/python -q"
+
+  bench:
+    <<: *cuda-service
+    command: ./scripts/benchmark.sh
+
+  serve:
+    <<: *cuda-service
+    command: >
+      python3 -m uvicorn inference.server:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDAFORGE_MODEL=gpt2
+      - CUDAFORGE_MAX_BATCH=16
+      - CUDAFORGE_MAX_WAIT_US=5000
+
+  train:
+    <<: *cuda-service
+    command: python3 -m training.train --config training/configs/tiny.yaml
+
+  profile:
+    <<: *cuda-service
+    command: ./scripts/profile.sh
+    volumes:
+      - ./profiles:/opt/cudaforge/profiles
+      - hf-cache:/home/cudaforge/.cache/huggingface
+    # Nsight needs performance counter access, which is privileged by default on
+    # most driver configurations.
+    cap_add:
+      - SYS_ADMIN
+
+volumes:
+  hf-cache:
