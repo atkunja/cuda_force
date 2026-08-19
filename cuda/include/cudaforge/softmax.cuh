@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cuda_bf16.h>
+#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
 namespace cudaforge {
@@ -49,6 +51,17 @@ void launch_softmax(const float* input, float* output, int rows, int cols, Softm
 /// resulting distribution is visibly wrong. Storage stays FP16; only the
 /// arithmetic is widened.
 void launch_softmax_half(const __half* input, __half* output, int rows, int cols,
+                         cudaStream_t stream);
+
+/// BF16 storage, FP32 accumulation.
+///
+/// BF16's mantissa is *shorter* than FP16's — 7 bits against 10 — so it is even
+/// less suited to holding the sum. Its advantage is exponent range, which
+/// matters for the logits rather than for the accumulator: attention logits
+/// span orders of magnitude that FP16 cannot represent at all.
+///
+/// This is the path an Ampere-or-later deployment takes.
+void launch_softmax_bf16(const __nv_bfloat16* input, __nv_bfloat16* output, int rows, int cols,
                          cudaStream_t stream);
 
 }  // namespace cudaforge

@@ -5,6 +5,7 @@
 
 #include "cudaforge/cuda_error.cuh"
 #include "cudaforge/cuda_utils.cuh"
+#include "cudaforge/reduced_precision.cuh"
 
 namespace cudaforge {
 namespace {
@@ -136,10 +137,13 @@ __global__ void softmax_online(const float* __restrict__ input, float* __restric
     }
 }
 
-/// FP16 storage, FP32 arithmetic. See the note in softmax.cuh for why the
-/// accumulator cannot be FP16.
-__global__ void softmax_half(const __half* __restrict__ input, __half* __restrict__ output,
-                             int rows, int cols) {
+/// Reduced-precision storage, FP32 arithmetic, templated so FP16 and BF16 share
+/// one implementation. Neither format can hold the accumulator: FP16's mantissa
+/// stops making progress after ~2048 terms and BF16's after a few hundred.
+template <typename T>
+__global__ void softmax_reduced(const T* __restrict__ input, T* __restrict__ output, int rows,
+                                int cols) {
+    using Convert = ReducedPrecision<T>;
     __shared__ float scratch[kWarpSize];
 
     const int row = static_cast<int>(blockIdx.x);
@@ -147,26 +151,27 @@ __global__ void softmax_half(const __half* __restrict__ input, __half* __restric
         return;
     }
 
-    const __half* row_in = input + static_cast<std::size_t>(row) * cols;
-    __half* row_out = output + static_cast<std::size_t>(row) * cols;
+    const T* row_in = input + static_cast<std::size_t>(row) * cols;
+    T* row_out = output + static_cast<std::size_t>(row) * cols;
     const int tid = static_cast<int>(threadIdx.x);
     const int step = static_cast<int>(blockDim.x);
 
     float local_max = -FLT_MAX;
     for (int col = tid; col < cols; col += step) {
-        local_max = fmaxf(local_max, __half2float(row_in[col]));
+        local_max = fmaxf(local_max, Convert::to_float(row_in[col]));
     }
     const float row_max = block_reduce_max(local_max, scratch, -FLT_MAX);
 
     float local_sum = 0.0F;
     for (int col = tid; col < cols; col += step) {
-        local_sum += __expf(__half2float(row_in[col]) - row_max);
+        local_sum += __expf(Convert::to_float(row_in[col]) - row_max);
     }
     const float row_sum = block_reduce_sum(local_sum, scratch);
 
     const float inv_sum = 1.0F / row_sum;
     for (int col = tid; col < cols; col += step) {
-        row_out[col] = __float2half(__expf(__half2float(row_in[col]) - row_max) * inv_sum);
+        row_out[col] =
+            Convert::from_float(__expf(Convert::to_float(row_in[col]) - row_max) * inv_sum);
     }
 }
 
@@ -233,7 +238,17 @@ void launch_softmax_half(const __half* input, __half* output, int rows, int cols
         return;
     }
     const int block = block_size_for_row(cols);
-    softmax_half<<<rows, block, 0, stream>>>(input, output, rows, cols);
+    softmax_reduced<<<rows, block, 0, stream>>>(input, output, rows, cols);
+    CUDAFORGE_CHECK_LAUNCH(stream);
+}
+
+void launch_softmax_bf16(const __nv_bfloat16* input, __nv_bfloat16* output, int rows, int cols,
+                         cudaStream_t stream) {
+    if (rows <= 0 || cols <= 0) {
+        return;
+    }
+    const int block = block_size_for_row(cols);
+    softmax_reduced<<<rows, block, 0, stream>>>(input, output, rows, cols);
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
