@@ -177,9 +177,7 @@ class TransformersRunner:
         prompt_length = encoded["input_ids"].shape[1]
         results = []
         for row, setting in zip(range(generated_ids.shape[0]), settings, strict=True):
-            generated = generated_ids[
-                row, prompt_length : prompt_length + setting.max_new_tokens
-            ]
+            generated = generated_ids[row, prompt_length : prompt_length + setting.max_new_tokens]
             text = str(self._tokenizer.decode(generated, skip_special_tokens=True))
             results.append(
                 GenerationResult(
