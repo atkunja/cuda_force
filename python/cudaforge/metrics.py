@@ -99,6 +99,7 @@ class MetricsSnapshot:
     requests_completed: int = 0
     requests_failed: int = 0
     requests_rejected: int = 0
+    requests_expired: int = 0
 
     batches_processed: int = 0
     batched_requests: int = 0
@@ -146,6 +147,7 @@ class MetricsRegistry:
         self._completed = 0
         self._failed = 0
         self._rejected = 0
+        self._expired = 0
         self._batches = 0
         self._batched_requests = 0
         self._size_closures = 0
@@ -167,6 +169,17 @@ class MetricsRegistry:
     def record_failed(self) -> None:
         with self._lock:
             self._failed += 1
+
+    def record_expired(self) -> None:
+        """A request dropped at dequeue because its deadline had passed.
+
+        Counted separately from `rejected` (refused at admission) and `failed`
+        (execution error): a rising expiry count means the queue is deeper than
+        clients are willing to wait for, which calls for shedding earlier rather
+        than for more capacity.
+        """
+        with self._lock:
+            self._expired += 1
 
     def record_queue_delay(self, seconds: float) -> None:
         self.queue_delay.record(seconds)
@@ -203,6 +216,7 @@ class MetricsRegistry:
                 requests_completed=completed,
                 requests_failed=self._failed,
                 requests_rejected=self._rejected,
+                requests_expired=self._expired,
                 batches_processed=batches,
                 batched_requests=batched,
                 batches_closed_by_size=self._size_closures,
@@ -232,6 +246,7 @@ class MetricsRegistry:
             self._completed = 0
             self._failed = 0
             self._rejected = 0
+            self._expired = 0
             self._batches = 0
             self._batched_requests = 0
             self._size_closures = 0
