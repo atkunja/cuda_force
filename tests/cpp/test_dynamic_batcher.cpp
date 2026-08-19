@@ -258,3 +258,129 @@ TEST_CASE("concurrent producers all get their requests batched", "[batcher][stre
     REQUIRE(snapshot.batched_requests == kProducers * kPerProducer);
     REQUIRE(snapshot.average_batch_size > 1.0);
 }
+
+// --- deadline-aware admission ---------------------------------------------
+
+namespace {
+
+Request expired_request(std::uint64_t id) {
+    Request request(id, "stale", {});
+    request.deadline = Clock::now() - std::chrono::seconds(1);
+    return request;
+}
+
+Request request_with_deadline(std::uint64_t id, std::chrono::milliseconds budget) {
+    Request request(id, "live", {});
+    request.deadline = Clock::now() + budget;
+    return request;
+}
+
+}  // namespace
+
+TEST_CASE("a request without a deadline never expires", "[batcher][deadline]") {
+    const Request request(1, "x", {});
+    REQUIRE_FALSE(request.has_deadline());
+    REQUIRE_FALSE(request.expired());
+}
+
+TEST_CASE("expiry is evaluated against the deadline", "[batcher][deadline]") {
+    REQUIRE(expired_request(1).expired());
+    REQUIRE_FALSE(request_with_deadline(2, std::chrono::seconds(60)).expired());
+}
+
+TEST_CASE("expired requests are dropped rather than executed", "[batcher][deadline]") {
+    // Running work nobody is waiting for spends capacity the live requests
+    // need, which under overload deepens the backlog that caused the timeouts.
+    auto collector = std::make_shared<BatchCollector>();
+    auto metrics = std::make_shared<Metrics>();
+    std::atomic<int> dropped{0};
+
+    {
+        DynamicBatcher batcher(
+            test_config(4, 10ms),
+            [collector](Batch&& batch) { (*collector)(std::move(batch)); }, metrics,
+            [&dropped](const Request&) { dropped.fetch_add(1); });
+
+        for (std::uint64_t i = 0; i < 6; ++i) {
+            REQUIRE(batcher.submit(expired_request(i)));
+        }
+        for (std::uint64_t i = 0; i < 4; ++i) {
+            REQUIRE(batcher.submit(make_request(100 + i)));
+        }
+        std::this_thread::sleep_for(150ms);
+    }
+
+    REQUIRE(dropped.load() == 6);
+    REQUIRE(collector->total() == 4);
+    REQUIRE(metrics->snapshot().requests_expired == 6);
+}
+
+TEST_CASE("an all-expired queue produces no batches", "[batcher][deadline]") {
+    auto collector = std::make_shared<BatchCollector>();
+    auto metrics = std::make_shared<Metrics>();
+
+    {
+        DynamicBatcher batcher(test_config(4, 10ms),
+                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+                               metrics);
+        for (std::uint64_t i = 0; i < 10; ++i) {
+            REQUIRE(batcher.submit(expired_request(i)));
+        }
+        std::this_thread::sleep_for(120ms);
+    }
+
+    REQUIRE(collector->total() == 0);
+    REQUIRE(metrics->snapshot().requests_expired == 10);
+}
+
+TEST_CASE("expiry is counted apart from rejection and failure", "[batcher][deadline]") {
+    // Distinct causes with distinct remedies: rejection means the queue is
+    // full, expiry means it is deeper than clients will wait for.
+    auto metrics = std::make_shared<Metrics>();
+    {
+        DynamicBatcher batcher(test_config(2, 5ms), [](Batch&&) {}, metrics);
+        REQUIRE(batcher.submit(expired_request(1)));
+        std::this_thread::sleep_for(80ms);
+    }
+
+    const auto snapshot = metrics->snapshot();
+    REQUIRE(snapshot.requests_expired == 1);
+    REQUIRE(snapshot.requests_rejected == 0);
+    REQUIRE(snapshot.requests_failed == 0);
+}
+
+TEST_CASE("a throwing expiry handler does not stop the batcher", "[batcher][deadline]") {
+    auto collector = std::make_shared<BatchCollector>();
+    auto metrics = std::make_shared<Metrics>();
+
+    {
+        DynamicBatcher batcher(
+            test_config(2, 5ms),
+            [collector](Batch&& batch) { (*collector)(std::move(batch)); }, metrics,
+            [](const Request&) { throw std::runtime_error("handler failure"); });
+
+        REQUIRE(batcher.submit(expired_request(1)));
+        REQUIRE(batcher.submit(make_request(2)));
+        std::this_thread::sleep_for(120ms);
+    }
+
+    REQUIRE(collector->total() == 1);
+}
+
+TEST_CASE("a live request survives alongside expired neighbours", "[batcher][deadline]") {
+    auto collector = std::make_shared<BatchCollector>();
+    auto metrics = std::make_shared<Metrics>();
+
+    {
+        DynamicBatcher batcher(test_config(8, 20ms),
+                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+                               metrics);
+        REQUIRE(batcher.submit(expired_request(1)));
+        REQUIRE(batcher.submit(request_with_deadline(2, std::chrono::seconds(60))));
+        REQUIRE(batcher.submit(expired_request(3)));
+        std::this_thread::sleep_for(150ms);
+    }
+
+    REQUIRE(collector->total() == 1);
+    REQUIRE(metrics->snapshot().requests_expired == 2);
+}
