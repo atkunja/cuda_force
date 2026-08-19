@@ -20,10 +20,15 @@ add_executable(cudaforge_tests
   test_memory_pool.cpp
   test_config.cpp
   test_launch_config.cpp
+  test_bench_common.cpp
 )
 
 target_link_libraries(cudaforge_tests
   PRIVATE cudaforge::runtime cudaforge_warnings Catch2::Catch2WithMain)
+
+# The benchmark helpers are header-only and produce every result file, so they
+# are tested here rather than left to be verified by reading the output.
+target_include_directories(cudaforge_tests PRIVATE ${CMAKE_SOURCE_DIR}/benchmarks)
 
 cudaforge_apply_sanitizer(cudaforge_tests)
 
