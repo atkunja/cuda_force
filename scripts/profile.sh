@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Collect Nsight Systems and Nsight Compute profiles.
+#
+# Requires an NVIDIA GPU and the Nsight tools. Not executable on the
+# development host; see docs/profiling.md for how to read the output.
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+OUTPUT="${OUTPUT:-profiles}"
+mkdir -p "$OUTPUT"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+  echo "error: no NVIDIA GPU detected" >&2
+  exit 1
+fi
+
+BINARY="build-cuda/benchmarks/bench_kernels"
+if [[ ! -x "$BINARY" ]]; then
+  echo "==> building CUDA benchmarks"
+  ./scripts/build.sh --cuda >/dev/null
+fi
+
+# --- Nsight Systems: timeline ----------------------------------------------
+# System-wide view. This is what shows whether copies and kernels actually
+# overlap — the question the stream scheduler exists to answer. If the timeline
+# shows serialised copy/compute, the usual causes are pageable host memory or a
+# stray device-wide synchronisation.
+if command -v nsys >/dev/null 2>&1; then
+  echo "==> nsys profile"
+  nsys profile \
+    --trace=cuda,nvtx,osrt \
+    --sample=cpu \
+    --cuda-memory-usage=true \
+    --force-overwrite=true \
+    --output="$OUTPUT/timeline-$STAMP" \
+    "$BINARY" > /dev/null
+  echo "    wrote $OUTPUT/timeline-$STAMP.nsys-rep"
+  nsys stats --report cuda_gpu_kern_sum "$OUTPUT/timeline-$STAMP.nsys-rep" \
+    | tee "$OUTPUT/kernel-summary-$STAMP.txt"
+else
+  echo "==> nsys not found; skipping the timeline profile"
+fi
+
+# --- Nsight Compute: per-kernel counters ------------------------------------
+# Kernel-level hardware counters. Replays each kernel many times, so it is far
+# slower than nsys and is pointed at a small set of kernels rather than a whole
+# run.
+#
+# The sections requested here answer the questions that actually change a
+# kernel: is it memory- or compute-bound (SpeedOfLight), are accesses coalesced
+# (MemoryWorkloadAnalysis), is there enough parallelism to hide latency
+# (Occupancy), and do warps diverge (WarpStateStats).
+if command -v ncu >/dev/null 2>&1; then
+  echo "==> ncu profile"
+  ncu \
+    --set full \
+    --section SpeedOfLight \
+    --section MemoryWorkloadAnalysis \
+    --section Occupancy \
+    --section WarpStateStats \
+    --kernel-name-base demangled \
+    --launch-count 3 \
+    --force-overwrite \
+    --export "$OUTPUT/kernels-$STAMP" \
+    "$BINARY" > "$OUTPUT/ncu-$STAMP.txt" 2>&1 || true
+  echo "    wrote $OUTPUT/kernels-$STAMP.ncu-rep"
+else
+  echo "==> ncu not found; skipping the kernel profile"
+fi
+
+echo
+echo "profiles in $OUTPUT — see docs/profiling.md for what to look at"
