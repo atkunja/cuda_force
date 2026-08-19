@@ -77,3 +77,120 @@ report.cuda_device_available  # a GPU is visible
 
 Call this before drawing any conclusion from a measurement. A silent fallback
 to the reference path looks exactly like a very slow custom kernel.
+
+## Engine
+
+### `InferenceEngine(config=None, runner=None, metrics=None)`
+
+Concurrent, dynamically batched inference. Thread-safe: `submit` may be called
+from any number of threads.
+
+```python
+with cudaforge.InferenceEngine(config=cudaforge.EngineConfig()) as engine:
+    response = engine.generate("Explain CUDA warps.")
+```
+
+| Method | Returns | Notes |
+| --- | --- | --- |
+| `submit(prompt, generation=None, block_when_full=True, deadline_seconds=None)` | `Future[Response]` | returns immediately |
+| `generate(prompt, generation=None, timeout=60.0)` | `Response` | blocking wrapper |
+| `generate_many(prompts, generation=None, timeout=120.0)` | `list[Response]` | submits all, then collects |
+| `snapshot()` | `MetricsSnapshot` | counters and percentiles |
+| `shutdown(timeout=30.0)` | `None` | drains, then settles every outstanding future |
+
+`generate_many` submits every prompt before waiting on any. That is the point:
+it gives the batcher several requests to aggregate. Submitting and waiting one
+at a time produces batches of one.
+
+`block_when_full=False` sheds load instead of applying backpressure — raises
+`EngineClosedError` rather than queueing. Which is correct depends on the
+caller: a batch client wants backpressure, an HTTP frontend generally wants to
+return 503.
+
+`deadline_seconds` drops the request if it is still waiting past that point,
+completing its future with a `RequestExpired` error. Under load this stops the
+runtime spending capacity on work nobody is waiting for.
+
+### `Response`
+
+| Field | Meaning |
+| --- | --- |
+| `request_id` | assigned at ingress |
+| `text` | generated text; unspecified when `error` is set |
+| `prompt_tokens`, `generated_tokens` | token counts |
+| `queue_time`, `inference_time` | seconds; reported separately because they point at different problems |
+| `total_latency` | their sum |
+| `batch_size` | how many requests ran together |
+| `error` | `None` on success |
+| `ok` | `error is None` |
+
+## Batching
+
+### `DynamicBatcher(handler, max_batch_size=16, max_wait_seconds=0.005, queue_capacity=1024, metrics=None, on_expired=None)`
+
+Aggregates concurrent requests on a background thread. A batch closes on
+whichever comes first: `max_batch_size` requests, or the **oldest** request
+having waited `max_wait_seconds`. The deadline is anchored, never extended — so
+no request waits longer than `max_wait_seconds` plus its batch's service time.
+
+| Method | Behaviour when full |
+| --- | --- |
+| `submit(request, timeout=None)` | blocks |
+| `try_submit(request)` | returns `False` |
+
+### `Request` and `Batch`
+
+`Request` carries the prompt, its `GenerationConfig`, timestamps, and an
+optional `deadline`. `Batch` carries the requests, the `BatchTrigger` that
+closed it, and the formation time.
+
+`BatchTrigger` is `MAX_SIZE`, `TIMEOUT` or `SHUTDOWN`. Worth recording: a
+batcher that only ever closes on `TIMEOUT` is starved, one that only ever closes
+on `MAX_SIZE` is saturated, and batch size alone cannot distinguish them.
+
+## Configuration
+
+### `EngineConfig`
+
+| Field | Default | Effect |
+| --- | --- | --- |
+| `model_name` | `sshleifer/tiny-gpt2` | |
+| `device`, `dtype` | `auto` | CUDA → MPS → CPU; bf16 where supported |
+| `max_batch_size` | 16 | throughput lever |
+| `max_wait_us` | 5000 | tail-latency lever |
+| `queue_capacity` | 1024 | must be at least `max_batch_size` |
+| `worker_threads` | 4 | executor width |
+| `cuda_streams` | 4 | copy/compute overlap |
+| `max_prompt_chars` | 8192 | 0 disables |
+| `warmup_iterations` | 3 | keeps first-call costs out of measurements |
+
+Validated in `__post_init__`, so an unworkable configuration fails at
+construction rather than twenty minutes into a benchmark.
+
+### `GenerationConfig`
+
+`max_new_tokens`, `temperature`, `top_p`, `top_k`, `seed`. `temperature == 0`
+means greedy. Every field is range-checked.
+
+## Runners
+
+`ModelRunner` is a runtime-checkable protocol with `warmup`, `generate` and
+`description`. Two implementations ship:
+
+* `EchoRunner(per_token_seconds=0.0, fixed_overhead=0.0)` — deterministic, no
+  model. The cost parameters simulate real inference's fixed-plus-variable
+  shape, which is what makes batching observable in a test.
+* `TransformersRunner(config)` — a causal LM from transformers, with left
+  padding (a causal model continues from the last position, so right padding
+  would ask it to continue from padding).
+
+Implementations must return results **in the same order** they were given, and
+one per prompt. The engine pairs them positionally and fails the whole batch
+with a clear error if the count disagrees.
+
+## Metrics
+
+`MetricsRegistry` collects; `MetricsSnapshot` is a point-in-time view;
+`render_prometheus(snapshot)` formats it for a scraper. Field names match the
+C++ registry, so a dashboard need not know which runtime produced a snapshot —
+a parity test enforces that.
