@@ -2,6 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <memory>
@@ -57,7 +58,10 @@ RuntimeConfig test_config(std::size_t max_batch, std::chrono::microseconds wait)
     RuntimeConfig config;
     config.max_batch_size = max_batch;
     config.max_wait = wait;
-    config.queue_capacity = 256;
+    // The queue must be able to hold a full batch, so it is derived from the
+    // batch size rather than fixed. A fixed 256 silently broke the large-batch
+    // cases below.
+    config.queue_capacity = std::max<std::size_t>(256, max_batch * 2);
     return config;
 }
 
