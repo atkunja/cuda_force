@@ -213,3 +213,54 @@ def test_no_configuration_yields_the_defaults(monkeypatch):
     from cudaforge.config import EngineConfig
 
     assert server.config_from_environment() == EngineConfig()
+
+
+def test_omitted_sampling_fields_fall_back_to_the_engine_defaults(monkeypatch):
+    # Without this, the `generation:` block in a serving config would be dead
+    # configuration: the schema's own defaults would win every time.
+    config = EngineConfig(
+        max_batch_size=4,
+        max_wait_us=2_000,
+        queue_capacity=64,
+        warmup_iterations=0,
+        generation=__import__("cudaforge").GenerationConfig(max_new_tokens=7),
+    )
+    monkeypatch.setattr(
+        server,
+        "build_engine",
+        lambda *_, **__: InferenceEngine(config=config, runner=EchoRunner()),
+    )
+    with fastapi_testclient.TestClient(server.app) as client:
+        payload = client.post("/generate", json={"prompt": "hello"}).json()
+    assert payload["generated_tokens"] == 7
+
+
+def test_an_explicit_sampling_field_overrides_the_engine_default(monkeypatch):
+    config = EngineConfig(
+        max_batch_size=4,
+        max_wait_us=2_000,
+        queue_capacity=64,
+        warmup_iterations=0,
+        generation=__import__("cudaforge").GenerationConfig(max_new_tokens=7),
+    )
+    monkeypatch.setattr(
+        server,
+        "build_engine",
+        lambda *_, **__: InferenceEngine(config=config, runner=EchoRunner()),
+    )
+    with fastapi_testclient.TestClient(server.app) as client:
+        payload = client.post(
+            "/generate", json={"prompt": "hello", "max_new_tokens": 12}
+        ).json()
+    assert payload["generated_tokens"] == 12
+
+
+def test_sampling_fields_are_still_range_checked_when_supplied(client):
+    # Making them optional must not make them unvalidated.
+    for body in (
+        {"prompt": "ok", "max_new_tokens": 0},
+        {"prompt": "ok", "temperature": 3.0},
+        {"prompt": "ok", "top_p": 0.0},
+        {"prompt": "ok", "top_k": -1},
+    ):
+        assert client.post("/generate", json=body).status_code == 422
