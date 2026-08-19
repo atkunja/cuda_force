@@ -430,3 +430,62 @@ def test_two_fused_blocks_compose_like_a_transformer_stack():
 
     torch.testing.assert_close(fused_state[0], unfused_hidden, rtol=1e-4, atol=1e-5)
     torch.testing.assert_close(fused_state[1], unfused_residual, rtol=1e-4, atol=1e-5)
+
+
+# --- kernel dtype coverage -------------------------------------------------
+
+
+def test_the_dtype_the_config_prefers_has_a_kernel():
+    # EngineConfig.resolve_dtype prefers bfloat16 on Ampere and later. A
+    # configured dtype with no kernel behind it would silently take the fallback
+    # and look like a slow kernel.
+    from cudaforge.config import EngineConfig
+
+    for dtype in (torch.float32, torch.float16, torch.bfloat16):
+        assert ops.kernel_supports(dtype), dtype
+
+    resolved = EngineConfig(device="cuda", dtype="auto").resolve_dtype()
+    assert ops.kernel_supports(resolved)
+
+
+def test_an_unsupported_dtype_is_reported_as_such():
+    assert not ops.kernel_supports(torch.float64)
+    assert not ops.kernel_supports(torch.int8)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+def test_the_reference_path_handles_every_kernel_dtype(dtype):
+    # The fallback must cover at least what the kernels cover, or a CPU-only
+    # host cannot exercise the same configurations.
+    x = torch.randn(4, 64, dtype=dtype)
+    weight = torch.ones(64, dtype=dtype)
+
+    result = ops.rmsnorm(x, weight)
+    assert result.dtype == dtype
+    assert torch.isfinite(result).all()
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_swiglu_preserves_reduced_precision_dtypes(dtype):
+    gate = torch.randn(128, dtype=dtype)
+    up = torch.randn(128, dtype=dtype)
+
+    result = ops.swiglu(gate, up)
+    assert result.dtype == dtype
+    assert torch.isfinite(result).all()
+
+
+def test_bfloat16_holds_magnitudes_that_overflow_float16():
+    # The property bfloat16 exists for: float32's exponent range. 300 squared is
+    # 90,000, which is infinite in float16 and unremarkable in bfloat16.
+    value = torch.tensor([300.0], dtype=torch.bfloat16)
+    assert torch.isfinite(value.float() ** 2).all()
+
+    as_half = torch.tensor([300.0], dtype=torch.float16)
+    assert torch.isinf((as_half * as_half)).all()
+
+    # The reference path promotes for exactly this reason, so both survive.
+    for dtype in (torch.float16, torch.bfloat16):
+        x = torch.full((2, 64), 300.0, dtype=dtype)
+        result = ops.rmsnorm(x, torch.ones(64, dtype=dtype))
+        assert torch.isfinite(result).all(), dtype
