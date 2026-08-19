@@ -171,3 +171,45 @@ def test_request_ids_are_unique_across_requests(client):
         for i in range(10)
     }
     assert len(ids) == 10
+
+
+def test_config_from_environment_reads_a_yaml_file(monkeypatch):
+    monkeypatch.setenv("CUDAFORGE_CONFIG", "inference/configs/throughput.yaml")
+    config = server.config_from_environment()
+    assert config.model_name == "gpt2"
+    assert config.max_batch_size == 64
+    assert config.worker_threads == 8
+
+
+def test_environment_variables_override_the_file(monkeypatch):
+    # A container ships a config and is still adjustable per deployment without
+    # rebuilding the image.
+    monkeypatch.setenv("CUDAFORGE_CONFIG", "inference/configs/throughput.yaml")
+    monkeypatch.setenv("CUDAFORGE_MAX_BATCH", "8")
+    config = server.config_from_environment()
+    assert config.max_batch_size == 8
+    assert config.max_wait_us == 20_000  # unspecified, so from the file
+
+
+def test_the_queue_is_widened_to_fit_an_overridden_batch(monkeypatch):
+    monkeypatch.setenv("CUDAFORGE_CONFIG", "inference/configs/latency.yaml")
+    monkeypatch.setenv("CUDAFORGE_MAX_BATCH", "2048")
+    config = server.config_from_environment()
+    assert config.queue_capacity >= 2048
+
+
+def test_no_configuration_yields_the_defaults(monkeypatch):
+    for name in (
+        "CUDAFORGE_CONFIG",
+        "CUDAFORGE_MODEL",
+        "CUDAFORGE_DEVICE",
+        "CUDAFORGE_MAX_BATCH",
+        "CUDAFORGE_MAX_WAIT_US",
+        "CUDAFORGE_QUEUE_CAPACITY",
+        "CUDAFORGE_WORKER_THREADS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    from cudaforge.config import EngineConfig
+
+    assert server.config_from_environment() == EngineConfig()
