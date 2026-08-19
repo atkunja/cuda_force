@@ -94,3 +94,41 @@ def test_metrics_field_names_match_across_languages(cpp_field, python_field):
     )
     assert re.search(rf"\b{cpp_field}\b", header), f"{cpp_field} missing from the C++ snapshot"
     assert hasattr(MetricsSnapshot(), python_field)
+
+
+@pytest.mark.parametrize(
+    ("cpp_field", "cpp_default", "python_field"),
+    [
+        ("max_batch_size", 16, "max_batch_size"),
+        ("queue_capacity", 1024, "queue_capacity"),
+        ("worker_threads", 4, "worker_threads"),
+        ("cuda_streams", 4, "cuda_streams"),
+        ("max_prompt_chars", 8192, "max_prompt_chars"),
+    ],
+)
+def test_the_two_runtimes_ship_the_same_defaults(cpp_field, cpp_default, python_field):
+    # docs/concurrency.md describes one policy for both runtimes. Divergent
+    # defaults would make that description wrong for whichever one a reader
+    # happened to be using.
+    from cudaforge.config import EngineConfig
+
+    header = (REPO_ROOT / "cpp" / "include" / "cudaforge" / "config.hpp").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(rf"{re.escape(cpp_field)}\s*=\s*(\d+)\s*;", header)
+    assert match is not None, f"{cpp_field} not found in the C++ config"
+
+    assert int(match.group(1)) == cpp_default
+    assert getattr(EngineConfig(), python_field) == cpp_default
+
+
+def test_the_default_wait_agrees_across_runtimes():
+    from cudaforge.config import EngineConfig
+
+    header = (REPO_ROOT / "cpp" / "include" / "cudaforge" / "config.hpp").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(r"max_wait\{(\d+)\}", header)
+    assert match is not None
+
+    assert int(match.group(1)) == EngineConfig().max_wait_us == 5000
