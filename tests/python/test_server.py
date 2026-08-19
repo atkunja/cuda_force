@@ -95,3 +95,22 @@ def test_openapi_schema_is_served(client):
     assert "/generate" in schema["paths"]
     assert "/health" in schema["paths"]
     assert "/metrics" in schema["paths"]
+
+
+def test_a_deadline_is_accepted(client):
+    response = client.post(
+        "/generate", json={"prompt": "hello", "deadline_seconds": 5.0}
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.parametrize("value", [0, -1, 601])
+def test_an_invalid_deadline_is_rejected(client, value):
+    response = client.post("/generate", json={"prompt": "hello", "deadline_seconds": value})
+    assert response.status_code == 422
+
+
+def test_metrics_expose_the_expiry_counter(client):
+    client.post("/generate", json={"prompt": "hello"})
+    payload = client.get("/metrics").json()
+    assert payload["requests_expired"] == 0
