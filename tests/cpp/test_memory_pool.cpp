@@ -269,6 +269,9 @@ public:
     }
 
     [[nodiscard]] static const char* name() { return "failing"; }
+
+private:
+    State* state_;
 };
 
 }  // namespace
