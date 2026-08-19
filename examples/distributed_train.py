@@ -113,8 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     base = AutoModelForCausalLM.from_pretrained(args.model)
     config = TrainingConfig(
         model_name=args.model,
-        lora=LoRAConfig(rank=args.rank_dim, alpha=args.rank_dim * 2,
-                        target_modules=["c_attn"]),
+        lora=LoRAConfig(rank=args.rank_dim, alpha=args.rank_dim * 2, target_modules=["c_attn"]),
     )
     model = attach_lora(base, config.lora).to(local_rank)
     _LOG.info("%s", describe_parameters(model))

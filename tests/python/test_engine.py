@@ -173,17 +173,13 @@ def test_outstanding_futures_are_failed_at_shutdown():
         def generate(self, prompts, settings):
             started.set()
             time.sleep(0.2)
-            return [
-                GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts
-            ]
+            return [GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts]
 
         @property
         def description(self) -> str:
             return "Slow"
 
-    config = EngineConfig(
-        max_batch_size=1, max_wait_us=500, queue_capacity=64, warmup_iterations=0
-    )
+    config = EngineConfig(max_batch_size=1, max_wait_us=500, queue_capacity=64, warmup_iterations=0)
     engine = InferenceEngine(config=config, runner=Slow())
     futures = [engine.submit(f"p{i}") for i in range(10)]
     started.wait(timeout=5)
@@ -226,7 +222,10 @@ def test_snapshot_reports_engine_configuration():
 def test_load_shedding_rejects_instead_of_blocking():
     runner = EchoRunner(fixed_overhead=0.05)
     config = EngineConfig(
-        max_batch_size=1, max_wait_us=500, queue_capacity=2, warmup_iterations=0,
+        max_batch_size=1,
+        max_wait_us=500,
+        queue_capacity=2,
+        warmup_iterations=0,
         worker_threads=1,
     )
     rejected = 0

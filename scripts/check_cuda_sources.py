@@ -275,8 +275,7 @@ def main() -> int:
         print(finding)
 
     print(
-        f"\nchecked {len(targets)} file(s): "
-        f"{len(findings)} finding(s)",
+        f"\nchecked {len(targets)} file(s): {len(findings)} finding(s)",
         file=sys.stderr,
     )
     return 1 if findings else 0

@@ -101,9 +101,7 @@ def test_evaluation_reports_loss_and_perplexity(loader):
     result = evaluate(StubCausalLM(), loader, torch.device("cpu"))
     assert result.batches == 4
     assert result.tokens > 0
-    assert result.perplexity == pytest.approx(
-        perplexity_from_loss(result.loss), rel=1e-6
-    )
+    assert result.perplexity == pytest.approx(perplexity_from_loss(result.loss), rel=1e-6)
     assert "perplexity" in str(result)
 
 

@@ -155,9 +155,7 @@ def test_the_deadline_is_anchored_to_the_oldest_request():
 
 def test_shutdown_drains_queued_requests():
     collector = Collector()
-    batcher = DynamicBatcher(
-        collector, max_batch_size=8, max_wait_seconds=0.5, queue_capacity=256
-    )
+    batcher = DynamicBatcher(collector, max_batch_size=8, max_wait_seconds=0.5, queue_capacity=256)
     for i in range(50):
         batcher.submit(make_request(i))
     batcher.shutdown()

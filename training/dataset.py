@@ -140,7 +140,6 @@ def load_texts(
     dataset = load_dataset(dataset_name, dataset_config, split=split)
     if text_field not in dataset.column_names:
         raise KeyError(
-            f"column {text_field!r} not in {dataset.column_names}; "
-            f"set text_field to one of these"
+            f"column {text_field!r} not in {dataset.column_names}; set text_field to one of these"
         )
     return [row for row in dataset[text_field] if row]

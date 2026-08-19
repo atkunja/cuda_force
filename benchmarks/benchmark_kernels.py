@@ -117,9 +117,9 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "rmsnorm",
                 "torch",
                 shape,
-                lambda x=x, weight=weight: x
-                * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6)
-                * weight,
+                lambda x=x, weight=weight: (
+                    x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * weight
+                ),
                 warmup,
                 runs,
             )
@@ -129,9 +129,7 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
             measure("softmax", "cudaforge", shape, lambda x=x: ops.softmax(x), warmup, runs)
         )
         results.append(
-            measure(
-                "softmax", "torch", shape, lambda x=x: torch.softmax(x, dim=-1), warmup, runs
-            )
+            measure("softmax", "torch", shape, lambda x=x: torch.softmax(x, dim=-1), warmup, runs)
         )
 
     for batch, in_features, out_features, rank in [(32, 1024, 1024, 8), (128, 4096, 4096, 16)]:
@@ -158,8 +156,9 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "lora_linear",
                 "torch",
                 shape,
-                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: x @ weight
-                + 2.0 * ((x @ lora_a) @ lora_b),
+                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: (
+                    x @ weight + 2.0 * ((x @ lora_a) @ lora_b)
+                ),
                 warmup,
                 runs,
             )
@@ -169,8 +168,12 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
         x = torch.randn(count, device=device)
         results.append(
             measure(
-                "quantize_int8", "cudaforge", str(count), lambda x=x: ops.quantize_int8(x),
-                warmup, runs,
+                "quantize_int8",
+                "cudaforge",
+                str(count),
+                lambda x=x: ops.quantize_int8(x),
+                warmup,
+                runs,
             )
         )
         results.append(

@@ -145,9 +145,7 @@ class InferenceEngine:
             self._futures[request.request_id] = future
 
         accepted = (
-            self._batcher.submit(request)
-            if block_when_full
-            else self._batcher.try_submit(request)
+            self._batcher.submit(request) if block_when_full else self._batcher.try_submit(request)
         )
         if not accepted:
             with self._futures_lock:

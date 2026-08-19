@@ -131,9 +131,7 @@ class DynamicBatcher:
         self._queue: queue.Queue[Request | None] = queue.Queue(maxsize=queue_capacity)
         self._stopping = threading.Event()
         self._counter = itertools.count()
-        self._thread = threading.Thread(
-            target=self._run, name="cudaforge-batcher", daemon=True
-        )
+        self._thread = threading.Thread(target=self._run, name="cudaforge-batcher", daemon=True)
         self._thread.start()
 
     @property

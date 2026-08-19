@@ -77,9 +77,7 @@ def evaluate(
     # exp() overflows for a badly diverged model; reporting inf is more honest
     # than crashing the eval loop at the moment something has gone wrong.
     perplexity = math.exp(mean_loss) if mean_loss < 700 else float("inf")
-    return EvalResult(
-        loss=mean_loss, perplexity=perplexity, tokens=total_tokens, batches=batches
-    )
+    return EvalResult(loss=mean_loss, perplexity=perplexity, tokens=total_tokens, batches=batches)
 
 
 def perplexity_from_loss(loss: float) -> float:

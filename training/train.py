@@ -78,9 +78,7 @@ def build_model(config: TrainingConfig) -> tuple[torch.nn.Module, object]:
     load_kwargs: dict[str, object] = {}
     if config.load_in_4bit:
         if not torch.cuda.is_available():
-            raise RuntimeError(
-                "load_in_4bit requires CUDA; bitsandbytes has no CPU or MPS backend"
-            )
+            raise RuntimeError("load_in_4bit requires CUDA; bitsandbytes has no CPU or MPS backend")
         from transformers import BitsAndBytesConfig  # imported lazily: optional dependency
 
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -147,9 +145,7 @@ def train(config: TrainingConfig) -> TrainState:
     )
 
     steps_per_epoch = max(len(loader) // config.gradient_accumulation_steps, 1)
-    total_steps = (
-        config.max_steps if config.max_steps > 0 else steps_per_epoch * config.epochs
-    )
+    total_steps = config.max_steps if config.max_steps > 0 else steps_per_epoch * config.epochs
     warmup_steps = int(total_steps * config.warmup_ratio)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,

@@ -152,9 +152,7 @@ def test_rates_are_derived_from_uptime():
     snapshot = metrics.snapshot()
     assert snapshot.uptime_seconds > 0
     assert snapshot.requests_per_second > 0
-    assert snapshot.tokens_per_second == pytest.approx(
-        snapshot.requests_per_second * 5, rel=1e-6
-    )
+    assert snapshot.tokens_per_second == pytest.approx(snapshot.requests_per_second * 5, rel=1e-6)
 
 
 def test_reset_clears_every_counter():

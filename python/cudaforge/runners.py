@@ -48,12 +48,10 @@ class ModelRunner(Protocol):
 
     def generate(
         self, prompts: list[str], settings: list[GenerationConfig]
-    ) -> list[GenerationResult]:
-        ...
+    ) -> list[GenerationResult]: ...
 
     @property
-    def description(self) -> str:
-        ...
+    def description(self) -> str: ...
 
 
 class EchoRunner:
@@ -136,9 +134,7 @@ class TransformersRunner:
             self._tokenizer.pad_token = self._tokenizer.eos_token
         self._tokenizer.padding_side = "left"
 
-        self._model = AutoModelForCausalLM.from_pretrained(
-            config.model_name, dtype=self._dtype
-        )
+        self._model = AutoModelForCausalLM.from_pretrained(config.model_name, dtype=self._dtype)
         self._model.to(self._device)
         self._model.eval()
 
@@ -150,9 +146,9 @@ class TransformersRunner:
     def generate(
         self, prompts: list[str], settings: list[GenerationConfig]
     ) -> list[GenerationResult]:
-        encoded = self._tokenizer(
-            prompts, return_tensors="pt", padding=True, truncation=True
-        ).to(self._device)
+        encoded = self._tokenizer(prompts, return_tensors="pt", padding=True, truncation=True).to(
+            self._device
+        )
 
         # The batch runs for as long as its most demanding member. Rows that
         # would have finished earlier are truncated at their own limit below

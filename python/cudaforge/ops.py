@@ -166,9 +166,7 @@ def _quantize_int8_reference(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tenso
     return trimmed.to(torch.int8).view_as(x), scales
 
 
-def _dequantize_int8_reference(
-    quantised: torch.Tensor, scales: torch.Tensor
-) -> torch.Tensor:
+def _dequantize_int8_reference(quantised: torch.Tensor, scales: torch.Tensor) -> torch.Tensor:
     flat = quantised.reshape(-1).float()
     padding = (-flat.numel()) % QUANT_BLOCK_SIZE
     original = quantised.numel()
@@ -242,9 +240,7 @@ def lora_linear(
         scale: usually ``alpha / rank``.
     """
     if x.shape[-1] != weight.shape[0]:
-        raise ValueError(
-            f"x has {x.shape[-1]} input features but weight expects {weight.shape[0]}"
-        )
+        raise ValueError(f"x has {x.shape[-1]} input features but weight expects {weight.shape[0]}")
     if lora_a.shape[0] != weight.shape[0]:
         raise ValueError(
             f"lora_a must be [in_features, rank] with in_features={weight.shape[0]}, "

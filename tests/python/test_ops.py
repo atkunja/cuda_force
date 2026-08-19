@@ -213,7 +213,7 @@ def test_an_outlier_only_degrades_its_own_block():
     quantised, scales = ops.quantize_int8(x)
     restored = ops.dequantize_int8(quantised, scales)
 
-    same_block_error = (x[1] - restored[1]).abs()      # block 0, with the outlier
+    same_block_error = (x[1] - restored[1]).abs()  # block 0, with the outlier
     clean_block_error = (x[200] - restored[200]).abs()  # block 3, no outlier
 
     assert same_block_error > clean_block_error

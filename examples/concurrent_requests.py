@@ -76,9 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     unbatched = run(args.clients, args.requests_per_client, 1, args.wait_us)
-    batched = run(
-        args.clients, args.requests_per_client, args.max_batch_size, args.wait_us
-    )
+    batched = run(args.clients, args.requests_per_client, args.max_batch_size, args.wait_us)
 
     print(f"{args.clients} concurrent clients x {args.requests_per_client} requests")
     report("max_batch_size = 1 (batching disabled)", unbatched)

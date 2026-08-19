@@ -81,9 +81,7 @@ class LoadResult:
     wall_seconds: float
 
 
-def _drive(
-    engine: InferenceEngine, clients: int, per_client: int, tokens: int
-) -> LoadResult:
+def _drive(engine: InferenceEngine, clients: int, per_client: int, tokens: int) -> LoadResult:
     """Run `clients` threads each issuing `per_client` requests.
 
     Threads submit independently rather than through ``generate_many`` so the
@@ -170,8 +168,10 @@ def bench(argv: list[str] | None = None) -> int:
 
     print(payload["backend"])
     print(f"  model            {config.model_name}  device={config.resolve_device()}")
-    print(f"  batching         max_batch_size={config.max_batch_size} "
-          f"max_wait_us={config.max_wait_us}")
+    print(
+        f"  batching         max_batch_size={config.max_batch_size} "
+        f"max_wait_us={config.max_wait_us}"
+    )
     print(f"  load             {args.clients} clients x {args.requests_per_client} requests")
     print()
     print(f"  completed        {result.completed}")
@@ -181,12 +181,16 @@ def bench(argv: list[str] | None = None) -> int:
     print(f"  throughput       {snapshot.requests_per_second:.1f} req/s")
     print(f"  tokens/s         {snapshot.tokens_per_second:.1f}")
     print(f"  avg batch size   {snapshot.average_batch_size:.2f}")
-    print(f"  batches          {snapshot.batches_processed} "
-          f"(size={snapshot.batches_closed_by_size}, "
-          f"timeout={snapshot.batches_closed_by_timeout})")
+    print(
+        f"  batches          {snapshot.batches_processed} "
+        f"(size={snapshot.batches_closed_by_size}, "
+        f"timeout={snapshot.batches_closed_by_timeout})"
+    )
     print(f"  queue delay p99  {snapshot.queue_delay_p99_ms:.2f} ms")
-    print(f"  latency p50/p95/p99  {snapshot.latency_p50_ms:.2f} / "
-          f"{snapshot.latency_p95_ms:.2f} / {snapshot.latency_p99_ms:.2f} ms")
+    print(
+        f"  latency p50/p95/p99  {snapshot.latency_p50_ms:.2f} / "
+        f"{snapshot.latency_p95_ms:.2f} / {snapshot.latency_p99_ms:.2f} ms"
+    )
     return 0
 
 
