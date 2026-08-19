@@ -156,7 +156,11 @@ class TransformersRunner:
         max_new = max(setting.max_new_tokens for setting in settings)
         first = settings[0]
 
-        output = self._model.generate(
+        # `generate` is typed as returning a union of beam/sample output objects
+        # or a plain tensor. With `return_dict_in_generate` left at its default
+        # it is always the tensor, so the union is narrowed once here rather
+        # than at every use below.
+        generated_ids: torch.Tensor = self._model.generate(  # type: ignore[assignment]
             **encoded,
             max_new_tokens=max_new,
             do_sample=not first.greedy,
@@ -168,9 +172,11 @@ class TransformersRunner:
 
         prompt_length = encoded["input_ids"].shape[1]
         results = []
-        for row, setting in zip(range(output.shape[0]), settings, strict=True):
-            generated = output[row, prompt_length : prompt_length + setting.max_new_tokens]
-            text = self._tokenizer.decode(generated, skip_special_tokens=True)
+        for row, setting in zip(range(generated_ids.shape[0]), settings, strict=True):
+            generated = generated_ids[
+                row, prompt_length : prompt_length + setting.max_new_tokens
+            ]
+            text = str(self._tokenizer.decode(generated, skip_special_tokens=True))
             results.append(
                 GenerationResult(
                     text=text,
