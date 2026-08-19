@@ -123,3 +123,58 @@ reports `Closed`. Work already accepted is therefore always executed.
 The engine additionally fails any future still outstanding after the drain —
 otherwise a caller blocked in `result()` would hang until its timeout with no
 explanation.
+
+## Dynamic batching
+
+GPU inference is dominated by weight movement, not arithmetic: running one
+request through a transformer layer reads the same weights as running sixteen.
+Batching amortises that read, so throughput rises close to linearly with batch
+size until the kernel becomes compute-bound.
+
+The cost is latency. A request arriving into an empty queue would be fastest
+executed immediately; batching makes it wait. A batch therefore closes on
+whichever comes first:
+
+1. it holds `max_batch_size` requests, or
+2. the **oldest** request in it has waited `max_wait`.
+
+### The deadline is anchored, not sliding
+
+```
+t=0    request A arrives, deadline set to t=5ms
+t=1ms  request B arrives, deadline unchanged
+t=2ms  request C arrives, deadline unchanged
+t=5ms  batch [A, B, C] executes
+```
+
+If the deadline were reset on each arrival, a steady stream would postpone
+execution indefinitely and no request would have a bounded wait — the classic
+Nagle-style starvation bug. Anchored to the oldest request, nothing waits longer
+than `max_wait` plus the batch's own service time.
+
+`tests/python/test_scheduler.py::test_the_deadline_is_anchored_to_the_oldest_request`
+and the matching C++ case assert exactly this, by trickling requests faster than
+the deadline and requiring that batches still close.
+
+### Batch formation is single-threaded
+
+Formation is an inherently serial decision. Two threads racing to claim requests
+from one queue would need a lock that serialises them anyway, and would make the
+deadline non-deterministic. Parallelism belongs downstream: the batcher hands
+each formed batch to a worker pool and immediately returns to forming the next.
+
+If the batcher executed batches itself, no batch could form while one ran, and
+arrival-time batching would collapse into strict serialisation — every batch
+would be a full one assembled from the backlog that accumulated during the
+previous execution, regardless of the configured wait.
+
+### Reading the trigger counters
+
+`batches_closed_by_size` and `batches_closed_by_timeout` are reported separately
+because average batch size alone cannot distinguish two very different states:
+
+| Observation | Meaning | Action |
+| --- | --- | --- |
+| Nearly all timeout closures, small batches | arrival rate too low to fill a batch | lower `max_wait`; it is pure added latency |
+| Nearly all size closures, queue depth rising | saturated | raise `max_batch_size`, or add capacity |
+| Mixed, batch size near the limit | well matched | leave it alone |
