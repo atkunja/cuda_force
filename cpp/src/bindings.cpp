@@ -15,8 +15,8 @@
 // available but CPU-only — which is what makes the package importable and
 // testable on a machine with no GPU.
 
-#include <torch/extension.h>
 #include <torch/csrc/autograd/autograd_not_implemented_fallback.h>
+#include <torch/extension.h>
 
 #include <string>
 #include <vector>
@@ -130,8 +130,8 @@ torch::Tensor silu_cuda(const torch::Tensor& input) {
     check_last_dim_contiguous(input, "input");
 
     torch::Tensor output = torch::empty_like(input);
-    launch_silu(input.data_ptr<float>(), output.data_ptr<float>(),
-                static_cast<int>(input.numel()), current_stream());
+    launch_silu(input.data_ptr<float>(), output.data_ptr<float>(), static_cast<int>(input.numel()),
+                current_stream());
     return output;
 }
 
@@ -140,8 +140,8 @@ torch::Tensor gelu_cuda(const torch::Tensor& input) {
     check_last_dim_contiguous(input, "input");
 
     torch::Tensor output = torch::empty_like(input);
-    launch_gelu(input.data_ptr<float>(), output.data_ptr<float>(),
-                static_cast<int>(input.numel()), current_stream());
+    launch_gelu(input.data_ptr<float>(), output.data_ptr<float>(), static_cast<int>(input.numel()),
+                current_stream());
     return output;
 }
 
@@ -333,8 +333,8 @@ TORCH_LIBRARY_IMPL(cudaforge, Autograd, m) {
     // Registered per operator rather than as a namespace fallback: the
     // dispatcher only accepts fallbacks that apply globally, and claiming the
     // Autograd key for every namespace would be wildly out of scope.
-    for (const char* name : {"rmsnorm", "softmax", "lora_linear", "sum", "silu", "gelu",
-                             "swiglu", "quantize_int8", "dequantize_int8"}) {
+    for (const char* name : {"rmsnorm", "softmax", "lora_linear", "sum", "silu", "gelu", "swiglu",
+                             "quantize_int8", "dequantize_int8"}) {
         m.impl(name, torch::autograd::autogradNotImplementedFallback());
     }
 }

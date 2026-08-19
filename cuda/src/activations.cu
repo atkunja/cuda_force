@@ -14,7 +14,9 @@ namespace {
 /// a single instruction rather than a polynomial. On a bandwidth-bound kernel
 /// the accuracy difference is far below the tolerance these tests use and the
 /// instruction count is what matters.
-__device__ __forceinline__ float silu(float x) { return x / (1.0F + __expf(-x)); }
+__device__ __forceinline__ float silu(float x) {
+    return x / (1.0F + __expf(-x));
+}
 
 /// GELU, tanh approximation:
 ///
@@ -57,9 +59,8 @@ __global__ void swiglu_scalar(const float* __restrict__ gate, const float* __res
 
 /// Same arithmetic over `float4`, so each thread issues one 128-bit transaction
 /// per operand instead of four 32-bit ones.
-__global__ void swiglu_vectorised(const float4* __restrict__ gate,
-                                  const float4* __restrict__ up, float4* __restrict__ output,
-                                  int vec_count) {
+__global__ void swiglu_vectorised(const float4* __restrict__ gate, const float4* __restrict__ up,
+                                  float4* __restrict__ output, int vec_count) {
     const int index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
     if (index >= vec_count) {
         return;
@@ -79,9 +80,8 @@ __global__ void swiglu_vectorised(const float4* __restrict__ gate,
 /// FP16 storage, FP32 sigmoid. See the note in activations.cuh: `exp` of a
 /// moderately negative input underflows a 10-bit mantissa long before it
 /// underflows FP32, which would flatten the activation's negative tail.
-__global__ void swiglu_half_kernel(const __half* __restrict__ gate,
-                                   const __half* __restrict__ up, __half* __restrict__ output,
-                                   int count) {
+__global__ void swiglu_half_kernel(const __half* __restrict__ gate, const __half* __restrict__ up,
+                                   __half* __restrict__ output, int count) {
     const int index = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
     if (index < count) {
         const float activated = silu(__half2float(gate[index]));
