@@ -53,9 +53,10 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # Ships a config; the individual variables below override it, so this
+      # service can be retuned without rebuilding the image.
+      - CUDAFORGE_CONFIG=/opt/cudaforge/inference/configs/balanced.yaml
       - CUDAFORGE_MODEL=gpt2
-      - CUDAFORGE_MAX_BATCH=16
-      - CUDAFORGE_MAX_WAIT_US=5000
 
   train:
     <<: *cuda-service

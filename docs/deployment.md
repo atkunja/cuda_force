@@ -140,10 +140,26 @@ Environment variables read at startup:
 
 | Variable | Default | Effect |
 | --- | --- | --- |
+| `CUDAFORGE_CONFIG` | unset | path to a YAML engine config |
 | `CUDAFORGE_MODEL` | `sshleifer/tiny-gpt2` | model to load |
+| `CUDAFORGE_DEVICE` | `auto` | `cuda`, `mps`, `cpu`, or `auto` |
 | `CUDAFORGE_MAX_BATCH` | 16 | `max_batch_size` |
 | `CUDAFORGE_MAX_WAIT_US` | 5000 | `max_wait_us` |
+| `CUDAFORGE_QUEUE_CAPACITY` | 1024 | queue bound |
+| `CUDAFORGE_WORKER_THREADS` | 4 | executor width |
 | `CUDAFORGE_ECHO_RUNNER` | unset | use the deterministic runner; useful for load-testing the runtime without a model |
+
+The individual variables override `CUDAFORGE_CONFIG`, so an image can ship a
+config and still be adjusted per deployment without being rebuilt:
+
+```yaml
+env:
+  - { name: CUDAFORGE_CONFIG,    value: /opt/cudaforge/inference/configs/balanced.yaml }
+  - { name: CUDAFORGE_MAX_BATCH, value: "32" }
+```
+
+An override that widens the batch widens the queue with it — a queue smaller
+than a batch would make the configured batch size unreachable.
 
 If the model fails to load, the server logs a warning and starts with the
 deterministic runner rather than crashing — a startup crash gives no signal
