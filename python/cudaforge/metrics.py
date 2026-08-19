@@ -10,6 +10,7 @@ from __future__ import annotations
 import bisect
 import threading
 import time
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -33,7 +34,10 @@ class LatencyHistogram:
             raise ValueError(f"capacity must be positive, got {capacity}")
         self._capacity = capacity
         self._samples: list[float] = []
-        self._order: list[float] = []  # insertion order, for eviction
+        # Eviction order. A deque rather than a list because popping the front
+        # of a list is O(n), which would make recording O(n) once the window is
+        # full — on the per-request path.
+        self._order: deque[float] = deque()
         self._lock = threading.Lock()
         self._count = 0
         self._total = 0.0
@@ -43,7 +47,7 @@ class LatencyHistogram:
             self._count += 1
             self._total += value_seconds
             if len(self._samples) >= self._capacity:
-                oldest = self._order.pop(0)
+                oldest = self._order.popleft()
                 index = bisect.bisect_left(self._samples, oldest)
                 if index < len(self._samples) and self._samples[index] == oldest:
                     self._samples.pop(index)
