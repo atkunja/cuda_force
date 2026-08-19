@@ -4,9 +4,19 @@
 
 ```bash
 ./scripts/setup.sh && source .venv/bin/activate
-pre-commit install
 ./scripts/test.sh
 ```
+
+Then install the hooks, either way round — they cover the same ground:
+
+```bash
+pre-commit install                      # if you use pre-commit
+git config core.hooksPath .githooks     # if you would rather not
+```
+
+Both run formatting, linting and the CUDA and documentation checks on staged
+files only, so they finish in under a second. Slow suites belong in CI, because
+a hook that takes 30 seconds gets bypassed with `--no-verify`.
 
 `test.sh` prints `[SKIP]` with a reason for anything your machine cannot run —
 most commonly the CUDA suites. That is expected and is not a failure.
