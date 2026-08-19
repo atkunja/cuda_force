@@ -1,0 +1,30 @@
+# The default shape: a reasonable starting point before measuring.
+#
+# max_batch_size 16 and max_wait_us 5000 is where to begin, not where to end.
+# Run the sweep and read three numbers together:
+#
+#   * timeout_closure_fraction near 1.0 with small batches → arrivals never fill
+#     a batch, so lower max_wait_us; it is pure added latency
+#   * average_batch_size at the limit with queue_depth rising → saturated, so
+#     raise max_batch_size or add capacity
+#   * queue_delay_p99_ms approaching max_wait_us → the batcher is the tail
+#
+#   python benchmarks/benchmark_batching.py --model gpt2
+
+model_name: gpt2
+device: auto
+dtype: auto
+
+max_batch_size: 16
+max_wait_us: 5000
+queue_capacity: 1024
+worker_threads: 4
+cuda_streams: 4
+
+max_prompt_chars: 8192
+warmup_iterations: 3
+
+generation:
+  max_new_tokens: 64
+  temperature: 0.7
+  top_p: 0.95
