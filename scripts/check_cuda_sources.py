@@ -144,10 +144,17 @@ def logical_statements(lines: list[str]) -> list[tuple[int, str]]:
     buffer: list[str] = []
     first = 1
     for index, line in enumerate(lines):
+        stripped = line.strip()
+        # Blank lines never start a statement. Comments are blanked out by
+        # strip_comments before this runs, so without this guard a statement
+        # preceded by a comment block would be reported at the comment's line
+        # rather than its own.
+        if not buffer and not stripped:
+            continue
         if not buffer:
             first = index + 1
-        buffer.append(line.strip())
-        if ";" in line or line.strip().endswith("{") or line.strip().endswith("}"):
+        buffer.append(stripped)
+        if ";" in line or stripped.endswith("{") or stripped.endswith("}"):
             statements.append((first, " ".join(buffer)))
             buffer = []
     if buffer:
