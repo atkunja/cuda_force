@@ -482,7 +482,7 @@ def test_bfloat16_holds_magnitudes_that_overflow_float16():
     assert torch.isfinite(value.float() ** 2).all()
 
     as_half = torch.tensor([300.0], dtype=torch.float16)
-    assert torch.isinf((as_half * as_half)).all()
+    assert torch.isinf(as_half * as_half).all()
 
     # The reference path promotes for exactly this reason, so both survive.
     for dtype in (torch.float16, torch.bfloat16):
