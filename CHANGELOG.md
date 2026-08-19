@@ -70,7 +70,8 @@ development host has no NVIDIA GPU.
 - `check_cuda_sources.py`: structural CUDA rules enforceable without a toolkit.
 - `check_docs.py`: Markdown link and anchor validation.
 - Benchmarks for the queue, batcher, memory pool, latency histogram, operators,
-  end-to-end batching, and CUDA kernels.
+  end-to-end batching, the HTTP server, and CUDA kernels, plus a dependency-free
+  Markdown summariser for their output.
 - CI across three workflows, a multi-stage CUDA Dockerfile, compose services,
   pre-commit hooks, and a Makefile.
 - Fourteen documents, including a concepts index mapping every claim to the code

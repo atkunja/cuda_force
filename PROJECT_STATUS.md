@@ -67,7 +67,8 @@ during generation.
 
 ### Supporting
 
-Benchmarks (5 C++/Python harnesses plus a CUDA one), 7 examples, 7 scripts, a
+Benchmarks (7 C++/Python harnesses plus a CUDA one and a result summariser),
+7 examples, 7 scripts, a
 custom CUDA structural linter, a Markdown link checker, 3 CI workflows, a
 multi-stage CUDA Dockerfile with 5 compose services, pre-commit config, a
 Makefile, and 14 documents.
@@ -91,6 +92,7 @@ Makefile, and 14 documents.
 | C++ benchmarks (queue, scheduler, memory, histogram) | **run** |
 | Python benchmarks (operators, batching) | **run** |
 | Engine under concurrent load | **run** — 160 requests, avg batch 8.0 |
+| HTTP server under load | **run** — 300 requests at concurrency 32, no failures |
 | `ruff check` / `ruff format --check` | **clean** |
 | `mypy` | **clean**, 8 source files |
 | `clang-format --dry-run --Werror` | **clean**, 46 files |
@@ -108,6 +110,7 @@ throughput.
 | Batching, 8 clients, `max_batch_size` 1 → 16 | 499 → 722 req/s, p99 12.89 → 7.88 ms |
 | Batching, 1 client, `max_batch_size` 1 → 16 | 112 → 87 req/s — the latency cost when there is nothing to batch |
 | Memory pool | 2,020 allocations, 5 backend calls, reuse rate 0.9975 |
+| HTTP end to end | 300 requests at concurrency 32: 420 req/s, 0 failures; client p99 279 ms against server p99 1.03 ms |
 | Latency histogram | worst error **4.95%** against a documented 6.25% bound, over four distributions |
 | Histogram record rate | 76–120M samples/second |
 
