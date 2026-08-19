@@ -244,3 +244,30 @@ def test_a_kv_workload_without_the_reported_block_size_is_skipped(tmp_path, caps
         capsys,
     )
     assert "_no rows_" in text
+
+
+def test_metrics_overhead_results_render(tmp_path, capsys):
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "metrics_overhead",
+            "note": "recording cost on the request path",
+            "windows": [
+                {
+                    "capacity": 10000,
+                    "microseconds_per_record": 1.76,
+                    "records_per_second": 568758.0,
+                }
+            ],
+            "registry": {
+                "microseconds_per_request": 3.25,
+                "requests_per_second": 307692.0,
+            },
+            "snapshot_median_us": 1.96,
+        },
+        capsys,
+    )
+    assert "10,000" in text
+    assert "1.76" in text
+    # The per-request figure is the one that matters; two histograms per request.
+    assert "3.25 µs per request" in text
