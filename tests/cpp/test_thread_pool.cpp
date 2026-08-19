@@ -53,7 +53,7 @@ TEST_CASE("futures carry return values", "[pool]") {
 
 TEST_CASE("futures propagate exceptions to the caller", "[pool]") {
     ThreadPool pool(2);
-    auto future = pool.submit_with_result([] -> int { throw std::runtime_error("boom"); });
+    auto future = pool.submit_with_result([]() -> int { throw std::runtime_error("boom"); });
     REQUIRE_THROWS_AS(future.get(), std::runtime_error);
 }
 
