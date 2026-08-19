@@ -195,7 +195,12 @@ void launch_softmax(const float* input, float* output, int rows, int cols, Softm
 
     SoftmaxKernel selected = variant;
     if (selected == SoftmaxKernel::SharedMemory) {
-        const auto required = static_cast<std::size_t>(cols) * sizeof(float);
+        // The kernel also declares a static `scratch[kWarpSize]` for the block
+        // reduction, which comes out of the same budget. Ignoring it would let
+        // a launch through that the hardware then rejects, at the exact row
+        // width where the dynamic request alone just fits.
+        const auto required = static_cast<std::size_t>(cols) * sizeof(float) +
+                              static_cast<std::size_t>(kWarpSize) * sizeof(float);
         if (required > static_cast<std::size_t>(max_shared_memory_per_block())) {
             // Falling back keeps the call correct for long rows rather than
             // failing the launch. The online variant is the right fallback
