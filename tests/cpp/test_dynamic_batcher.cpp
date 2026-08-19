@@ -13,8 +13,8 @@
 #include <vector>
 
 using cudaforge::Batch;
-using cudaforge::Clock;
 using cudaforge::BatchTrigger;
+using cudaforge::Clock;
 using cudaforge::DynamicBatcher;
 using cudaforge::Metrics;
 using cudaforge::Request;
@@ -298,9 +298,8 @@ TEST_CASE("expired requests are dropped rather than executed", "[batcher][deadli
 
     {
         DynamicBatcher batcher(
-            test_config(4, 10ms),
-            [collector](Batch&& batch) { (*collector)(std::move(batch)); }, metrics,
-            [&dropped](const Request&) { dropped.fetch_add(1); });
+            test_config(4, 10ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics, [&dropped](const Request&) { dropped.fetch_add(1); });
 
         for (std::uint64_t i = 0; i < 6; ++i) {
             REQUIRE(batcher.submit(expired_request(i)));
@@ -321,9 +320,9 @@ TEST_CASE("an all-expired queue produces no batches", "[batcher][deadline]") {
     auto metrics = std::make_shared<Metrics>();
 
     {
-        DynamicBatcher batcher(test_config(4, 10ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(4, 10ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         for (std::uint64_t i = 0; i < 10; ++i) {
             REQUIRE(batcher.submit(expired_request(i)));
         }
@@ -356,9 +355,8 @@ TEST_CASE("a throwing expiry handler does not stop the batcher", "[batcher][dead
 
     {
         DynamicBatcher batcher(
-            test_config(2, 5ms),
-            [collector](Batch&& batch) { (*collector)(std::move(batch)); }, metrics,
-            [](const Request&) { throw std::runtime_error("handler failure"); });
+            test_config(2, 5ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics, [](const Request&) { throw std::runtime_error("handler failure"); });
 
         REQUIRE(batcher.submit(expired_request(1)));
         REQUIRE(batcher.submit(make_request(2)));
@@ -373,9 +371,9 @@ TEST_CASE("a live request survives alongside expired neighbours", "[batcher][dea
     auto metrics = std::make_shared<Metrics>();
 
     {
-        DynamicBatcher batcher(test_config(8, 20ms),
-                               [collector](Batch&& batch) { (*collector)(std::move(batch)); },
-                               metrics);
+        DynamicBatcher batcher(
+            test_config(8, 20ms), [collector](Batch&& batch) { (*collector)(std::move(batch)); },
+            metrics);
         REQUIRE(batcher.submit(expired_request(1)));
         REQUIRE(batcher.submit(request_with_deadline(2, std::chrono::seconds(60))));
         REQUIRE(batcher.submit(expired_request(3)));
