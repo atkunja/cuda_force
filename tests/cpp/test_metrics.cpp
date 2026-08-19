@@ -49,10 +49,14 @@ TEST_CASE("average batch size is the ratio of requests to batches", "[metrics]")
 }
 
 TEST_CASE("latency percentiles reflect recorded completions", "[metrics]") {
+    // 2% slow out of 100 samples. One slow sample would not move p99: the 99th
+    // of 100 values is still a fast one, which is the definition working as
+    // intended rather than a bug.
     Metrics metrics;
-    for (int i = 0; i < 99; ++i) {
+    for (int i = 0; i < 98; ++i) {
         metrics.record_completion(1'000'000, 1);
     }
+    metrics.record_completion(500'000'000, 1);
     metrics.record_completion(500'000'000, 1);
 
     const auto snapshot = metrics.snapshot();
