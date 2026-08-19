@@ -82,7 +82,7 @@ custom CUDA structural linter, 3 CI workflows, multi-stage CUDA Dockerfile with
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
 | LoRA fine-tune, end to end | **pass** — 64/102,778 trainable (0.062%), 2 steps, eval, checkpoint |
-| C++ benchmarks (queue, scheduler, memory) | **run** |
+| C++ benchmarks (queue, scheduler, memory, histogram) | **run** |
 | Python benchmarks (operators, batching) | **run** |
 | Engine under concurrent load | **run** — 160 requests, avg batch 8.0 |
 | `ruff check` / `ruff format --check` | **clean** |
@@ -102,6 +102,8 @@ throughput.
 | Batching, 8 clients, `max_batch_size` 1 → 16 | 499 → 722 req/s, p99 12.89 → 7.88 ms |
 | Batching, 1 client, `max_batch_size` 1 → 16 | 112 → 87 req/s — the latency cost when there is nothing to batch |
 | Memory pool | 2,020 allocations, 5 backend calls, reuse rate 0.9975 |
+| Latency histogram | worst error **4.95%** against a documented 6.25% bound, over four distributions |
+| Histogram record rate | 76–120M samples/second |
 
 ### Bugs found and fixed during development
 
