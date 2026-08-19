@@ -80,3 +80,14 @@ def test_star_import_is_safe():
     exec("from cudaforge import *", namespace)
     for name in cudaforge.__all__:
         assert name in namespace
+
+
+def test_the_declared_version_matches_pyproject():
+    # Two sources of truth for a version drift silently and only surface when a
+    # published wheel reports the wrong number.
+    import tomllib
+    from pathlib import Path
+
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    assert cudaforge.__version__ == declared
