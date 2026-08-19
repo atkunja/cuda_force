@@ -54,3 +54,75 @@ legacy default stream. Any library call that touches the default stream would
 then serialise every stream the scheduler owns — silently undoing the overlap it
 exists to create. The flag is not a micro-optimisation; without it the scheduler
 does not work.
+
+## Events
+
+Events serve two distinct purposes, and the right creation flags differ:
+
+| Purpose | Flags | Why |
+| --- | --- | --- |
+| Ordering | `cudaEventDisableTiming` | skips a timestamp write on every record |
+| Timing | default | records a device-side timestamp |
+
+Using a timing-enabled event purely for ordering is a common and easy
+inefficiency, so `CudaEvent`'s constructor makes the choice explicit rather than
+defaulting silently.
+
+### Cross-stream dependencies
+
+```cuda
+producer.record_completion();          // mark a point in the producer's stream
+GpuScheduler::chain(consumer, producer);  // consumer waits, host does not
+```
+
+`cudaStreamWaitEvent` makes one stream wait for another **without blocking the
+host**. The alternative — synchronising the host and then issuing the dependent
+work — idles the GPU for a full host round trip on every dependency, which for
+a pipeline with a dependency per batch is most of the timeline.
+
+### Timing GPU work
+
+CUDA events are the only correct way to time a kernel:
+
+```cuda
+start.record(stream);
+launch_kernel<<<grid, block, 0, stream>>>(...);
+stop.record(stream);
+stop.synchronize();
+float ms = CudaEvent::elapsed_ms(start, stop);
+```
+
+A host timer around a launch measures the *launch*, because the launch is
+asynchronous and returns immediately. Adding a synchronise to fix that measures
+the synchronisation as well. Events are recorded on the device timeline and
+measure exactly the work between them.
+
+## Stream assignment
+
+Round-robin over a relaxed atomic counter.
+
+The obvious alternative — query each stream and pick an idle one — costs a
+driver call per acquisition, and `cudaStreamQuery` only reports whether *all*
+work on a stream is done. In practice that piles short batches onto whichever
+stream happened to finish first, producing exactly the uneven distribution the
+overlap argument assumes away.
+
+Round-robin is contention-free, predictable, and produces the even spread the
+pipeline needs. The counter is relaxed because it only distributes work: nothing
+is published through it and no reader establishes happens-before from it.
+
+### How many streams
+
+| Streams | Effect |
+| --- | --- |
+| 1 | no overlap at all; copies and kernels serialise |
+| 2 | compute overlaps one direction of copy |
+| 3–4 | copy-in, compute and copy-out all in flight — the useful range |
+| 8+ | copy engines saturate; additional streams add scheduling overhead |
+
+Most parts have two copy engines, so three to four streams is enough to keep
+them and the SMs busy simultaneously. The default is 4.
+
+Streams are created at the highest available priority band so inference work is
+not preempted by lower-priority background streams a host application may be
+running on the same device.
