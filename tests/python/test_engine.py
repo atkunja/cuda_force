@@ -236,3 +236,41 @@ def test_load_shedding_rejects_instead_of_blocking():
             except EngineClosedError:
                 rejected += 1
     assert rejected > 0
+
+
+# --- deadlines -------------------------------------------------------------
+
+
+def test_an_expired_request_gets_a_settled_future_not_a_hang():
+    # The important property: a dropped request must never leave its caller
+    # blocked. It is failed with a stated reason instead.
+    runner = EchoRunner(fixed_overhead=0.08)
+    config = EngineConfig(
+        max_batch_size=1,
+        max_wait_us=500,
+        queue_capacity=64,
+        worker_threads=1,
+        warmup_iterations=0,
+    )
+    with InferenceEngine(config=config, runner=runner) as engine:
+        futures = [engine.submit(f"p{i}", deadline_seconds=0.02) for i in range(20)]
+        responses = [future.result(timeout=30) for future in futures]
+
+    assert all(future.done() for future in futures)
+    expired = [r for r in responses if not r.ok and "RequestExpired" in (r.error or "")]
+    assert expired, "expected at least one request to miss its deadline"
+    assert engine.snapshot().requests_expired == len(expired)
+
+
+def test_a_generous_deadline_does_not_drop_anything():
+    with make_engine() as engine:
+        responses = engine.generate_many([f"p{i}" for i in range(16)])
+    assert all(response.ok for response in responses)
+    assert engine.snapshot().requests_expired == 0
+
+
+def test_submitting_without_a_deadline_is_unchanged():
+    with make_engine() as engine:
+        response = engine.submit("hello").result(timeout=10)
+    assert response.ok
+    assert engine.snapshot().requests_expired == 0
