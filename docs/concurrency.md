@@ -217,6 +217,18 @@ within its deadline and still be long past it by the time a worker picks it up.
 This was not obvious from the design and was found by a test: an
 executor-saturating workload dropped nothing until the second check was added.
 
+### What `average_batch_size` actually measures
+
+Batches are counted when they are **formed**, not when they complete. A request
+can therefore be counted into a batch and then dropped before the runner sees
+it, if its deadline passes while the batch waits behind the worker pool.
+
+Under heavy expiry that makes `average_batch_size` slightly overstate what ran.
+Correcting it would mean adjusting a counter backwards from a worker thread —
+precision in a number that is already only a guide, bought with a
+synchronisation point on the execution path. `requests_expired` is what to read
+alongside it.
+
 ### Three counters, three different problems
 
 | Counter | Cause | Remedy |

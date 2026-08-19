@@ -191,6 +191,19 @@ class MetricsRegistry:
             self._tokens += tokens
 
     def record_batch(self, size: int, closed_by_timeout: bool) -> None:
+        """Record a batch at the moment it was *formed*.
+
+        `batched_requests` and `average_batch_size` therefore describe batch
+        formation, not execution. A request can be counted here and then dropped
+        before the runner sees it, if its deadline passes while the batch waits
+        behind the worker pool — so under heavy expiry, `average_batch_size`
+        slightly overstates what actually ran.
+
+        Correcting it would mean adjusting a counter backwards from a worker
+        thread, which buys precision in a number that is already only a guide
+        and costs a synchronisation point on the execution path.
+        `requests_expired` is the figure to read alongside it.
+        """
         with self._lock:
             self._batches += 1
             self._batched_requests += size
