@@ -9,6 +9,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 add_library(cudaforge_kernels
+  src/activations.cu
   src/reduction.cu
   src/softmax.cu
   src/rmsnorm.cu
