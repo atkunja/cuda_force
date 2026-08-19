@@ -6,8 +6,8 @@
 | --- | --- | --- | --- |
 | C++ (`tests/cpp`) | 160 cases, 49,866 assertions | C++20 compiler | yes |
 | C++ under TSan / ASan / UBSan | same 160 | clang | yes, all three clean |
-| Python (`tests/python`) | 404 | Python + PyTorch | yes |
-| CUDA (`tests/cuda`) | 56 cases | NVIDIA GPU | **no** |
+| Python (`tests/python`) | 418 | Python + PyTorch | yes |
+| CUDA (`tests/cuda`) | 60 cases | NVIDIA GPU | **no** |
 | CUDA structural checks | 29 files | nothing | yes |
 
 ```bash
