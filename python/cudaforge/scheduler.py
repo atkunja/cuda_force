@@ -23,6 +23,10 @@ from cudaforge.config import GenerationConfig
 from cudaforge.metrics import MetricsRegistry
 
 
+class RequestExpired(Exception):
+    """Raised for a request dropped because its deadline had already passed."""
+
+
 class BatchTrigger(Enum):
     """Why the batcher stopped accumulating.
 
@@ -46,6 +50,10 @@ class Request:
     request_id: str = field(default_factory=lambda: uuid.uuid4().hex[:16])
     enqueued_at: float = field(default_factory=time.monotonic)
     dequeued_at: float | None = None
+    #: Monotonic time past which this request is worthless. None means no
+    #: deadline. Set from the caller's timeout so the runtime knows when a
+    #: client has already stopped waiting.
+    deadline: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -54,6 +62,18 @@ class Request:
         if self.dequeued_at is None:
             return 0.0
         return self.dequeued_at - self.enqueued_at
+
+    def expired(self, now: float | None = None) -> bool:
+        """True once the deadline has passed.
+
+        Checked at dequeue rather than at submission. Executing a request whose
+        client has already given up spends GPU capacity that the requests still
+        being waited on need — under overload that is precisely backwards, and
+        it deepens the backlog that caused the timeouts in the first place.
+        """
+        if self.deadline is None:
+            return False
+        return (now if now is not None else time.monotonic()) >= self.deadline
 
 
 @dataclass
@@ -109,6 +129,7 @@ class DynamicBatcher:
         max_wait_seconds: float = 0.005,
         queue_capacity: int = 1024,
         metrics: MetricsRegistry | None = None,
+        on_expired: Callable[[Request], None] | None = None,
     ) -> None:
         if max_batch_size <= 0:
             raise ValueError(f"max_batch_size must be positive, got {max_batch_size}")
@@ -121,6 +142,10 @@ class DynamicBatcher:
             )
 
         self._handler = handler
+        # Called for each dropped request so the owner can fail its future.
+        # Without it an expired request would simply vanish and its caller would
+        # block until its own timeout with no explanation.
+        self._on_expired = on_expired
         self._max_batch_size = max_batch_size
         self._max_wait = max_wait_seconds
         self._metrics = metrics or MetricsRegistry()
@@ -217,15 +242,30 @@ class DynamicBatcher:
                 # shutdown. The failure is counted and the loop continues.
                 self._metrics.record_failed()
 
+    def _drop_if_expired(self, request: Request) -> bool:
+        """Discard a request whose deadline has passed. Returns True if dropped."""
+        if not request.expired():
+            return False
+        self._metrics.record_expired()
+        if self._on_expired is not None:
+            try:
+                self._on_expired(request)
+            except Exception:  # noqa: BLE001 - a bad callback must not stop the batcher
+                self._metrics.record_failed()
+        return True
+
     def _collect(self) -> Batch | None:
         """Block for the first request, then fill until size or deadline.
 
         Returns None once the queue is closed and drained.
         """
-        first = self._queue.get()
-        if first is None:
-            return None
-        first.dequeued_at = time.monotonic()
+        while True:
+            first = self._queue.get()
+            if first is None:
+                return None
+            first.dequeued_at = time.monotonic()
+            if not self._drop_if_expired(first):
+                break
 
         requests = [first]
         # Anchored to the first request. This is what bounds queue delay at
@@ -256,6 +296,8 @@ class DynamicBatcher:
                     if pending is None:
                         break
                     pending.dequeued_at = time.monotonic()
+                    if self._drop_if_expired(pending):
+                        continue
                     requests.append(pending)
                 # Re-post the sentinel so the next iteration sees it. Never
                 # block doing so: at shutdown the queue may still be full, and
@@ -265,6 +307,8 @@ class DynamicBatcher:
                 break
 
             nxt.dequeued_at = time.monotonic()
+            if self._drop_if_expired(nxt):
+                continue
             requests.append(nxt)
 
         return Batch(requests=requests, trigger=trigger)
