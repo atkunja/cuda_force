@@ -214,3 +214,52 @@ TEST_CASE("concurrent workers can share the scheduler", "[cuda][scheduler][stres
     REQUIRE(failures.load() == 0);
     REQUIRE(scheduler.stats().total_dispatches == kThreads * kPerThread);
 }
+
+TEST_CASE("device buffer copies are bounds checked", "[cuda][raii]") {
+    // A device-side overrun does not fault at the copy; it corrupts whatever
+    // allocation follows and surfaces later as wrong numbers, or as an illegal
+    // access in an unrelated kernel.
+    CudaStream stream;
+    DeviceBuffer<float> buffer(16);
+    std::vector<float> host(32, 1.0F);
+
+    REQUIRE_THROWS_AS(buffer.copy_from_host(host.data(), 32, stream), std::out_of_range);
+    REQUIRE_THROWS_AS(buffer.copy_to_host(host.data(), 32, stream), std::out_of_range);
+
+    REQUIRE_NOTHROW(buffer.copy_from_host(host.data(), 16, stream));
+    stream.synchronize();
+}
+
+TEST_CASE("a moved-from device buffer releases its allocation", "[cuda][raii]") {
+    DeviceBuffer<float> source(1024);
+    const float* address = source.data();
+
+    DeviceBuffer<float> destination(std::move(source));
+    REQUIRE(destination.data() == address);
+    REQUIRE(destination.size() == 1024);
+    REQUIRE(source.data() == nullptr);
+    REQUIRE(source.empty());
+}
+
+TEST_CASE("a moved-from stream is not destroyed twice", "[cuda][raii]") {
+    CudaStream source;
+    const cudaStream_t handle = source.get();
+
+    CudaStream destination(std::move(source));
+    REQUIRE(destination.get() == handle);
+    REQUIRE(source.get() == nullptr);
+}
+
+TEST_CASE("pinned buffers are addressable", "[cuda][raii]") {
+    // Pinned memory is the precondition for a copy to overlap at all; a
+    // PinnedBuffer that does not behave like ordinary host memory would fail
+    // in confusing ways at the copy rather than here.
+    PinnedBuffer<float> buffer(256);
+    REQUIRE(buffer.size() == 256);
+    REQUIRE(buffer.bytes() == 256 * sizeof(float));
+
+    buffer[0] = 1.5F;
+    buffer[255] = 2.5F;
+    REQUIRE(buffer[0] == 1.5F);
+    REQUIRE(buffer[255] == 2.5F);
+}
