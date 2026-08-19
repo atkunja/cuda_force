@@ -87,6 +87,27 @@ maximum and the actual distribution.
 Allocator throughput: 163–180M operations/second, so the per-token block check
 is free relative to anything else on the decode path.
 
+### Python latency histogram window
+
+| Field | |
+| --- | --- |
+| Baseline | a 100,000-sample window, `bisect.insort` into a sorted list |
+| Bottleneck | insort is O(n) — the insertion memmoves the tail, and two histograms are recorded per request |
+| Change | default window reduced to 10,000 |
+| Expected | roughly a ninth of the cost, with far more samples than a p99 needs |
+| **Measured** | **16.38 µs → 1.76 µs per record**; registry overhead now 3.25 µs per request for both histograms |
+
+| Window | Cost per record | Records/second |
+| --- | --- | --- |
+| 1,000 | 0.43 µs | 2,326k |
+| 10,000 | 1.76 µs | 568k |
+| 100,000 | 16.38 µs | 61k |
+
+This mattered because it is metrics overhead on the request path — a system that
+degrades the thing it measures. The C++ histogram does not have the problem: its
+buckets make recording O(1), which is why it uses them despite the bounded
+relative error.
+
 ### Latency histogram accuracy
 
 | Field | |

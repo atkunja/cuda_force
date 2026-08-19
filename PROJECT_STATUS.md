@@ -113,7 +113,8 @@ throughput.
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, 0 failures; client p99 279 ms against server p99 1.03 ms |
 | Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
 | Block allocator throughput | 163–180M operations/second |
-| Latency histogram | worst error **4.95%** against a documented 6.25% bound, over four distributions |
+| Latency histogram (C++) | worst error **4.95%** against a documented 6.25% bound, over four distributions |
+| Latency histogram (Python) | 16.38 µs → 1.76 µs per record after retuning the window; 3.25 µs per request total |
 | Histogram record rate | 76–120M samples/second |
 
 ### Bugs found and fixed during development
