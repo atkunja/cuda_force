@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
@@ -54,6 +55,18 @@ void launch_swiglu(const float* gate, const float* up, float* output, int count,
 /// does, which flattens the activation's negative tail.
 void launch_swiglu_half(const __half* gate, const __half* up, __half* output, int count,
                         cudaStream_t stream);
+
+/// BF16 SwiGLU.
+///
+/// The sigmoid is evaluated in FP32 for the same reason as the FP16 path, and
+/// with more force: BF16's 7-bit mantissa underflows `exp` of a moderately
+/// negative input even earlier than FP16's 10-bit one, which would flatten the
+/// activation's negative tail to exactly zero.
+///
+/// This is the path an Ampere-or-later deployment takes, since
+/// `EngineConfig.resolve_dtype` prefers bfloat16 wherever it is supported.
+void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up,
+                        __nv_bfloat16* output, int count, cudaStream_t stream);
 
 /// GELU, tanh approximation — the activation used by GPT-2 and BERT.
 ///

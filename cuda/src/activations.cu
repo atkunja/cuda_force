@@ -5,6 +5,7 @@
 
 #include "cudaforge/cuda_error.cuh"
 #include "cudaforge/cuda_utils.cuh"
+#include "cudaforge/reduced_precision.cuh"
 
 namespace cudaforge {
 namespace {
@@ -103,8 +104,8 @@ __global__ void swiglu_half_kernel(const __half* __restrict__ gate, const __half
     // near INT_MAX, and the result would be a wrong element rather than a fault.
     const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
     if (index < static_cast<std::size_t>(count)) {
-        const float activated = silu(__half2float(gate[index]));
-        output[index] = __float2half(activated * __half2float(up[index]));
+        const float activated = silu(Convert::to_float(gate[index]));
+        output[index] = Convert::from_float(activated * Convert::to_float(up[index]));
     }
 }
 
@@ -173,7 +174,17 @@ void launch_swiglu_half(const __half* gate, const __half* up, __half* output, in
         return;
     }
     const int grid = ceil_div(count, kDefaultBlockSize);
-    swiglu_half_kernel<<<grid, kDefaultBlockSize, 0, stream>>>(gate, up, output, count);
+    swiglu_reduced<<<grid, kDefaultBlockSize, 0, stream>>>(gate, up, output, count);
+    CUDAFORGE_CHECK_LAUNCH(stream);
+}
+
+void launch_swiglu_bf16(const __nv_bfloat16* gate, const __nv_bfloat16* up,
+                        __nv_bfloat16* output, int count, cudaStream_t stream) {
+    if (count <= 0) {
+        return;
+    }
+    const int grid = ceil_div(count, kDefaultBlockSize);
+    swiglu_reduced<<<grid, kDefaultBlockSize, 0, stream>>>(gate, up, output, count);
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 
