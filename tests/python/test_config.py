@@ -108,3 +108,74 @@ def test_describe_mentions_the_key_knobs():
     text = EngineConfig(max_batch_size=12, max_wait_us=1234).describe()
     assert "max_batch_size=12" in text
     assert "max_wait_us=1234" in text
+
+
+# --- YAML loading ----------------------------------------------------------
+
+
+def test_engine_config_round_trips_through_yaml(tmp_path):
+    import yaml
+
+    path = tmp_path / "engine.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "model_name": "gpt2",
+                "max_batch_size": 8,
+                "max_wait_us": 1234,
+                "queue_capacity": 256,
+                "generation": {"max_new_tokens": 32, "temperature": 0.5},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = EngineConfig.from_yaml(path)
+    assert config.model_name == "gpt2"
+    assert config.max_batch_size == 8
+    assert config.max_wait_us == 1234
+    assert config.generation.max_new_tokens == 32
+
+
+def test_an_empty_yaml_file_yields_the_defaults(tmp_path):
+    path = tmp_path / "empty.yaml"
+    path.write_text("", encoding="utf-8")
+    assert EngineConfig.from_yaml(path) == EngineConfig()
+
+
+def test_an_invalid_yaml_config_is_rejected_at_load(tmp_path):
+    # A config that cannot work should fail when it is read, not twenty minutes
+    # into a run.
+    import yaml
+
+    path = tmp_path / "bad.yaml"
+    path.write_text(
+        yaml.safe_dump({"max_batch_size": 64, "queue_capacity": 8}), encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="queue_capacity"):
+        EngineConfig.from_yaml(path)
+
+
+@pytest.mark.parametrize("name", ["latency", "throughput", "balanced"])
+def test_the_shipped_serving_configs_are_valid(name):
+    # A shipped config that does not load is a documentation bug with a
+    # working-code disguise.
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    config = EngineConfig.from_yaml(root / "inference" / "configs" / f"{name}.yaml")
+    assert config.queue_capacity >= config.max_batch_size
+    assert config.max_wait_us > 0
+
+
+def test_the_latency_config_trades_throughput_for_tail():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2] / "inference" / "configs"
+    latency = EngineConfig.from_yaml(root / "latency.yaml")
+    throughput = EngineConfig.from_yaml(root / "throughput.yaml")
+
+    # The two knobs must actually pull in opposite directions, or the configs
+    # are mislabelled.
+    assert latency.max_batch_size < throughput.max_batch_size
+    assert latency.max_wait_us < throughput.max_wait_us
