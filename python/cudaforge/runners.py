@@ -119,7 +119,7 @@ class TransformersRunner:
     """
 
     def __init__(self, config: EngineConfig) -> None:
-        from transformers import (  # noqa: PLC0415  (optional dependency)
+        from transformers import (  # imported lazily: optional dependency
             AutoModelForCausalLM,
             AutoTokenizer,
         )

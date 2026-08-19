@@ -135,7 +135,7 @@ def load_texts(
             raise ValueError("set either dataset_name or inline_texts")
         return list(inline_texts)
 
-    from datasets import load_dataset  # noqa: PLC0415
+    from datasets import load_dataset  # imported lazily: optional dependency
 
     dataset = load_dataset(dataset_name, dataset_config, split=split)
     if text_field not in dataset.column_names:

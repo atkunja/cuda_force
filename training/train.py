@@ -66,7 +66,7 @@ def build_model(config: TrainingConfig) -> tuple[torch.nn.Module, object]:
     training in fp16 when 4-bit was asked for would produce a run that does not
     fit the memory budget it was configured for.
     """
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: PLC0415
+    from transformers import AutoModelForCausalLM, AutoTokenizer  # imported lazily: optional dependency
 
     tokenizer = AutoTokenizer.from_pretrained(config.model_name)
     if tokenizer.pad_token_id is None:
@@ -78,7 +78,7 @@ def build_model(config: TrainingConfig) -> tuple[torch.nn.Module, object]:
             raise RuntimeError(
                 "load_in_4bit requires CUDA; bitsandbytes has no CPU or MPS backend"
             )
-        from transformers import BitsAndBytesConfig  # noqa: PLC0415
+        from transformers import BitsAndBytesConfig  # imported lazily: optional dependency
 
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,

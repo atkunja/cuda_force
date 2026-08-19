@@ -47,7 +47,7 @@ def _load_extension() -> tuple[bool, bool, str]:
         return False, False, "extension not built; using reference implementations"
 
     try:
-        from cudaforge import _C  # noqa: PLC0415  (import must stay lazy)
+        from cudaforge import _C  # imported lazily: optional dependency
     except ImportError as error:
         return False, False, f"extension present but failed to load: {error}"
 

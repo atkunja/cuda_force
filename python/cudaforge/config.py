@@ -144,7 +144,7 @@ class EngineConfig:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> EngineConfig:
-        import yaml  # noqa: PLC0415  (optional dependency, imported on demand)
+        import yaml  # imported lazily: optional dependency
 
         with Path(path).open(encoding="utf-8") as handle:
             return cls.from_dict(yaml.safe_load(handle) or {})

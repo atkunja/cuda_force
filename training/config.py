@@ -131,14 +131,14 @@ class TrainingConfig:
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> TrainingConfig:
-        import yaml  # noqa: PLC0415
+        import yaml  # imported lazily: optional dependency
 
         with Path(path).open(encoding="utf-8") as handle:
             return cls.from_dict(yaml.safe_load(handle) or {})
 
     def save(self, directory: str | Path) -> Path:
         """Write the config beside the checkpoint so the run is reproducible."""
-        import json  # noqa: PLC0415
+        import json  # imported lazily: optional dependency
 
         target = Path(directory)
         target.mkdir(parents=True, exist_ok=True)

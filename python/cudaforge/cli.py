@@ -59,9 +59,9 @@ def serve(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args(argv)
 
-    import os  # noqa: PLC0415
+    import os  # imported lazily: optional dependency
 
-    import uvicorn  # noqa: PLC0415
+    import uvicorn  # imported lazily: optional dependency
 
     os.environ["CUDAFORGE_MODEL"] = args.model
     os.environ["CUDAFORGE_MAX_BATCH"] = str(args.max_batch_size)

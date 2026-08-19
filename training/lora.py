@@ -148,7 +148,7 @@ def attach_lora(model: nn.Module, config: LoRAConfig) -> nn.Module:
             training a model with no adapters attached would produce a run that
             looks successful and updates nothing.
     """
-    from peft import LoraConfig, TaskType, get_peft_model  # noqa: PLC0415
+    from peft import LoraConfig, TaskType, get_peft_model  # imported lazily: optional dependency
 
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
