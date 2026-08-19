@@ -13,7 +13,7 @@ fastapi_testclient = pytest.importorskip("fastapi.testclient")
 
 from inference import server  # noqa: E402
 
-from cudaforge.config import EngineConfig  # noqa: E402
+from cudaforge.config import EngineConfig, GenerationConfig  # noqa: E402
 from cudaforge.engine import InferenceEngine  # noqa: E402
 from cudaforge.runners import EchoRunner  # noqa: E402
 
@@ -223,7 +223,7 @@ def test_omitted_sampling_fields_fall_back_to_the_engine_defaults(monkeypatch):
         max_wait_us=2_000,
         queue_capacity=64,
         warmup_iterations=0,
-        generation=__import__("cudaforge").GenerationConfig(max_new_tokens=7),
+        generation=GenerationConfig(max_new_tokens=7),
     )
     monkeypatch.setattr(
         server,
@@ -241,7 +241,7 @@ def test_an_explicit_sampling_field_overrides_the_engine_default(monkeypatch):
         max_wait_us=2_000,
         queue_capacity=64,
         warmup_iterations=0,
-        generation=__import__("cudaforge").GenerationConfig(max_new_tokens=7),
+        generation=GenerationConfig(max_new_tokens=7),
     )
     monkeypatch.setattr(
         server,
