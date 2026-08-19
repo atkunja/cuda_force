@@ -44,6 +44,13 @@ repos:
         files: '\.(cu|cuh)$'
         pass_filenames: true
 
+      - id: markdown-links
+        name: Markdown link and anchor check
+        entry: python scripts/check_docs.py
+        language: system
+        files: '\.md$'
+        pass_filenames: false
+
 # mypy is deliberately absent. It needs the full dependency set installed in the
 # hook environment, which makes the first commit after a rebuild take minutes.
 # It runs in CI instead.
