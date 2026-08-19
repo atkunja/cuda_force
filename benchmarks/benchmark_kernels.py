@@ -103,7 +103,14 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
         shape = f"{rows}x{cols}"
 
         results.append(
-            measure("rmsnorm", "cudaforge", shape, lambda x=x, weight=weight: ops.rmsnorm(x, weight), warmup, runs)
+            measure(
+                "rmsnorm",
+                "cudaforge",
+                shape,
+                lambda x=x, weight=weight: ops.rmsnorm(x, weight),
+                warmup,
+                runs,
+            )
         )
         results.append(
             measure(

@@ -88,9 +88,11 @@ def test_generation_settings_are_respected_per_request():
 
 
 def test_an_oversized_prompt_is_rejected():
-    with make_engine(max_prompt_chars=16) as engine:
-        with pytest.raises(ValueError, match="exceeds the limit"):
-            engine.submit("x" * 100)
+    with (
+        make_engine(max_prompt_chars=16) as engine,
+        pytest.raises(ValueError, match="exceeds the limit"),
+    ):
+        engine.submit("x" * 100)
 
 
 def test_submitting_after_shutdown_raises():
