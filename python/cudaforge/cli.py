@@ -32,6 +32,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_engine_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--config",
+        help="YAML engine config; individual flags below override its values",
+    )
     parser.add_argument("--model", default="sshleifer/tiny-gpt2")
     parser.add_argument("--max-batch-size", type=int, default=16)
     parser.add_argument("--max-wait-us", type=int, default=5_000)
@@ -45,15 +49,52 @@ def _add_engine_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _config_from(args: argparse.Namespace) -> EngineConfig:
+    """Build the config, letting explicit flags override a YAML file.
+
+    argparse cannot distinguish "the user passed the default" from "the user
+    passed nothing", so the overrides are applied by comparing against the
+    parser's own defaults. That keeps `--config x.yaml --max-batch-size 32`
+    behaving the way anyone would expect.
+    """
+    if args.config is None:
+        return EngineConfig(
+            model_name=args.model,
+            device=args.device,
+            max_batch_size=args.max_batch_size,
+            max_wait_us=args.max_wait_us,
+            queue_capacity=max(args.queue_capacity, args.max_batch_size),
+            worker_threads=args.worker_threads,
+        )
+
+    config = EngineConfig.from_yaml(args.config)
+    defaults = {
+        "model": "sshleifer/tiny-gpt2",
+        "device": "auto",
+        "max_batch_size": 16,
+        "max_wait_us": 5_000,
+        "queue_capacity": 1024,
+        "worker_threads": 4,
+    }
+    for flag, field in (
+        ("model", "model_name"),
+        ("device", "device"),
+        ("max_batch_size", "max_batch_size"),
+        ("max_wait_us", "max_wait_us"),
+        ("queue_capacity", "queue_capacity"),
+        ("worker_threads", "worker_threads"),
+    ):
+        value = getattr(args, flag)
+        if value != defaults[flag]:
+            setattr(config, field, value)
+
+    config.queue_capacity = max(config.queue_capacity, config.max_batch_size)
+    config.__post_init__()
+    return config
+
+
 def _build(args: argparse.Namespace) -> tuple[EngineConfig, ModelRunner]:
-    config = EngineConfig(
-        model_name=args.model,
-        device=args.device,
-        max_batch_size=args.max_batch_size,
-        max_wait_us=args.max_wait_us,
-        queue_capacity=max(args.queue_capacity, args.max_batch_size),
-        worker_threads=args.worker_threads,
-    )
+    config = _config_from(args)
     runner: ModelRunner = EchoRunner() if args.echo_runner else TransformersRunner(config)
     return config, runner
 
