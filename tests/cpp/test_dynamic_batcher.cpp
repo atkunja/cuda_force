@@ -1,5 +1,7 @@
 #include "cudaforge/dynamic_batcher.hpp"
 
+#include "thread_assert.hpp"
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -16,6 +18,7 @@ using cudaforge::DynamicBatcher;
 using cudaforge::Metrics;
 using cudaforge::Request;
 using cudaforge::RuntimeConfig;
+using cudaforge::test::ThreadAssert;
 using namespace std::chrono_literals;
 
 namespace {
@@ -224,6 +227,7 @@ TEST_CASE("concurrent producers all get their requests batched", "[batcher][stre
 
     auto collector = std::make_shared<BatchCollector>();
     auto metrics = std::make_shared<Metrics>();
+    ThreadAssert errors;
     {
         DynamicBatcher batcher(test_config(16, 3ms),
                                [collector](Batch&& batch) { (*collector)(std::move(batch)); },
@@ -233,7 +237,7 @@ TEST_CASE("concurrent producers all get their requests batched", "[batcher][stre
         for (int p = 0; p < kProducers; ++p) {
             producers.emplace_back([&, p] {
                 for (int i = 0; i < kPerProducer; ++i) {
-                    REQUIRE(batcher.submit(make_request(
+                    errors.check(batcher.submit(make_request(
                         static_cast<std::uint64_t>(p * kPerProducer + i))));
                 }
             });
@@ -243,6 +247,7 @@ TEST_CASE("concurrent producers all get their requests batched", "[batcher][stre
         }
     }
 
+    REQUIRE(errors.failures() == 0);
     REQUIRE(collector->total() == kProducers * kPerProducer);
 
     const auto snapshot = metrics->snapshot();
