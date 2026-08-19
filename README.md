@@ -400,6 +400,15 @@ Honest about what is not here:
 - [ ] **GPU-measured benchmarks.** Everything is in place; only hardware is
       missing.
 
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) has the rules that are not negotiable — no
+fabricated measurements, every CUDA call checked, no `cudaDeviceSynchronize`,
+portable code stays portable, and new kernels ship with a reference
+implementation.
+
+Release history is in [CHANGELOG.md](CHANGELOG.md).
+
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
