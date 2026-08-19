@@ -2,7 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cctype>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <sstream>
 #include <string>
 #include <vector>
