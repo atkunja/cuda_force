@@ -1,0 +1,22 @@
+# Google style with a 100-column limit and 4-space indentation.
+#
+# 100 rather than Google's 80: CUDA kernel signatures carry __restrict__
+# qualifiers and long type names, and wrapping them at 80 hurts readability more
+# than the extra width does.
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 100
+IndentWidth: 4
+AccessModifierOffset: -4
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+PointerAlignment: Left
+DerivePointerAlignment: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBraces: Attach
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive
+SpaceAfterTemplateKeyword: false
