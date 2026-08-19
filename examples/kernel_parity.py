@@ -47,8 +47,9 @@ class Check:
         )
 
 
-def compare(kernel: str, shape: str, actual: torch.Tensor, expected: torch.Tensor,
-            tolerance: float) -> Check:
+def compare(
+    kernel: str, shape: str, actual: torch.Tensor, expected: torch.Tensor, tolerance: float
+) -> Check:
     error = (actual.float() - expected.float()).abs().max().item()
     return Check(kernel, shape, error, tolerance)
 
@@ -66,19 +67,16 @@ def run(device: torch.device) -> list[Check]:
         expected = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * weight
         checks.append(compare("rmsnorm", shape, ops.rmsnorm(x, weight), expected, 1e-4))
 
-        checks.append(
-            compare("softmax", shape, ops.softmax(x), torch.softmax(x, dim=-1), 1e-5)
-        )
+        checks.append(compare("softmax", shape, ops.softmax(x), torch.softmax(x, dim=-1), 1e-5))
 
     # Logits that overflow exp() without the max-subtraction.
     extreme = torch.tensor([[1000.0, 1000.0, 1000.0], [-1000.0, 0.0, 1000.0]], device=device)
     checks.append(
-        compare(
-            "softmax(±1e3)", "2x3", ops.softmax(extreme), torch.softmax(extreme, dim=-1), 1e-6
-        )
+        compare("softmax(±1e3)", "2x3", ops.softmax(extreme), torch.softmax(extreme, dim=-1), 1e-6)
     )
 
-    for batch, in_features, out_features, rank in [(1, 8, 4, 2), (7, 129, 65, 3), (64, 1024, 1024, 16)]:
+    lora_shapes = [(1, 8, 4, 2), (7, 129, 65, 3), (64, 1024, 1024, 16)]
+    for batch, in_features, out_features, rank in lora_shapes:
         x = torch.randn(batch, in_features, device=device)
         weight = torch.randn(in_features, out_features, device=device)
         lora_a = torch.randn(in_features, rank, device=device)

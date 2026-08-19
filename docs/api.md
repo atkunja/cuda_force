@@ -69,9 +69,9 @@ Which implementation path is active, and why.
 
 ```python
 report = cudaforge.backend_report()
-report.using_custom_kernels   # bool — the only field that matters for timings
-report.extension_loaded       # the compiled module imported
-report.cuda_compiled          # it was built with CUDA support
+report.using_custom_kernels  # bool — the only field that matters for timings
+report.extension_loaded  # the compiled module imported
+report.cuda_compiled  # it was built with CUDA support
 report.cuda_device_available  # a GPU is visible
 ```
 

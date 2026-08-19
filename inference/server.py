@@ -23,7 +23,8 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Response as FastAPIResponse
+from fastapi import FastAPI, HTTPException
+from fastapi import Response as FastAPIResponse
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from cudaforge.config import EngineConfig, GenerationConfig
@@ -190,9 +191,7 @@ async def metrics_prometheus() -> PlainTextResponse:
     response_model=GenerateResponse,
     responses={503: {"description": "queue full, shutting down, or past its deadline"}},
 )
-async def generate(
-    request: GenerateRequest, response: FastAPIResponse
-) -> GenerateResponse:
+async def generate(request: GenerateRequest, response: FastAPIResponse) -> GenerateResponse:
     engine = _require_engine()
 
     generation = GenerationConfig(
