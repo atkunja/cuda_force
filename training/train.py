@@ -114,7 +114,21 @@ def build_loader(config: TrainingConfig, tokenizer: object) -> DataLoader:
     return DataLoader(dataset, batch_size=config.batch_size, shuffle=True, drop_last=False)
 
 
-def train(config: TrainingConfig) -> TrainState:
+def train(
+    config: TrainingConfig,
+    model: torch.nn.Module | None = None,
+    loader: DataLoader | None = None,
+) -> TrainState:
+    """Run the training loop.
+
+    `model` and `loader` exist so the loop can be exercised without downloading
+    weights. That matters more than it might appear: the parts most likely to be
+    subtly wrong — accumulation, the unscale-then-clip ordering, when the
+    scheduler steps — are entirely model-independent, and a loop that can only
+    be run by downloading a model is a loop that does not get tested.
+
+    Both default to being built from `config`.
+    """
     set_seed(config.seed)
 
     device = (
@@ -126,12 +140,18 @@ def train(config: TrainingConfig) -> TrainState:
     )
     _LOG.info("device: %s", device)
 
-    model, tokenizer = build_model(config)
+    if model is None:
+        model, tokenizer = build_model(config)
+    else:
+        tokenizer = None
     model.to(device)
     model.train()
     _LOG.info("%s", describe_parameters(model))
 
-    loader = build_loader(config, tokenizer)
+    if loader is None:
+        if tokenizer is None:
+            raise ValueError("supply a loader when supplying a model")
+        loader = build_loader(config, tokenizer)
 
     # Only adapter parameters reach the optimiser. Passing frozen parameters
     # would allocate Adam state for them — two fp32 tensors per parameter — and
