@@ -38,6 +38,14 @@ target_compile_options(cudaforge_kernels PRIVATE
   # entirely and makes any measurement meaningless.
   $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
 
+option(CUDAFORGE_ENABLE_NVTX "Emit NVTX ranges for Nsight Systems" OFF)
+if(CUDAFORGE_ENABLE_NVTX)
+  # Header-only in CUDA 11+. Compiled out entirely when this is OFF, so the
+  # release path pays nothing for the annotations.
+  target_compile_definitions(cudaforge_kernels PUBLIC CUDAFORGE_ENABLE_NVTX)
+  message(STATUS "  NVTX      : ON")
+endif()
+
 option(CUDAFORGE_DEBUG_SYNC "Synchronise and check after every kernel launch" OFF)
 if(CUDAFORGE_DEBUG_SYNC)
   target_compile_definitions(cudaforge_kernels PUBLIC CUDAFORGE_DEBUG_SYNC)
