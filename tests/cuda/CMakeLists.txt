@@ -3,6 +3,7 @@
 
 add_executable(cudaforge_cuda_tests
   test_activations.cu
+  test_fused_norm.cu
   test_reduction.cu
   test_softmax.cu
   test_rmsnorm.cu
