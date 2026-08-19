@@ -122,6 +122,9 @@ public:
         return snap;
     }
 
+    /// Not safe to call concurrently with `snapshot()` — `started_` is a plain
+    /// member and resetting it races a reader. Intended for test setup and for
+    /// benchmark phase boundaries, where the runtime is quiesced.
     void reset() {
         received_.store(0, std::memory_order_relaxed);
         completed_.store(0, std::memory_order_relaxed);
