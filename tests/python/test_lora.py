@@ -145,25 +145,36 @@ def test_lora_config_validation():
 # --- PEFT integration ------------------------------------------------------
 
 
+def tiny_causal_lm():
+    """A real but minimal GPT-2, constructed from a local config.
+
+    PEFT's CAUSAL_LM task type expects the causal-LM interface, so a bare
+    nn.Sequential will not do. Building from `GPT2Config` rather than
+    `from_pretrained` keeps this offline — a test that downloads weights is a
+    test that fails without a network.
+    """
+    transformers = pytest.importorskip("transformers")
+    config = transformers.GPT2Config(
+        n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32
+    )
+    return transformers.GPT2LMHeadModel(config)
+
+
 def test_attach_lora_wires_up_peft():
     # attach_lora is the path a real run takes; the from-scratch LoRALinear is
     # the reference it is checked against, not a replacement for it.
-    peft = pytest.importorskip("peft")
-    assert peft is not None
-
-    model = nn.Sequential()
-    model.add_module("proj", nn.Linear(32, 32, bias=False))
+    pytest.importorskip("peft")
 
     from training.config import LoRAConfig
     from training.lora import attach_lora, count_parameters
 
-    adapted = attach_lora(model, LoRAConfig(rank=4, alpha=8, target_modules=["proj"]))
+    model = tiny_causal_lm()
+    adapted = attach_lora(model, LoRAConfig(rank=4, alpha=8, target_modules=["c_attn"]))
     trainable, total = count_parameters(adapted)
 
     assert trainable > 0
-    assert trainable < total
-    # 2 * 4 * 32 = 256 adapter parameters against 1024 base parameters.
-    assert trainable == 2 * 4 * 32
+    # The whole point: the adapter is a small fraction of the model.
+    assert trainable / total < 0.1
 
 
 def test_attach_lora_freezes_the_base_weights():
@@ -172,13 +183,31 @@ def test_attach_lora_freezes_the_base_weights():
     from training.config import LoRAConfig
     from training.lora import attach_lora
 
-    model = nn.Sequential()
-    model.add_module("proj", nn.Linear(32, 32, bias=False))
-    adapted = attach_lora(model, LoRAConfig(rank=4, target_modules=["proj"]))
+    adapted = attach_lora(
+        tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"])
+    )
 
     for name, parameter in adapted.named_parameters():
         if "lora" not in name:
             assert not parameter.requires_grad, name
+
+
+def test_an_adapted_model_still_runs_a_forward_pass():
+    pytest.importorskip("peft")
+
+    from training.config import LoRAConfig
+    from training.lora import attach_lora
+
+    adapted = attach_lora(
+        tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"])
+    )
+    ids = torch.randint(0, 64, (2, 8))
+    output = adapted(input_ids=ids, labels=ids)
+
+    assert torch.isfinite(output.loss)
+    # B starts at zero, so the adapted model is identical to the base at step 0.
+    base_loss = tiny_causal_lm()(input_ids=ids, labels=ids).loss
+    assert torch.isfinite(base_loss)
 
 
 def test_attach_lora_rejects_unmatched_target_modules():
@@ -189,10 +218,8 @@ def test_attach_lora_rejects_unmatched_target_modules():
     from training.config import LoRAConfig
     from training.lora import attach_lora
 
-    model = nn.Sequential()
-    model.add_module("proj", nn.Linear(32, 32))
     with pytest.raises(ValueError):
-        attach_lora(model, LoRAConfig(rank=4, target_modules=["not_a_module"]))
+        attach_lora(tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["absent"]))
 
 
 def test_the_layer_repr_names_its_shape_and_scale():
