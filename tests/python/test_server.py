@@ -275,9 +275,7 @@ def test_build_engine_falls_back_when_the_model_cannot_load(monkeypatch):
     monkeypatch.setattr(server, "TransformersRunner", explode)
     monkeypatch.delenv("CUDAFORGE_ECHO_RUNNER", raising=False)
 
-    engine = server.build_engine(
-        EngineConfig(model_name="does-not-exist", warmup_iterations=0)
-    )
+    engine = server.build_engine(EngineConfig(model_name="does-not-exist", warmup_iterations=0))
     try:
         assert "EchoRunner" in engine.snapshot().extra["runner"]
     finally:

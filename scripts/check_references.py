@@ -22,8 +22,19 @@ CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 
 # Extensions that identify a repository file rather than prose.
 TRACKED_SUFFIXES = {
-    ".py", ".cpp", ".hpp", ".cu", ".cuh", ".md", ".sh", ".yaml", ".yml",
-    ".toml", ".json", ".txt", ".cmake",
+    ".py",
+    ".cpp",
+    ".hpp",
+    ".cu",
+    ".cuh",
+    ".md",
+    ".sh",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".json",
+    ".txt",
+    ".cmake",
 }
 
 
@@ -75,9 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     for problem in problems:
         print(problem)
 
-    print(
-        f"\nchecked {len(targets)} file(s): {len(problems)} problem(s)", file=sys.stderr
-    )
+    print(f"\nchecked {len(targets)} file(s): {len(problems)} problem(s)", file=sys.stderr)
     return 1 if problems else 0
 
 
