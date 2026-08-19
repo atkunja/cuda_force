@@ -129,3 +129,80 @@ TEST_CASE("concurrent recording loses no samples", "[histogram][stress]") {
     }
     REQUIRE(histogram.count() == kThreads * kPerThread);
 }
+
+// --- bucket boundaries -----------------------------------------------------
+
+TEST_CASE("bucket boundaries are monotonic across magnitudes", "[histogram][buckets]") {
+    // A non-monotonic bucket layout would make percentiles jump backwards at
+    // magnitude changes — the kind of defect that only shows up as a confusing
+    // dashboard, never as an error.
+    LatencyHistogram histogram;
+    std::uint64_t previous = 0;
+
+    for (std::uint64_t value = 1; value < (1ULL << 32); value = value + 1 + value / 8) {
+        LatencyHistogram single;
+        single.record(value);
+        const std::uint64_t reported = single.percentile(1.0);
+
+        INFO("value " << value << " reported " << reported);
+        // The bucket's upper bound must be at least the value it holds, and
+        // must not decrease as the value grows.
+        REQUIRE(reported >= value);
+        REQUIRE(reported >= previous);
+        previous = reported;
+    }
+}
+
+TEST_CASE("relative error stays within the documented bound", "[histogram][buckets]") {
+    constexpr double kBound = 1.0 / static_cast<double>(LatencyHistogram::kSubBuckets);
+
+    for (std::uint64_t value = LatencyHistogram::kSubBuckets; value < (1ULL << 30);
+         value = value + 1 + value / 5) {
+        LatencyHistogram single;
+        single.record(value);
+        const auto reported = static_cast<double>(single.percentile(1.0));
+        const auto exact = static_cast<double>(value);
+
+        INFO("value " << value << " reported " << reported);
+        REQUIRE((reported - exact) / exact <= kBound);
+    }
+}
+
+TEST_CASE("values below the sub-bucket count are exact", "[histogram][buckets]") {
+    // The bottom magnitude maps one-to-one, so there is no rounding at all.
+    for (std::uint64_t value = 0; value < LatencyHistogram::kSubBuckets; ++value) {
+        LatencyHistogram single;
+        single.record(value);
+        REQUIRE(single.percentile(1.0) == value);
+    }
+}
+
+TEST_CASE("an enormous value is clamped rather than overflowing", "[histogram][buckets]") {
+    // Past the top bucket the index is clamped; the alternative is writing out
+    // of bounds, which a sanitizer would catch but a release build would not.
+    LatencyHistogram histogram;
+    histogram.record(UINT64_MAX / 2);
+    REQUIRE(histogram.count() == 1);
+    REQUIRE(histogram.max_ns() == UINT64_MAX / 2);
+}
+
+TEST_CASE("min and max bracket every recorded sample", "[histogram][buckets]") {
+    LatencyHistogram histogram;
+    for (std::uint64_t value : {5ULL, 500ULL, 50'000ULL, 5'000'000ULL}) {
+        histogram.record(value);
+    }
+    REQUIRE(histogram.min_ns() == 5);
+    REQUIRE(histogram.max_ns() == 5'000'000);
+    // Unlike the percentiles, min and max are stored exactly.
+    REQUIRE(histogram.percentile(0.0) <= histogram.max_ns());
+}
+
+TEST_CASE("a single sample is its own percentile at every quantile",
+          "[histogram][buckets]") {
+    LatencyHistogram histogram;
+    histogram.record(123'456);
+    const std::uint64_t reported = histogram.percentile(0.5);
+    for (double quantile : {0.0, 0.25, 0.5, 0.9, 0.99, 1.0}) {
+        REQUIRE(histogram.percentile(quantile) == reported);
+    }
+}
