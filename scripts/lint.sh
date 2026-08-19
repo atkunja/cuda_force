@@ -22,15 +22,18 @@ check() {
 PYTHON="${PYTHON:-python}"
 [[ -x .venv/bin/python ]] && PYTHON=".venv/bin/python"
 
+# find -exec rather than mapfile: mapfile needs bash 4, and macOS still ships
+# bash 3.2, so this script would fail on the platform it is most often run on.
+CPP_SOURCES=(-name '*.cpp' -o -name '*.hpp' -o -name '*.cu' -o -name '*.cuh')
+
 if command -v clang-format >/dev/null 2>&1; then
-  mapfile -t SOURCES < <(find cpp cuda tests benchmarks \
-    -name '*.cpp' -o -name '*.hpp' -o -name '*.cu' -o -name '*.cuh' 2>/dev/null)
-  if [[ ${#SOURCES[@]} -gt 0 ]]; then
-    if [[ $FIX -eq 1 ]]; then
-      check "clang-format (fixing)" clang-format -i "${SOURCES[@]}"
-    else
-      check "clang-format" clang-format --dry-run --Werror "${SOURCES[@]}"
-    fi
+  if [[ $FIX -eq 1 ]]; then
+    check "clang-format (fixing)" \
+      find cpp cuda tests benchmarks \( "${CPP_SOURCES[@]}" \) -exec clang-format -i {} +
+  else
+    check "clang-format" \
+      find cpp cuda tests benchmarks \( "${CPP_SOURCES[@]}" \) \
+        -exec clang-format --dry-run --Werror {} +
   fi
 else
   echo "==> clang-format not found; skipping C++ formatting"
