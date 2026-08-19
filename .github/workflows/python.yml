@@ -46,7 +46,7 @@ jobs:
         run: python -c "from cudaforge.ops import backend_report; print(backend_report())"
 
       - name: Tests
-        run: pytest tests/python -q
+        run: pytest tests/python -q --cov --cov-report=term
 
       - name: Examples
         run: |

@@ -96,6 +96,31 @@ associative and a tree reduction genuinely differs from a sequential sum.
 Where the input is exactly representable (a sum of ones below 2^24), the test
 demands exact equality: any deviation there is a bug, not accumulated error.
 
+## Coverage
+
+```bash
+pytest tests/python -q --cov --cov-report=term-missing
+```
+
+**91% of statements, 88% of branches.** There is deliberately no `fail_under`
+threshold: a number that must not drop invites tests written to raise it rather
+than to catch anything.
+
+What remains uncovered is uncovered for a stated reason:
+
+| Uncovered | Why |
+| --- | --- |
+| `train.build_model` | downloads model weights; exercised end to end in CI instead |
+| `dataset.load_texts` with a named dataset | downloads a dataset |
+| CUDA branches in `ops.py` | need a GPU; the reference branches beside them are covered |
+| `TransformersRunner`'s loading path | downloads weights — its *logic* is covered through injection |
+
+The two refactors that made the difference were injection points: `train()` and
+`TransformersRunner` both accept a model and a loader, so the parts most likely
+to be subtly wrong — accumulation, the unscale-then-clip ordering, left padding,
+per-row truncation — are tested without a network round trip. Code that can only
+be run by downloading something is code that does not get tested.
+
 ## Isolation
 
 Tests that touch process-wide state restore it. `cli.serve` configures the

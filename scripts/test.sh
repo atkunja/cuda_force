@@ -60,7 +60,7 @@ else
 fi
 
 # --- Python ----------------------------------------------------------------
-run_stage "Python tests" "$PYTHON" -m pytest tests/python -q
+run_stage "Python tests" "$PYTHON" -m pytest tests/python -q --cov --cov-report=term:skip-covered
 
 # Runs the examples as smoke tests. An example that no longer works is a
 # documentation bug with a working-code disguise.
