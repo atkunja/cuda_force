@@ -202,3 +202,106 @@ and overflows to infinity, which then propagates through the entire row. The
 sum of squares is therefore accumulated in FP32 unconditionally.
 `tests/cuda/test_rmsnorm.cu` uses inputs of 300 specifically to hit this, and
 `tests/python/test_ops.py` asserts the same property for the reference path.
+
+## Kernel D — LoRA Linear
+
+```
+Y = X W + scale * (X A) B
+```
+
+with `W: [in, out]` frozen, `A: [in, r]` and `B: [r, out]` trainable, and `r`
+typically 8–64 against `in` in the thousands.
+
+### The tiled matmul underneath
+
+The naive matmul reads a full row of A and column of B from global memory for
+every output element, so each element of A is re-read `n` times. Staging tiles
+in shared memory means each element crosses the memory bus once per tile and is
+then reused `kTile` times.
+
+Tile width is 16: 256 threads per block, a 1 KB tile per operand, and 16 reuses
+per loaded element. Wider tiles improve the reuse ratio, but shared memory grows
+quadratically and occupancy falls — 32 would need 4 KB per operand and halve the
+blocks resident per SM on most parts.
+
+One line in the tile declaration is doing real work:
+
+```cuda
+__shared__ float tile_b[kTile][kTile + 1];
+```
+
+The `+ 1` breaks the power-of-two stride so that a column access hits `kTile`
+distinct banks instead of all mapping to one. Without it, the column reads in
+the inner loop are a 16-way bank conflict and the inner loop runs 16x slower.
+
+Both `__syncthreads()` calls are required. The second is the one people omit:
+without it, a fast warp can begin loading tile `t+1` while a slow warp is still
+reading tile `t`.
+
+**This matmul is not competitive with cuBLAS and is not meant to be.** cuBLAS
+uses tensor cores, deeper register blocking, and per-architecture tuned tile
+shapes. This one exists to make the shared-memory argument concrete and to give
+the fused kernel a baseline.
+
+### Why fusion pays here
+
+`X A` is tall and extremely thin — small enough to live in shared memory, large
+enough that a round trip through global memory costs more than the multiply
+itself. That imbalance is exactly what kernel fusion removes.
+
+The fused kernel computes a block's slice of `X A` into shared memory, then
+walks the output columns adding the frozen and adapter contributions in one
+pass. Relative to the unfused path it saves:
+
+* two kernel launches,
+* a `batch x rank` write to global memory and the matching read,
+* a re-read of `X` for the adapter path, since those rows are already resident.
+
+The unfused path remains as the correctness reference and the fallback when
+`rank * kTile` floats exceed the shared-memory budget.
+
+## Kernel E — Quantise / Dequantise
+
+Block-wise symmetric INT8:
+
+```
+scale_b = max(|x|) over block b / 127
+q_i     = round(x_i / scale_b), clamped to [-127, 127]
+```
+
+### Design choices
+
+**Block-wise, not per-tensor.** Per-tensor scaling is cheap, but a single
+outlier stretches the range for every other value — and transformer weights have
+outliers. Per-element scales would be exact and would also defeat the purpose,
+since the scales would cost more than the saved payload. At 64 elements per
+scale the overhead is 4 bytes per 64 bytes of INT8, about 6%, and any outlier's
+influence is confined to its own block.
+
+`tests/cuda/test_quantization.cu` asserts this directly: an element sharing a
+block with a 1000x outlier loses precision, while the same value three blocks
+away round-trips within 1%.
+
+**Symmetric, no zero point.** Dequantisation stays a single multiply, and exact
+zeros map to exact zeros — which matters for padding and masks.
+
+**127, not 128.** Negation stays representable and the grid is symmetric about
+zero.
+
+**`rintf`, not truncation.** Round-half-to-even matches the reference
+implementation. Truncation would bias every value toward zero and shift the mean
+of the dequantised tensor.
+
+**An all-zero block gets a scale of 1.** Its absmax is zero; a zero scale would
+divide by zero, while a scale of 1 maps the block to zero and back exactly.
+
+### What this is not
+
+This is **not** a reimplementation of bitsandbytes' NF4. NF4 uses a non-uniform
+4-bit grid derived from the normal distribution's quantiles, plus double
+quantisation of the scales themselves. Nothing here reproduces that, and the
+QLoRA path in `training/` calls bitsandbytes directly rather than pretending
+this is equivalent.
+
+The error bound this scheme does guarantee is half a quantisation step —
+`scale_b / 2` — and both the CUDA and Python test suites assert exactly that.
