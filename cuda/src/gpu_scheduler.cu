@@ -3,6 +3,7 @@
 #include <stdexcept>
 
 #include "cudaforge/cuda_error.cuh"
+#include "cudaforge/nvtx.cuh"
 
 namespace cudaforge {
 
@@ -52,6 +53,7 @@ void GpuScheduler::copy_to_device(const StreamLease& lease, void* device, const 
     if (bytes == 0) {
         return;
     }
+    CUDAFORGE_NVTX_RANGE("h2d", NvtxCategory::Transfer);
     CUDAFORGE_CHECK(cudaMemcpyAsync(device, host, bytes, cudaMemcpyHostToDevice, lease.stream()));
 
     std::lock_guard lock(stats_mutex_);
@@ -63,6 +65,7 @@ void GpuScheduler::copy_to_host(const StreamLease& lease, void* host, const void
     if (bytes == 0) {
         return;
     }
+    CUDAFORGE_NVTX_RANGE("d2h", NvtxCategory::Transfer);
     CUDAFORGE_CHECK(cudaMemcpyAsync(host, device, bytes, cudaMemcpyDeviceToHost, lease.stream()));
 
     std::lock_guard lock(stats_mutex_);
@@ -79,6 +82,9 @@ void GpuScheduler::note_dispatch(const StreamLease& lease) {
 }
 
 void GpuScheduler::synchronize_all() {
+    // Annotated because a long bar here at any time other than shutdown means
+    // the pipeline is being drained when it should not be.
+    CUDAFORGE_NVTX_RANGE("synchronize_all", NvtxCategory::Compute);
     for (const CudaStream& stream : streams_) {
         stream.synchronize();
     }
