@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Fast checks only. A hook that takes 30 seconds gets bypassed with
+# --no-verify, which is worse than not having one.
+#
+# Install with:
+#   git config core.hooksPath .githooks
+#
+# This is an alternative to pre-commit for anyone who would rather not install
+# it; .pre-commit-config.yaml covers the same ground plus more.
+
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 1
+
+PYTHON="python3"
+[[ -x .venv/bin/python ]] && PYTHON=".venv/bin/python"
+
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+STAGED_CPP=$(git diff --cached --name-only --diff-filter=ACM -- '*.cpp' '*.hpp' '*.cu' '*.cuh')
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM -- '*.md')
+
+status=0
+
+if [[ -n "$STAGED_PY" ]]; then
+  echo "$STAGED_PY" | xargs "$PYTHON" -m ruff format --check || {
+    echo "  run: $PYTHON -m ruff format ." >&2
+    status=1
+  }
+  echo "$STAGED_PY" | xargs "$PYTHON" -m ruff check || status=1
+fi
+
+if [[ -n "$STAGED_CPP" ]] && command -v clang-format >/dev/null 2>&1; then
+  echo "$STAGED_CPP" | xargs clang-format --dry-run --Werror || status=1
+fi
+
+if [[ -n "$STAGED_CPP" ]]; then
+  CUDA_FILES=$(echo "$STAGED_CPP" | grep -E '\.(cu|cuh)$' || true)
+  if [[ -n "$CUDA_FILES" ]]; then
+    # shellcheck disable=SC2086
+    "$PYTHON" scripts/check_cuda_sources.py $CUDA_FILES || status=1
+  fi
+fi
+
+if [[ -n "$STAGED_MD" ]]; then
+  "$PYTHON" scripts/check_docs.py . || status=1
+  "$PYTHON" scripts/check_references.py . || status=1
+fi
+
+exit $status
