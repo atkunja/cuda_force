@@ -178,12 +178,12 @@ TEST_CASE("every counter appears in the json", "[metrics][json]") {
     // The field names are a contract shared with the Python registry so a
     // dashboard need not know which runtime produced a snapshot.
     const std::string json = cudaforge::to_json(Metrics{}.snapshot());
-    for (const char* field : {"requests_received", "requests_completed", "requests_failed",
-                              "requests_rejected", "requests_expired", "batches_processed",
-                              "batches_closed_by_size", "batches_closed_by_timeout",
-                              "average_batch_size", "queue_depth", "tokens_generated",
-                              "uptime_seconds", "requests_per_second", "tokens_per_second",
-                              "queue_delay_ms", "latency_ms"}) {
+    for (const char* field :
+         {"requests_received", "requests_completed", "requests_failed", "requests_rejected",
+          "requests_expired", "batches_processed", "batches_closed_by_size",
+          "batches_closed_by_timeout", "average_batch_size", "queue_depth", "tokens_generated",
+          "uptime_seconds", "requests_per_second", "tokens_per_second", "queue_delay_ms",
+          "latency_ms"}) {
         INFO("field " << field);
         REQUIRE(json.find(std::string("\"") + field + "\"") != std::string::npos);
     }
