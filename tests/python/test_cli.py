@@ -118,10 +118,13 @@ def test_both_entry_points_accept_version():
 def test_a_yaml_config_is_loaded(capsys):
     cli.bench(
         [
-            "--config", "inference/configs/latency.yaml",
+            "--config",
+            "inference/configs/latency.yaml",
             "--echo-runner",
-            "--clients", "1",
-            "--requests-per-client", "2",
+            "--clients",
+            "1",
+            "--requests-per-client",
+            "2",
             "--json",
         ]
     )
@@ -136,11 +139,15 @@ def test_an_explicit_flag_overrides_the_config_file(capsys):
     # the case that would break if that comparison were wrong.
     cli.bench(
         [
-            "--config", "inference/configs/latency.yaml",
-            "--max-batch-size", "32",
+            "--config",
+            "inference/configs/latency.yaml",
+            "--max-batch-size",
+            "32",
             "--echo-runner",
-            "--clients", "1",
-            "--requests-per-client", "2",
+            "--clients",
+            "1",
+            "--requests-per-client",
+            "2",
             "--json",
         ]
     )
@@ -153,11 +160,15 @@ def test_an_explicit_flag_overrides_the_config_file(capsys):
 def test_a_config_override_still_widens_the_queue(capsys):
     cli.bench(
         [
-            "--config", "inference/configs/latency.yaml",
-            "--max-batch-size", "512",
+            "--config",
+            "inference/configs/latency.yaml",
+            "--max-batch-size",
+            "512",
             "--echo-runner",
-            "--clients", "1",
-            "--requests-per-client", "1",
+            "--clients",
+            "1",
+            "--requests-per-client",
+            "1",
             "--json",
         ]
     )

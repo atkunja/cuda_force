@@ -97,9 +97,7 @@ def run(device: torch.device) -> list[Check]:
         up = torch.randn(*shape, device=device)
         label = "x".join(str(dim) for dim in shape)
 
-        checks.append(
-            compare("silu", label, ops.silu(gate), torch.nn.functional.silu(gate), 1e-5)
-        )
+        checks.append(compare("silu", label, ops.silu(gate), torch.nn.functional.silu(gate), 1e-5))
         checks.append(
             compare(
                 "gelu",

@@ -143,7 +143,7 @@ class StubTokenizer:
     eos_token = "<eos>"
     padding_side = "right"
 
-    def __call__(self, prompts, return_tensors=None, padding=False, truncation=False):  # noqa: ANN001
+    def __call__(self, prompts, return_tensors=None, padding=False, truncation=False):
         import torch
 
         encoded = [[len(word) % 60 + 1 for word in prompt.split()] for prompt in prompts]
@@ -158,7 +158,7 @@ class StubTokenizer:
             attention_mask.append([0] * pad + [1] * len(ids))
 
         class Batch(dict):
-            def to(self, _device):  # noqa: ANN001
+            def to(self, _device):
                 return self
 
         return Batch(
@@ -166,7 +166,7 @@ class StubTokenizer:
             attention_mask=torch.tensor(attention_mask),
         )
 
-    def decode(self, ids, skip_special_tokens=False):  # noqa: ANN001
+    def decode(self, ids, skip_special_tokens=False):
         return " ".join(str(int(value)) for value in ids)
 
 
@@ -180,10 +180,10 @@ class StubModel:
     def eval(self) -> None:
         self.eval_called = True
 
-    def to(self, _device):  # noqa: ANN001
+    def to(self, _device):
         return self
 
-    def generate(self, input_ids=None, attention_mask=None, max_new_tokens=1, **_kwargs):  # noqa: ANN001
+    def generate(self, input_ids=None, attention_mask=None, max_new_tokens=1, **_kwargs):
         import torch
 
         self.last_max_new_tokens = max_new_tokens

@@ -195,16 +195,22 @@ def test_kv_cache_results_render_with_their_ratio(tmp_path, capsys):
                     "contiguous_sequences": 512,
                     "contiguous_waste": 0.93,
                     "paged": [
-                        {"block_size": 8, "sequences": 6912, "waste": 0.02,
-                         "sequences_ratio": 13.5},
-                        {"block_size": 16, "sequences": 6752, "waste": 0.048,
-                         "sequences_ratio": 13.2},
+                        {
+                            "block_size": 8,
+                            "sequences": 6912,
+                            "waste": 0.02,
+                            "sequences_ratio": 13.5,
+                        },
+                        {
+                            "block_size": 16,
+                            "sequences": 6752,
+                            "waste": 0.048,
+                            "sequences_ratio": 13.2,
+                        },
                     ],
                 }
             ],
-            "allocator_throughput": [
-                {"pool_blocks": 1024, "operations_per_second": 163_400_000.0}
-            ],
+            "allocator_throughput": [{"pool_blocks": 1024, "operations_per_second": 163_400_000.0}],
         },
         capsys,
     )
@@ -229,8 +235,9 @@ def test_a_kv_workload_without_the_reported_block_size_is_skipped(tmp_path, caps
                     "mean_length": 10.0,
                     "contiguous_sequences": 8,
                     "contiguous_waste": 0.5,
-                    "paged": [{"block_size": 64, "sequences": 9, "waste": 0.1,
-                               "sequences_ratio": 1.1}],
+                    "paged": [
+                        {"block_size": 64, "sequences": 9, "waste": 0.1, "sequences_ratio": 1.1}
+                    ],
                 }
             ],
         },

@@ -176,13 +176,17 @@ async def run(args: argparse.Namespace) -> int:
     print(f"  failed           {client_side['failed']}")
     print(f"  wall time        {client_side['wall_seconds']:.3f} s")
     print(f"  throughput       {client_side['requests_per_second']:.1f} req/s")
-    print(f"\n  client latency p50/p95/p99   "
-          f"{latency['p50']:.2f} / {latency['p95']:.2f} / {latency['p99']:.2f} ms")
+    print(
+        f"\n  client latency p50/p95/p99   "
+        f"{latency['p50']:.2f} / {latency['p95']:.2f} / {latency['p99']:.2f} ms"
+    )
 
     if isinstance(metrics, dict) and "latency_p99_ms" in metrics:
-        print(f"  server latency p50/p95/p99   "
-              f"{metrics['latency_p50_ms']:.2f} / {metrics['latency_p95_ms']:.2f} / "
-              f"{metrics['latency_p99_ms']:.2f} ms")
+        print(
+            f"  server latency p50/p95/p99   "
+            f"{metrics['latency_p50_ms']:.2f} / {metrics['latency_p95_ms']:.2f} / "
+            f"{metrics['latency_p99_ms']:.2f} ms"
+        )
         print(f"  server avg batch size        {metrics['average_batch_size']:.2f}")
         print(
             "\n  The gap between the two p99s is HTTP overhead and client-side\n"

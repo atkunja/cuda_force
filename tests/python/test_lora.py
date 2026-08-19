@@ -154,9 +154,7 @@ def tiny_causal_lm():
     test that fails without a network.
     """
     transformers = pytest.importorskip("transformers")
-    config = transformers.GPT2Config(
-        n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32
-    )
+    config = transformers.GPT2Config(n_layer=1, n_head=2, n_embd=16, vocab_size=64, n_positions=32)
     return transformers.GPT2LMHeadModel(config)
 
 
@@ -183,9 +181,7 @@ def test_attach_lora_freezes_the_base_weights():
     from training.config import LoRAConfig
     from training.lora import attach_lora
 
-    adapted = attach_lora(
-        tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"])
-    )
+    adapted = attach_lora(tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"]))
 
     for name, parameter in adapted.named_parameters():
         if "lora" not in name:
@@ -198,9 +194,7 @@ def test_an_adapted_model_still_runs_a_forward_pass():
     from training.config import LoRAConfig
     from training.lora import attach_lora
 
-    adapted = attach_lora(
-        tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"])
-    )
+    adapted = attach_lora(tiny_causal_lm(), LoRAConfig(rank=4, target_modules=["c_attn"]))
     ids = torch.randint(0, 64, (2, 8))
     output = adapted(input_ids=ids, labels=ids)
 

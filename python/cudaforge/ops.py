@@ -347,9 +347,7 @@ def fused_residual_rmsnorm(
             f"and {tuple(residual.shape)}"
         )
     if weight.ndim != 1 or weight.shape[0] != x.shape[-1]:
-        raise ValueError(
-            f"weight must be 1-D of length {x.shape[-1]}, got {tuple(weight.shape)}"
-        )
+        raise ValueError(f"weight must be 1-D of length {x.shape[-1]}, got {tuple(weight.shape)}")
     if x.numel() == 0:
         return x.clone(), residual.clone()
 
@@ -362,9 +360,7 @@ def fused_residual_rmsnorm(
         and x.ndim == 2
         and x.dtype == torch.float32
     ):
-        normalised, summed = torch.ops.cudaforge.fused_residual_rmsnorm(
-            x, residual, weight, eps
-        )
+        normalised, summed = torch.ops.cudaforge.fused_residual_rmsnorm(x, residual, weight, eps)
         return normalised, summed
     return _fused_residual_rmsnorm_reference(x, residual, weight, eps)
 
@@ -408,8 +404,7 @@ def swiglu(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
     """
     if gate.shape != up.shape:
         raise ValueError(
-            f"gate and up must have the same shape, got {tuple(gate.shape)} "
-            f"and {tuple(up.shape)}"
+            f"gate and up must have the same shape, got {tuple(gate.shape)} and {tuple(up.shape)}"
         )
     if gate.dtype != up.dtype:
         raise ValueError(f"gate and up must have the same dtype, got {gate.dtype} and {up.dtype}")

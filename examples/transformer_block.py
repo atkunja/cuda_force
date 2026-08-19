@@ -84,9 +84,7 @@ class FeedForward(nn.Module):
         gate = self.gate(x)
         up = self.up(x)
         activated = (
-            cudaforge.swiglu(gate, up)
-            if use_cudaforge
-            else torch.nn.functional.silu(gate) * up
+            cudaforge.swiglu(gate, up) if use_cudaforge else torch.nn.functional.silu(gate) * up
         )
         return self.down(activated)
 

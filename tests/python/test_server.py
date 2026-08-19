@@ -249,9 +249,7 @@ def test_an_explicit_sampling_field_overrides_the_engine_default(monkeypatch):
         lambda *_, **__: InferenceEngine(config=config, runner=EchoRunner()),
     )
     with fastapi_testclient.TestClient(server.app) as client:
-        payload = client.post(
-            "/generate", json={"prompt": "hello", "max_new_tokens": 12}
-        ).json()
+        payload = client.post("/generate", json={"prompt": "hello", "max_new_tokens": 12}).json()
     assert payload["generated_tokens"] == 12
 
 

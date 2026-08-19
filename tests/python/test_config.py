@@ -149,9 +149,7 @@ def test_an_invalid_yaml_config_is_rejected_at_load(tmp_path):
     import yaml
 
     path = tmp_path / "bad.yaml"
-    path.write_text(
-        yaml.safe_dump({"max_batch_size": 64, "queue_capacity": 8}), encoding="utf-8"
-    )
+    path.write_text(yaml.safe_dump({"max_batch_size": 64, "queue_capacity": 8}), encoding="utf-8")
     with pytest.raises(ValueError, match="queue_capacity"):
         EngineConfig.from_yaml(path)
 

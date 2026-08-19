@@ -319,9 +319,7 @@ def test_worker_count_bounds_concurrent_execution():
             time.sleep(0.02)
             with lock:
                 concurrent -= 1
-            return [
-                GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts
-            ]
+            return [GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts]
 
         @property
         def description(self) -> str:
@@ -351,17 +349,13 @@ def test_metrics_survive_a_mix_of_success_and_failure():
             Flaky.calls += 1
             if Flaky.calls % 2 == 0:
                 raise RuntimeError("intermittent")
-            return [
-                GenerationResult(text=p, prompt_tokens=1, generated_tokens=3) for p in prompts
-            ]
+            return [GenerationResult(text=p, prompt_tokens=1, generated_tokens=3) for p in prompts]
 
         @property
         def description(self) -> str:
             return "Flaky"
 
-    config = EngineConfig(
-        max_batch_size=1, max_wait_us=500, queue_capacity=64, warmup_iterations=0
-    )
+    config = EngineConfig(max_batch_size=1, max_wait_us=500, queue_capacity=64, warmup_iterations=0)
     with InferenceEngine(config=config, runner=Flaky()) as engine:
         results = [engine.submit(f"p{i}").result(timeout=20) for i in range(10)]
 

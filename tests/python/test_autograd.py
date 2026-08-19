@@ -39,9 +39,7 @@ def test_the_registered_operator_still_works_for_inference():
     # The guard applies to the backward pass only; the forward path is
     # unaffected and must still match the reference exactly.
     x = torch.randn(16)
-    torch.testing.assert_close(
-        torch.ops.cudaforge.silu(x), torch.nn.functional.silu(x)
-    )
+    torch.testing.assert_close(torch.ops.cudaforge.silu(x), torch.nn.functional.silu(x))
 
 
 @pytest.mark.parametrize(
