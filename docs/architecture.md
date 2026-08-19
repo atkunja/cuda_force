@@ -106,6 +106,7 @@ assembled from the backlog that accumulated while the previous one ran.
 | Buffer reuse | `MemoryPool` | allocation is the thing being avoided |
 | Timing and counters | `Metrics` | one place, so a snapshot is coherent |
 | Result delivery | per-request futures | decouples completion from the caller's thread |
+| Liveness vs readiness | `/health` vs `/ready` | a full queue means take me out of rotation, not restart me |
 
 ## Deviations from the requested layout
 

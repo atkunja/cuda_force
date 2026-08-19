@@ -34,6 +34,17 @@ newer, `clang++` 12 or newer.
 `cudaErrorNoKernelImageForDevice` was compiled for a different compute
 capability. Set `TORCH_CUDA_ARCH_LIST` to match the card and rebuild.
 
+## The orchestrator keeps restarting the container
+
+Check which probe is failing. `/health` is liveness — a failure there should
+mean the process is broken. `/ready` is readiness, and returns 503 whenever the
+queue is above 90% of capacity.
+
+Wiring a liveness probe to `/ready` makes an orchestrator restart an instance
+that is merely busy, discarding the queued work it was draining and pushing that
+load onto its peers — which then also become busy. Point liveness at `/health`
+and readiness at `/ready`.
+
 ## Throughput is lower than expected
 
 Read four metrics together, not one:

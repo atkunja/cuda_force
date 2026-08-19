@@ -220,7 +220,14 @@ counted separately from rejections and failures.
 Queue time and inference time are reported separately because they point at
 different problems: high queue time means the runtime is saturated or the wait
 is too generous, high inference time means the model or the batch size is the
-constraint. `GET /health` and `GET /metrics` are also served.
+constraint.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /health` | liveness — a failure here means restart the process |
+| `GET /ready` | readiness — 503 when the queue is near capacity, meaning take it out of rotation, not restart it |
+| `GET /metrics` | counters, batching statistics and latency percentiles |
+| `POST /generate` | generation |
 
 ## Building the C++ and CUDA targets
 
