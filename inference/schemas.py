@@ -90,6 +90,22 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
 
 
+class ReadinessResponse(BaseModel):
+    """Whether this instance should receive traffic right now.
+
+    Distinct from liveness: a process can be perfectly healthy and still be the
+    wrong place to send a request — during warmup, or while the queue is already
+    full. Conflating the two makes an orchestrator restart a container that only
+    needed to be taken out of rotation for a few seconds.
+    """
+
+    ready: bool
+    reason: str
+    queue_depth: int
+    queue_capacity: int
+    saturation: float
+
+
 class MetricsResponse(BaseModel):
     """Mirrors ``MetricsSnapshot``; see cudaforge.metrics for field meanings."""
 

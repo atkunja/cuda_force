@@ -35,6 +35,7 @@ from inference.schemas import (
     GenerateResponse,
     HealthResponse,
     MetricsResponse,
+    ReadinessResponse,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -115,6 +116,48 @@ async def health() -> HealthResponse:
         queue_depth=engine.queue_depth,
         uptime_seconds=snapshot.uptime_seconds,
     )
+
+
+@app.get(
+    "/ready",
+    response_model=ReadinessResponse,
+    responses={503: {"description": "not accepting traffic"}},
+)
+async def ready() -> JSONResponse:
+    """Readiness, as distinct from liveness.
+
+    `/health` answers "is this process alive" — a failure there should restart
+    the container. This answers "should this instance receive a request right
+    now", and a failure should only remove it from rotation. An instance whose
+    queue is already full is healthy but not ready; restarting it would drop the
+    work it is currently draining.
+    """
+    if _engine is None:
+        payload = ReadinessResponse(
+            ready=False,
+            reason="engine is still starting",
+            queue_depth=0,
+            queue_capacity=0,
+            saturation=0.0,
+        )
+        return JSONResponse(status_code=503, content=payload.model_dump())
+
+    capacity = _engine.config.queue_capacity
+    depth = _engine.queue_depth
+    saturation = depth / capacity if capacity else 0.0
+
+    # The threshold is below 1.0 on purpose. Reporting unready only once the
+    # queue is completely full leaves no headroom: by the time the orchestrator
+    # reacts, requests are already being rejected.
+    ready_now = saturation < 0.9
+    payload = ReadinessResponse(
+        ready=ready_now,
+        reason="accepting requests" if ready_now else "queue is near capacity",
+        queue_depth=depth,
+        queue_capacity=capacity,
+        saturation=round(saturation, 4),
+    )
+    return JSONResponse(status_code=200 if ready_now else 503, content=payload.model_dump())
 
 
 @app.get("/metrics", response_model=MetricsResponse)
