@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from training.config import LoRAConfig, TrainingConfig
 from training.dataset import PackedCausalDataset
 from training.evaluation import evaluate, perplexity_from_loss
-from training.train import TrainState, save_checkpoint, set_seed
+from training.train import TrainState, save_checkpoint, set_seed, train
 
 
 class StubCausalLM(nn.Module):
