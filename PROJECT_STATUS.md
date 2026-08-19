@@ -75,11 +75,11 @@ Makefile, and 14 documents.
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **102 cases, 28,545 assertions — pass** |
+| C++ test suite | **114 cases, 28,567 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **251 tests — pass** |
+| Python test suite | **288 tests — pass** |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
