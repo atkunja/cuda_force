@@ -184,3 +184,29 @@ TEST_CASE("an empty activation launch is a no-op", "[cuda][activation]") {
     REQUIRE_NOTHROW(launch_gelu(nullptr, nullptr, 0, stream));
     REQUIRE_NOTHROW(launch_swiglu(nullptr, nullptr, nullptr, 0, SwiGLUKernel::Vectorised, stream));
 }
+
+TEST_CASE("elementwise add matches the host", "[cuda][activation]") {
+    // The unfused baseline the fused residual+RMSNorm kernel is measured
+    // against; a wrong baseline would invalidate that comparison.
+    const auto a = random_vector(4096, /*seed=*/151);
+    const auto b = random_vector(4096, /*seed=*/157);
+
+    CudaStream stream;
+    DeviceBuffer<float> device_a(a.size());
+    DeviceBuffer<float> device_b(b.size());
+    DeviceBuffer<float> device_out(a.size());
+    device_a.copy_from_host(a.data(), a.size(), stream);
+    device_b.copy_from_host(b.data(), b.size(), stream);
+    launch_add(device_a.data(), device_b.data(), device_out.data(),
+               static_cast<int>(a.size()), stream);
+
+    std::vector<float> actual(a.size());
+    device_out.copy_to_host(actual.data(), actual.size(), stream);
+    stream.synchronize();
+
+    std::vector<float> expected(a.size());
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        expected[i] = a[i] + b[i];
+    }
+    require_all_close(actual, expected, 1e-7F, 1e-7F);
+}
