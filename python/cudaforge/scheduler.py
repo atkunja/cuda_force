@@ -8,6 +8,7 @@ behaviour documented in ``docs/concurrency.md`` describes both.
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import queue
 import threading
@@ -188,10 +189,8 @@ class DynamicBatcher:
         # The sentinel unblocks the collector if it is parked on an empty queue.
         # A bounded wait rather than an unbounded put: if the queue is full the
         # collector is busy draining it and will observe _stopping shortly.
-        try:
+        with contextlib.suppress(queue.Full):
             self._queue.put(None, timeout=timeout)
-        except queue.Full:
-            pass
         self._thread.join(timeout=timeout)
 
     def __enter__(self) -> DynamicBatcher:
@@ -263,10 +262,8 @@ class DynamicBatcher:
                 # Re-post the sentinel so the next iteration sees it. Never
                 # block doing so: at shutdown the queue may still be full, and
                 # blocking here would deadlock the only thread that drains it.
-                try:
+                with contextlib.suppress(queue.Full):
                     self._queue.put_nowait(None)
-                except queue.Full:
-                    pass
                 break
 
             nxt.dequeued_at = time.monotonic()
