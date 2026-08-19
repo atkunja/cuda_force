@@ -155,3 +155,19 @@ def test_the_json_metrics_endpoint_is_unchanged_by_the_prometheus_one(client):
     payload = client.get("/metrics").json()
     assert isinstance(payload, dict)
     assert "requests_completed" in payload
+
+
+def test_the_request_id_is_echoed_as_a_header(client):
+    response = client.post("/generate", json={"prompt": "hello"})
+    assert response.status_code == 200
+    # Same id in the header and the body, so a client can correlate with a
+    # server log line without parsing the payload.
+    assert response.headers["X-Request-ID"] == response.json()["request_id"]
+
+
+def test_request_ids_are_unique_across_requests(client):
+    ids = {
+        client.post("/generate", json={"prompt": f"p{i}"}).headers["X-Request-ID"]
+        for i in range(10)
+    }
+    assert len(ids) == 10
