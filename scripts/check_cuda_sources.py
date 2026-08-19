@@ -234,12 +234,53 @@ def check_syncthreads_not_divergent(path: Path, lines: list[str]) -> list[Findin
     return findings
 
 
+def check_shared_reuse_is_barriered(path: Path, lines: list[str]) -> list[Finding]:
+    """Two block reductions over the same shared array need a barrier between.
+
+    `block_reduce_max(x, scratch)` followed by `block_reduce_sum(y, scratch)`
+    lets one warp overwrite `scratch[0]` while another has not yet read it. The
+    result is a silently wrong row, not a crash — which is why this is worth a
+    rule rather than a code review.
+
+    The reductions in cuda_utils.cuh now end with a trailing barrier, so this
+    guards against a future reduction being written without one.
+    """
+    findings: list[Finding] = []
+    reduction = re.compile(r"block_reduce_(sum|max)\s*\(\s*[^,]+,\s*(\w+)")
+
+    previous_array: str | None = None
+    previous_line = 0
+    for index, line in enumerate(lines):
+        match = reduction.search(line)
+        if match is None:
+            if "__syncthreads()" in line:
+                previous_array = None
+            continue
+
+        array = match.group(2)
+        if previous_array == array:
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "unbarriered-shared-reuse",
+                    f"'{array}' is reused by a second block reduction with no "
+                    f"__syncthreads() since line {previous_line}",
+                )
+            )
+        previous_array = array
+        previous_line = index + 1
+
+    return findings
+
+
 CHECKS = (
     check_launch_is_checked,
     check_no_device_sync,
     check_status_is_used,
     check_shuffle_has_mask,
     check_syncthreads_not_divergent,
+    check_shared_reuse_is_barriered,
 )
 
 
