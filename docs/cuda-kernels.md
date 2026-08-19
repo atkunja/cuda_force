@@ -29,3 +29,65 @@ That reframes optimisation. The levers that matter, in rough order of impact:
 | Launch overhead | fewer, larger kernels rather than many small ones |
 
 Arithmetic optimisation appears nowhere on that list, which is the point.
+
+## Kernel A — Reduction
+
+Sum an array. The simplest possible operation, and the clearest illustration of
+why naive GPU code is slow.
+
+### Naive: one atomic per element
+
+```cuda
+atomicAdd(output, input[index]);
+```
+
+Correct, and roughly as slow as a GPU reduction can be. Every thread in the grid
+targets the same address, and the memory subsystem serialises conflicting
+atomics — so a machine with tens of thousands of threads performs the additions
+essentially one at a time. The bottleneck is not the addition; it is contention.
+
+### Shared memory: tree reduction per block
+
+Each block reduces its own tile to a single value through `log2(blockDim)`
+halving steps, then performs one atomic. Global atomics drop from N to
+N/blockDim — a factor of 256 at the default block size.
+
+Two details in the halving loop are easy to get wrong:
+
+```cuda
+for (unsigned half = blockDim.x / 2; half > 0; half >>= 1) {
+    if (index < half) { tile[index] += tile[index + half]; }
+    __syncthreads();
+}
+```
+
+* `index < half` keeps the active threads **contiguous**, so entire warps retire
+  together. The strided-modulo formulation (`if (index % (2 * stride) == 0)`)
+  computes the same answer but leaves every warp partially active throughout,
+  wasting most of the machine.
+* Consecutive threads touch consecutive shared-memory addresses at every step,
+  so there are no bank conflicts.
+
+### Warp shuffle: the last five steps in registers
+
+`__shfl_down_sync` reads another lane's register directly. The final five
+halving steps — those within a single warp — need no shared memory and no
+`__syncthreads()`, because lanes in a warp advance together.
+
+The shared array shrinks from one float per thread to one per warp, and the
+barrier count drops from `log2(blockDim)` to two.
+
+**The mask is not optional.** On Volta and later, lanes in a warp can genuinely
+be at different instructions, so the mask must name every lane that will execute
+the shuffle. Passing `0xffffffff` from a divergent branch is undefined
+behaviour — which is why the block reduction is structured so the whole warp
+reaches the primitive.
+
+### Grid sizing
+
+The grid is fixed at a multiple of the SM count rather than derived from the
+input size. With a grid-stride loop each block handles many elements, so
+launching one block per tile would create far more blocks than the device can
+hold resident and pay scheduling overhead for no additional parallelism. The
+size is also capped by the input, so a tiny array does not launch blocks with
+nothing to do.
