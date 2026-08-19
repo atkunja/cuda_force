@@ -65,6 +65,7 @@ run_stage "Python tests" "$PYTHON" -m pytest tests/python -q
 # Runs the examples as smoke tests. An example that no longer works is a
 # documentation bug with a working-code disguise.
 run_stage "Operator parity" "$PYTHON" examples/kernel_parity.py
+run_stage "Transformer block parity" "$PYTHON" examples/transformer_block.py
 run_stage "Example: single request" "$PYTHON" examples/simple_inference.py --echo-runner
 
 if "$PYTHON" -c "import ruff" >/dev/null 2>&1 || command -v ruff >/dev/null 2>&1; then

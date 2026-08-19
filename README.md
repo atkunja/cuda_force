@@ -170,6 +170,9 @@ python examples/fine_tune.py
 
 # Every kernel against its reference — the first thing to run on new GPU hardware
 python examples/kernel_parity.py
+
+# The operators composed into a LLaMA-style block, checked against PyTorch
+python examples/transformer_block.py
 ```
 
 ### Using the operators

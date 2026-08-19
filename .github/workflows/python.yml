@@ -53,6 +53,9 @@ jobs:
           python examples/simple_inference.py --echo-runner
           python examples/concurrent_requests.py --clients 4 --requests-per-client 5
 
+      - name: Transformer block parity
+        run: python examples/transformer_block.py
+
       - name: Operator parity
         # On a CPU runner this compares the references against themselves and
         # says so. It still catches a reference implementation that regresses,

@@ -67,7 +67,7 @@ during generation.
 
 ### Supporting
 
-Benchmarks (5 C++/Python harnesses plus a CUDA one), 5 examples, 7 scripts, a
+Benchmarks (5 C++/Python harnesses plus a CUDA one), 7 examples, 7 scripts, a
 custom CUDA structural linter, a Markdown link checker, 3 CI workflows, a
 multi-stage CUDA Dockerfile with 5 compose services, pre-commit config, a
 Makefile, and 14 documents.
