@@ -40,6 +40,11 @@ struct Request {
     TimePoint enqueued{};
     TimePoint dequeued{};
 
+    /// Point past which this request is worthless. A default-constructed value
+    /// means no deadline, which is why `expired()` tests for it explicitly
+    /// rather than comparing against the epoch.
+    TimePoint deadline{};
+
     Request() = default;
 
     Request(RequestId request_id, std::string request_prompt, GenerationParams generation)
@@ -50,6 +55,18 @@ struct Request {
 
     [[nodiscard]] Duration queue_delay() const noexcept {
         return std::chrono::duration_cast<Duration>(dequeued - enqueued);
+    }
+
+    [[nodiscard]] bool has_deadline() const noexcept { return deadline != TimePoint{}; }
+
+    /// True once the deadline has passed.
+    ///
+    /// Tested at dequeue rather than at admission. Running a request whose
+    /// client has already given up spends capacity that the requests still
+    /// being waited on need — under overload that is exactly backwards, and it
+    /// deepens the backlog that caused the timeouts in the first place.
+    [[nodiscard]] bool expired(TimePoint now = Clock::now()) const noexcept {
+        return has_deadline() && now >= deadline;
     }
 };
 

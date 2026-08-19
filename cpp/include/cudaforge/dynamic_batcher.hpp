@@ -46,7 +46,14 @@ public:
     /// time spent here is time no batch is being formed.
     using BatchHandler = std::function<void(Batch&&)>;
 
-    DynamicBatcher(RuntimeConfig config, BatchHandler handler, std::shared_ptr<Metrics> metrics);
+    /// Invoked for each request dropped because its deadline had already
+    /// passed. Optional, but an owner that tracks outstanding work needs it:
+    /// without it a dropped request simply vanishes and whoever is waiting on
+    /// it waits out their own timeout with no explanation.
+    using ExpiryHandler = std::function<void(const Request&)>;
+
+    DynamicBatcher(RuntimeConfig config, BatchHandler handler, std::shared_ptr<Metrics> metrics,
+                   ExpiryHandler on_expired = nullptr);
 
     DynamicBatcher(const DynamicBatcher&) = delete;
     DynamicBatcher& operator=(const DynamicBatcher&) = delete;
@@ -78,8 +85,12 @@ private:
     /// when the queue is closed and drained.
     Batch collect_batch();
 
+    /// Discards a request whose deadline has passed. Returns true if dropped.
+    bool drop_if_expired(const Request& request);
+
     RuntimeConfig config_;
     BatchHandler handler_;
+    ExpiryHandler on_expired_;
     std::shared_ptr<Metrics> metrics_;
     ConcurrentQueue<Request> queue_;
     std::atomic<bool> stopping_{false};
