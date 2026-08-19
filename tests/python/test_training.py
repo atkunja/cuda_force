@@ -326,9 +326,12 @@ def test_main_applies_flag_overrides_on_top_of_a_config(tmp_path, monkeypatch):
     )
 
     captured: dict[str, TrainingConfig] = {}
-    monkeypatch.setattr(
-        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
-    )
+
+    def capture(config: TrainingConfig) -> TrainState:
+        captured["config"] = config
+        return TrainState()
+
+    monkeypatch.setattr(train_module, "train", capture)
 
     assert (
         train_module.main(
@@ -348,7 +351,7 @@ def test_main_validates_the_resulting_config(tmp_path, monkeypatch):
     # partway through a run.
     from training import train as train_module
 
-    monkeypatch.setattr(train_module, "train", lambda config: TrainState())
+    monkeypatch.setattr(train_module, "train", lambda _config: TrainState())
     with pytest.raises(ValueError, match="batch_size"):
         train_module.main(["--batch-size", "0"])
 
@@ -357,9 +360,12 @@ def test_main_defaults_need_no_config_file(monkeypatch):
     from training import train as train_module
 
     captured: dict[str, TrainingConfig] = {}
-    monkeypatch.setattr(
-        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
-    )
+
+    def capture(config: TrainingConfig) -> TrainState:
+        captured["config"] = config
+        return TrainState()
+
+    monkeypatch.setattr(train_module, "train", capture)
 
     assert train_module.main(["--max-steps", "1"]) == 0
     assert captured["config"].max_steps == 1
@@ -369,9 +375,12 @@ def test_the_4bit_flag_is_recorded(monkeypatch):
     from training import train as train_module
 
     captured: dict[str, TrainingConfig] = {}
-    monkeypatch.setattr(
-        train_module, "train", lambda config: captured.setdefault("config", config) or TrainState()
-    )
+
+    def capture(config: TrainingConfig) -> TrainState:
+        captured["config"] = config
+        return TrainState()
+
+    monkeypatch.setattr(train_module, "train", capture)
 
     train_module.main(["--load-in-4bit", "--max-steps", "1"])
     assert captured["config"].load_in_4bit

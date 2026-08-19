@@ -187,7 +187,7 @@ class StubModel:
         import torch
 
         self.last_max_new_tokens = max_new_tokens
-        rows, width = input_ids.shape
+        rows = input_ids.shape[0]
         continuation = torch.arange(1, max_new_tokens + 1).repeat(rows, 1)
         return torch.cat([input_ids, continuation], dim=1)
 
