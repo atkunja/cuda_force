@@ -164,6 +164,9 @@ python examples/concurrent_requests.py
 
 # A real LoRA fine-tune, CPU, under a minute, no downloads beyond the model
 python examples/fine_tune.py
+
+# Every kernel against its reference — the first thing to run on new GPU hardware
+python examples/kernel_parity.py
 ```
 
 ### Using the operators

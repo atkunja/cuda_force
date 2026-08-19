@@ -63,9 +63,10 @@ during generation.
 
 ### Supporting
 
-Benchmarks (4 C++/Python harnesses plus a CUDA one), 4 examples, 7 scripts, a
-custom CUDA structural linter, 3 CI workflows, multi-stage CUDA Dockerfile with
-5 compose services, pre-commit config, and 11 documents.
+Benchmarks (5 C++/Python harnesses plus a CUDA one), 5 examples, 7 scripts, a
+custom CUDA structural linter, a Markdown link checker, 3 CI workflows, a
+multi-stage CUDA Dockerfile with 5 compose services, pre-commit config, a
+Makefile, and 14 documents.
 
 ---
 
@@ -195,7 +196,8 @@ git clone https://github.com/atkunja/cuda_force.git && cd cuda_force
 # 3. Does the extension build and dispatch to CUDA?
 pip install -e . --no-build-isolation
 python -c "from cudaforge.ops import backend_report; print(backend_report())"
-pytest tests/python -q          # cuda-marked tests now run instead of skipping
+python examples/kernel_parity.py   # every operator against its reference
+pytest tests/python -q             # cuda-marked tests now run instead of skipping
 
 # 4. What are the numbers?
 ./build-cuda/benchmarks/bench_kernels > benchmarks/results/cuda-kernels.json
