@@ -139,21 +139,19 @@ def test_lora_scale_is_linear_in_the_adapter_path():
 
 
 @pytest.mark.parametrize(
-    ("bad", "message"),
+    ("shapes", "message"),
     [
-        ("x", "input features"),
-        ("a", "lora_a"),
-        ("b", "lora_b"),
+        # x's feature count disagrees with the weight's input dimension.
+        ({"x": (4, 31), "w": (32, 16), "a": (32, 4), "b": (4, 16)}, "input features"),
+        # lora_a's input dimension disagrees with the weight's.
+        ({"x": (4, 32), "w": (32, 16), "a": (31, 4), "b": (4, 16)}, "lora_a"),
+        # lora_b's rank disagrees with lora_a's.
+        ({"x": (4, 32), "w": (32, 16), "a": (32, 4), "b": (5, 16)}, "lora_b"),
+        # lora_b's output dimension disagrees with the weight's.
+        ({"x": (4, 32), "w": (32, 16), "a": (32, 4), "b": (4, 15)}, "lora_b"),
     ],
 )
-def test_lora_rejects_mismatched_shapes(bad, message):
-    shapes = {
-        "x": (4, 32),
-        "w": (32, 16),
-        "a": (32, 4),
-        "b": (4, 16),
-    }
-    shapes[bad] = (shapes[bad][0] + 3, shapes[bad][1])
+def test_lora_rejects_mismatched_shapes(shapes, message):
     with pytest.raises(ValueError, match=message):
         ops.lora_linear(
             torch.randn(*shapes["x"]),
@@ -206,16 +204,22 @@ def test_all_zero_input_round_trips_exactly():
 
 
 def test_an_outlier_only_degrades_its_own_block():
-    # Block-wise scaling exists precisely so one large value does not stretch
-    # the range of unrelated elements. Element 0 is in block 0; element 200 is
-    # in block 3 and should be unaffected.
+    # Block-wise scaling exists so one large value does not stretch the range of
+    # unrelated elements. The outlier itself is always exact — it defines the
+    # absmax and maps to 127 — so the comparison has to be between an ordinary
+    # element sharing the outlier's block and the same value in a clean block.
     x = torch.full((256,), 0.5)
     x[0] = 1000.0
     quantised, scales = ops.quantize_int8(x)
     restored = ops.dequantize_int8(quantised, scales)
 
-    assert (x[0] - restored[0]).abs() > (x[200] - restored[200]).abs()
-    assert (x[200] - restored[200]).abs() < 0.01
+    same_block_error = (x[1] - restored[1]).abs()      # block 0, with the outlier
+    clean_block_error = (x[200] - restored[200]).abs()  # block 3, no outlier
+
+    assert same_block_error > clean_block_error
+    assert clean_block_error < 0.01
+    # The outlier defines its block's scale, so it survives the round trip.
+    torch.testing.assert_close(restored[0], x[0])
 
 
 def test_dequantize_rejects_a_wrong_scale_count():
