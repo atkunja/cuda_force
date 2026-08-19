@@ -79,13 +79,14 @@ def test_invalid_configuration_is_rejected(kwargs, message):
         DynamicBatcher(handler=lambda _: None, **kwargs)
 
 
-def test_a_lone_request_is_released_after_max_wait():
+def test_an_idle_batcher_produces_no_batches():
     collector = Collector()
     with DynamicBatcher(collector, max_batch_size=16, max_wait_seconds=0.02):
-        assert make_request() is not None
-    # nothing submitted; nothing batched
+        time.sleep(0.1)
     assert collector.total == 0
 
+
+def test_a_lone_request_is_released_after_max_wait():
     collector = Collector()
     with DynamicBatcher(collector, max_batch_size=16, max_wait_seconds=0.02) as batcher:
         batcher.submit(make_request())
