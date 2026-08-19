@@ -75,6 +75,9 @@ public:
         latency_.record(latency_ns);
     }
 
+    /// Recorded at batch formation. Unlike the Python engine, the C++ batcher
+    /// has no separate execution stage that can drop members afterwards, so
+    /// these counters describe exactly what the handler received.
     void record_batch(std::size_t batch_size, bool closed_by_timeout) noexcept {
         batches_.fetch_add(1, std::memory_order_relaxed);
         batched_requests_.fetch_add(batch_size, std::memory_order_relaxed);
