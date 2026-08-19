@@ -178,3 +178,67 @@ because average batch size alone cannot distinguish two very different states:
 | Nearly all timeout closures, small batches | arrival rate too low to fill a batch | lower `max_wait`; it is pure added latency |
 | Nearly all size closures, queue depth rising | saturated | raise `max_batch_size`, or add capacity |
 | Mixed, batch size near the limit | well matched | leave it alone |
+
+## The thread pool
+
+A fixed set of workers over a bounded task queue. Two details are load-bearing.
+
+**Counters are relaxed atomics, not mutex-protected.** They are independent
+single words updated on the hot path; taking the queue's mutex to bump one would
+serialise workers that otherwise never interact. Relaxed ordering is correct
+because nothing is published through these counters — no reader uses them to
+establish happens-before. The consequence is that a stats snapshot is not an
+atomic view of the pool, which is why no invariant is derived across fields.
+
+**A throwing task must not kill its worker.** If it did, the pool would silently
+lose capacity one task at a time until it deadlocked with an empty worker set.
+Exceptions are counted and swallowed in the worker loop; callers who need the
+error use `submit_with_result`, where it is stored in the future.
+
+## What the tests actually verify
+
+Concurrency bugs do not reproduce on demand, so the suite asserts properties
+rather than sequences:
+
+| Property | Test |
+| --- | --- |
+| Capacity is never exceeded, observed from outside | `capacity is never exceeded under concurrent producers` |
+| Every item is consumed exactly once | `every produced item is consumed exactly once` |
+| Blocked producers and consumers are released by shutdown | `a blocked producer is released by shutdown` |
+| Accepted work survives shutdown | `shutdown drains buffered items before reporting Closed` |
+| Backpressure caps depth rather than growing | `a bounded queue applies backpressure rather than growing` |
+| A failing task does not reduce pool capacity | `a throwing task does not kill its worker` |
+
+### Assertions never run on worker threads
+
+Catch2's `REQUIRE` macros are not thread-safe — they manipulate per-run state
+including an output redirect that asserts if two threads activate it at once.
+Calling them off the main thread produces an abort whose timing depends on the
+scheduler, so the failure looks intermittent and unrelated to the code under
+test. This was observed here as a sporadic `SIGABRT` under AddressSanitizer.
+
+Concurrency tests therefore funnel checks through
+[`thread_assert.hpp`](../tests/cpp/thread_assert.hpp), an atomic failure
+counter, and assert once on the main thread after every worker is joined.
+
+## Sanitizer coverage
+
+The portable runtime is built and run under three sanitizers. All three pass on
+the development host:
+
+```bash
+./scripts/build.sh --sanitizer thread    && ./build-thread/tests/cpp/cudaforge_tests
+./scripts/build.sh --sanitizer address   && ./build-address/tests/cpp/cudaforge_tests
+./scripts/build.sh --sanitizer undefined && ./build-undefined/tests/cpp/cudaforge_tests
+```
+
+ThreadSanitizer is the important one here: it instruments every memory access
+and reports a race even when the interleaving that would expose it did not
+occur during the run. That is the only practical way to have any confidence in
+concurrent code, because testing alone samples a vanishing fraction of the
+possible schedules.
+
+The sanitizers are mutually exclusive at the ABI level — TSan and ASan
+instrument allocations differently and cannot be linked together — which is why
+`CUDAFORGE_SANITIZER` is a single-valued option rather than several booleans,
+and why each gets its own build directory.
