@@ -93,6 +93,27 @@ theoretical peak, which the CUDA harness reads from device properties and
 includes in its output. A kernel at 80% of peak is essentially done, regardless
 of how its time compares to another implementation.
 
+## Reading the output
+
+`scripts/benchmark.sh` writes a Markdown summary next to the JSON:
+
+```bash
+python benchmarks/summarize_results.py benchmarks/results/
+```
+
+Dependency-free on purpose — the machine that produced an interesting result is
+often not the one with a plotting stack installed, and requiring one is a good
+way to end up with no summary at all.
+
+For CUDA results the column to read is **`of peak`**: effective bandwidth as a
+fraction of the device's theoretical maximum, which the harness reads from
+device properties. A kernel near peak is finished; further work needs an
+algorithmic change, not more tuning. A raw millisecond figure says nothing
+without that reference.
+
+The summary reproduces the fallback caveat verbatim when custom kernels were
+not used, so a pasted table cannot be mistaken for a kernel comparison.
+
 ## What to look at
 
 ### Concurrency (`bench_queue`)

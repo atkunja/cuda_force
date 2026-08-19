@@ -67,5 +67,11 @@ else
 NOTE
 fi
 
+# A Markdown summary alongside the JSON. The JSON is what a script consumes;
+# this is what goes into an issue or a report without pasting hundreds of lines.
+SUMMARY="$RESULTS/summary-${STAMP}.md"
+"$PYTHON" benchmarks/summarize_results.py "$RESULTS"/*-"${STAMP}".json > "$SUMMARY"
+
 echo
 echo "done. results in $RESULTS"
+echo "summary: $SUMMARY"

@@ -41,6 +41,7 @@ runs/
 # is tracked, so the directory survives a clean checkout.
 benchmarks/results/*.json
 benchmarks/results/*.csv
+benchmarks/results/*.md
 !benchmarks/results/README.md
 
 # Profiling output

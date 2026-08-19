@@ -22,6 +22,12 @@ Writes timestamped JSON here:
 | `batching-*.json` | `benchmark_batching.py` | Python |
 | `cuda-kernels-*.json` | `bench_kernels` | **NVIDIA GPU** |
 
+A Markdown summary is written alongside them:
+
+```bash
+python benchmarks/summarize_results.py benchmarks/results/
+```
+
 ## Before reading any of it
 
 Check `backend.using_custom_kernels`. On a machine without CUDA,
