@@ -13,9 +13,12 @@
 // per range, which is negligible against the per-batch work being annotated but
 // would not be against a per-kernel one — annotate phases, not launches.
 
+#include <cstdint>
 #include <string>
 
 #ifdef CUDAFORGE_ENABLE_NVTX
+#include <pthread.h>
+
 #include <nvtx3/nvToolsExt.h>
 #endif
 
