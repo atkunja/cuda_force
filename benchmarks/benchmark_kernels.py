@@ -87,6 +87,14 @@ def measure(
 
 
 def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
+    """Build every case and time it.
+
+    Each lambda binds its tensors as default arguments. Python closes over the
+    *variable*, not its value, so a bare `lambda x=x, weight=weight: ops.rmsnorm(x, weight)` inside
+    a loop would capture whichever tensors the loop had reached by the time it
+    ran — the classic late-binding trap, and one that would silently benchmark
+    the same shape repeatedly.
+    """
     results: list[Measurement] = []
 
     for rows, cols in [(1024, 512), (2048, 4096), (512, 8192)]:
@@ -95,25 +103,27 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
         shape = f"{rows}x{cols}"
 
         results.append(
-            measure("rmsnorm", "cudaforge", shape, lambda: ops.rmsnorm(x, weight), warmup, runs)
+            measure("rmsnorm", "cudaforge", shape, lambda x=x, weight=weight: ops.rmsnorm(x, weight), warmup, runs)
         )
         results.append(
             measure(
                 "rmsnorm",
                 "torch",
                 shape,
-                lambda: x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * weight,
+                lambda x=x, weight=weight: x
+                * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6)
+                * weight,
                 warmup,
                 runs,
             )
         )
 
         results.append(
-            measure("softmax", "cudaforge", shape, lambda: ops.softmax(x), warmup, runs)
+            measure("softmax", "cudaforge", shape, lambda x=x: ops.softmax(x), warmup, runs)
         )
         results.append(
             measure(
-                "softmax", "torch", shape, lambda: torch.softmax(x, dim=-1), warmup, runs
+                "softmax", "torch", shape, lambda x=x: torch.softmax(x, dim=-1), warmup, runs
             )
         )
 
@@ -129,7 +139,9 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "lora_linear",
                 "cudaforge",
                 shape,
-                lambda: ops.lora_linear(x, weight, lora_a, lora_b, 2.0),
+                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: ops.lora_linear(
+                    x, weight, lora_a, lora_b, 2.0
+                ),
                 warmup,
                 runs,
             )
@@ -139,7 +151,8 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "lora_linear",
                 "torch",
                 shape,
-                lambda: x @ weight + 2.0 * ((x @ lora_a) @ lora_b),
+                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: x @ weight
+                + 2.0 * ((x @ lora_a) @ lora_b),
                 warmup,
                 runs,
             )
@@ -149,14 +162,14 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
         x = torch.randn(count, device=device)
         results.append(
             measure(
-                "quantize_int8", "cudaforge", str(count), lambda: ops.quantize_int8(x),
+                "quantize_int8", "cudaforge", str(count), lambda x=x: ops.quantize_int8(x),
                 warmup, runs,
             )
         )
         results.append(
-            measure("sum", "cudaforge", str(count), lambda: ops.sum_reduce(x), warmup, runs)
+            measure("sum", "cudaforge", str(count), lambda x=x: ops.sum_reduce(x), warmup, runs)
         )
-        results.append(measure("sum", "torch", str(count), lambda: x.sum(), warmup, runs))
+        results.append(measure("sum", "torch", str(count), lambda x=x: x.sum(), warmup, runs))
 
     return results
 
