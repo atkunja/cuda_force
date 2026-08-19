@@ -4,11 +4,11 @@
 
 | Suite | Count | Needs | Runs on the dev host? |
 | --- | --- | --- | --- |
-| C++ (`tests/cpp`) | 114 cases, 28,567 assertions | C++20 compiler | yes |
-| C++ under TSan / ASan / UBSan | same 114 | clang | yes, all three clean |
-| Python (`tests/python`) | 326 | Python + PyTorch | yes |
-| CUDA (`tests/cuda`) | 50 cases | NVIDIA GPU | **no** |
-| CUDA structural checks | 26 files | nothing | yes |
+| C++ (`tests/cpp`) | 118 cases, 28,585 assertions | C++20 compiler | yes |
+| C++ under TSan / ASan / UBSan | same 118 | clang | yes, all three clean |
+| Python (`tests/python`) | 340 | Python + PyTorch | yes |
+| CUDA (`tests/cuda`) | 56 cases | NVIDIA GPU | **no** |
+| CUDA structural checks | 29 files | nothing | yes |
 
 ```bash
 ./scripts/test.sh          # everything this machine can run, with skips reported

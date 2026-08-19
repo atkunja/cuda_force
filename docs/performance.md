@@ -88,7 +88,7 @@ at all, and it is where a naive bucketing would do worst. Reproduce with
 
 | Field | |
 | --- | --- |
-| Baseline | 114 C++ tests, 28,567 assertions |
+| Baseline | 118 C++ tests, 28,585 assertions |
 | **Measured** | clean under ThreadSanitizer, AddressSanitizer and UndefinedBehaviorSanitizer |
 
 ASan surfaced a real defect during development: concurrency tests were calling

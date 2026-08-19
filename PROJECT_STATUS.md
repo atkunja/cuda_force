@@ -79,11 +79,11 @@ Makefile, and 14 documents.
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **114 cases, 28,567 assertions — pass** |
+| C++ test suite | **118 cases, 28,585 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **326 tests — pass** |
+| Python test suite | **340 tests — pass** |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
@@ -158,7 +158,7 @@ by `nvcc` or executed on a GPU as part of this work.
 | Component | What is unverified |
 | --- | --- |
 | All `.cu` kernels | compilation and execution |
-| `tests/cuda/*` (50 cases) | every assertion in them |
+| `tests/cuda/*` (56 cases) | every assertion in them |
 | `GpuScheduler` | runtime stream overlap and event ordering |
 | `MemoryPool<DeviceAllocatorBackend>` | device allocation behaviour |
 | `PinnedBuffer` | page-locked allocation and DMA overlap |
