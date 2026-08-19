@@ -178,3 +178,62 @@ def test_the_http_percentile_helper_sorts_its_input():
     import benchmark_server
 
     assert benchmark_server.percentile([5.0, 1.0, 3.0, 2.0, 4.0], 0.5) == 3.0
+
+
+def test_kv_cache_results_render_with_their_ratio(tmp_path, capsys):
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "kv_cache_occupancy",
+            "cache_tokens": 1048576,
+            "max_sequence_length": 2048,
+            "note": "bookkeeping only",
+            "workloads": [
+                {
+                    "workload": "chat",
+                    "mean_length": 148.0,
+                    "contiguous_sequences": 512,
+                    "contiguous_waste": 0.93,
+                    "paged": [
+                        {"block_size": 8, "sequences": 6912, "waste": 0.02,
+                         "sequences_ratio": 13.5},
+                        {"block_size": 16, "sequences": 6752, "waste": 0.048,
+                         "sequences_ratio": 13.2},
+                    ],
+                }
+            ],
+            "allocator_throughput": [
+                {"pool_blocks": 1024, "operations_per_second": 163_400_000.0}
+            ],
+        },
+        capsys,
+    )
+    # Block 16 is the reported point; the rest stay in the JSON.
+    assert "13.2x" in text
+    assert "13.5x" not in text
+    assert "163.4M" in text
+    assert "bookkeeping only" in text
+
+
+def test_a_kv_workload_without_the_reported_block_size_is_skipped(tmp_path, capsys):
+    # Rendering a row with no data would be worse than omitting it.
+    text = render(
+        tmp_path,
+        {
+            "benchmark": "kv_cache_occupancy",
+            "cache_tokens": 1024,
+            "max_sequence_length": 128,
+            "workloads": [
+                {
+                    "workload": "odd",
+                    "mean_length": 10.0,
+                    "contiguous_sequences": 8,
+                    "contiguous_waste": 0.5,
+                    "paged": [{"block_size": 64, "sequences": 9, "waste": 0.1,
+                               "sequences_ratio": 1.1}],
+                }
+            ],
+        },
+        capsys,
+    )
+    assert "_no rows_" in text
