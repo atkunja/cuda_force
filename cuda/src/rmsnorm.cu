@@ -4,6 +4,7 @@
 
 #include "cudaforge/cuda_error.cuh"
 #include "cudaforge/cuda_utils.cuh"
+#include "cudaforge/reduced_precision.cuh"
 
 namespace cudaforge {
 namespace {
@@ -81,8 +82,13 @@ __global__ void rmsnorm_vectorised(const float4* __restrict__ input,
     }
 }
 
-__global__ void rmsnorm_half(const __half* __restrict__ input, const __half* __restrict__ weight,
-                             __half* __restrict__ output, int rows, int cols, float eps) {
+/// Templated over the storage type so FP16 and BF16 share one implementation.
+/// Only the conversions differ; the accumulator is FP32 either way — see
+/// reduced_precision.cuh for why that is not negotiable for either format.
+template <typename T>
+__global__ void rmsnorm_reduced(const T* __restrict__ input, const T* __restrict__ weight,
+                                T* __restrict__ output, int rows, int cols, float eps) {
+    using Convert = ReducedPrecision<T>;
     __shared__ float scratch[kWarpSize];
 
     const int row = static_cast<int>(blockIdx.x);
@@ -90,14 +96,14 @@ __global__ void rmsnorm_half(const __half* __restrict__ input, const __half* __r
         return;
     }
 
-    const __half* row_in = input + static_cast<std::size_t>(row) * cols;
-    __half* row_out = output + static_cast<std::size_t>(row) * cols;
+    const T* row_in = input + static_cast<std::size_t>(row) * cols;
+    T* row_out = output + static_cast<std::size_t>(row) * cols;
     const int tid = static_cast<int>(threadIdx.x);
     const int step = static_cast<int>(blockDim.x);
 
     float sum_squares = 0.0F;
     for (int col = tid; col < cols; col += step) {
-        const float value = __half2float(row_in[col]);
+        const float value = Convert::to_float(row_in[col]);
         sum_squares += value * value;
     }
     sum_squares = block_reduce_sum(sum_squares, scratch);
@@ -105,8 +111,9 @@ __global__ void rmsnorm_half(const __half* __restrict__ input, const __half* __r
     const float scale = rsqrtf(sum_squares / static_cast<float>(cols) + eps);
 
     for (int col = tid; col < cols; col += step) {
-        const float value = __half2float(row_in[col]) * scale * __half2float(weight[col]);
-        row_out[col] = __float2half(value);
+        const float value =
+            Convert::to_float(row_in[col]) * scale * Convert::to_float(weight[col]);
+        row_out[col] = Convert::from_float(value);
     }
 }
 
@@ -149,7 +156,18 @@ void launch_rmsnorm_half(const __half* input, const __half* weight, __half* outp
         return;
     }
     const int block = block_size_for_row(cols);
-    rmsnorm_half<<<rows, block, 0, stream>>>(input, weight, output, rows, cols, eps);
+    rmsnorm_reduced<<<rows, block, 0, stream>>>(input, weight, output, rows, cols, eps);
+    CUDAFORGE_CHECK_LAUNCH(stream);
+}
+
+void launch_rmsnorm_bf16(const __nv_bfloat16* input, const __nv_bfloat16* weight,
+                         __nv_bfloat16* output, int rows, int cols, float eps,
+                         cudaStream_t stream) {
+    if (rows <= 0 || cols <= 0) {
+        return;
+    }
+    const int block = block_size_for_row(cols);
+    rmsnorm_reduced<<<rows, block, 0, stream>>>(input, weight, output, rows, cols, eps);
     CUDAFORGE_CHECK_LAUNCH(stream);
 }
 

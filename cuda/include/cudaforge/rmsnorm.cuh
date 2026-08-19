@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
 
@@ -43,5 +44,22 @@ void launch_rmsnorm(const float* input, const float* weight, float* output, int 
 /// arithmetic-bound.
 void launch_rmsnorm_half(const __half* input, const __half* weight, __half* output, int rows,
                          int cols, float eps, cudaStream_t stream);
+
+/// BF16 storage with FP32 accumulation.
+///
+/// BF16 has float32's exponent range, so the overflow that motivates the FP32
+/// accumulator in the FP16 path cannot occur here — an activation of magnitude
+/// 300 squares to 90,000, which is unremarkable in BF16 and infinite in FP16.
+///
+/// The accumulator stays FP32 anyway, for the opposite reason: BF16's 7-bit
+/// mantissa is *worse* than FP16's, so a BF16 accumulator would stop making
+/// progress after a few hundred terms. Both formats are storage-only here.
+///
+/// This is the path an Ampere-or-later deployment takes, because
+/// `EngineConfig.resolve_dtype` prefers bfloat16 wherever the hardware supports
+/// it.
+void launch_rmsnorm_bf16(const __nv_bfloat16* input, const __nv_bfloat16* weight,
+                         __nv_bfloat16* output, int rows, int cols, float eps,
+                         cudaStream_t stream);
 
 }  // namespace cudaforge
