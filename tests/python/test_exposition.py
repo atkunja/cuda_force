@@ -112,9 +112,7 @@ def test_the_content_type_declares_the_format_version():
 def snapshot_with_configuration():
     metrics = MetricsRegistry()
     snapshot = metrics.snapshot()
-    snapshot.extra.update(
-        {"runner": "EchoRunner", "max_batch_size": 16, "max_wait_us": 5000}
-    )
+    snapshot.extra.update({"runner": "EchoRunner", "max_batch_size": 16, "max_wait_us": 5000})
     return snapshot
 
 
@@ -141,9 +139,7 @@ def test_label_values_are_escaped():
     snapshot.extra["runner"] = 'Weird"Runner\\with\nnewline'
 
     text = render_prometheus(snapshot)
-    info_line = next(
-        line for line in text.splitlines() if line.startswith("cudaforge_build_info{")
-    )
+    info_line = next(line for line in text.splitlines() if line.startswith("cudaforge_build_info{"))
     assert '\\"' in info_line
     assert "\n" not in info_line.replace("\\n", "")
     # Exactly two unescaped quotes delimit the value.

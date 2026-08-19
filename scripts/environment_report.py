@@ -37,9 +37,7 @@ def probe(name: str, command: list[str], note: str = "") -> Tool:
     if shutil.which(command[0]) is None:
         return Tool(name, False, None, note)
     try:
-        result = subprocess.run(
-            command, capture_output=True, text=True, timeout=15, check=False
-        )
+        result = subprocess.run(command, capture_output=True, text=True, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError) as error:
         return Tool(name, False, None, f"{note} ({error})".strip())
 
