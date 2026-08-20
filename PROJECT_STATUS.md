@@ -311,10 +311,20 @@ of the section above is that compiling and working are different things.
 | `launch_paged_attention` — gather through the block table | compiles; 4 test cases written |
 | `StreamOrderedAllocatorBackend` — `cudaMallocAsync` | compiles; 3 test cases written |
 | Tiled rewrite of the fused LoRA kernel | compiles; existing LoRA tests cover it |
+| `launch_matmul_tensor_core` — TF32 WMMA | compiles; 3 test cases written |
+| `ReplicatedEngine` — one engine per device | **host-side, fully tested**; the multi-device path needs 2 GPUs |
+| `KVCacheManager` (Python) + scheduler wiring | **host-side, fully tested**; 14 conformance scenarios against C++ |
 
 A second validation run would settle all three. `./scripts/validate_gpu.sh`
 already picks them up — the CUDA tests and the kernel benchmark both enumerate
 what is built, so nothing needs changing to include them.
+
+The tensor-core matmul carries a prediction worth writing down before it runs:
+TF32 on an RTX 3090 should beat the tiled FP32 kernel by a wide margin on the
+larger shapes, and still fall well short of cuBLAS, because this kernel loads
+fragments straight from global memory instead of double-buffering them through
+shared. If it does *not* beat the tiled kernel, the likely cause is that
+fragment loading, not the tensor cores.
 
 The LoRA rewrite is the one to watch. It was measured at 21.8-32.3x slower than
 the unfused path, diagnosed as a missing tiling rather than the tensor-core
