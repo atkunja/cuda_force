@@ -302,3 +302,37 @@ def test_shutting_down_mid_submission_settles_every_future():
 
     leaked = scheduler_threads() - pre_existing
     assert not leaked, f"{len(leaked)} scheduler thread(s) outlived their engine"
+
+
+def test_shutdown_honours_its_timeout_and_abandons_what_is_left():
+    """The counterpart to `test_shutdown_waits_for_dispatched_batches_regardless_of_timeout`.
+
+    Same method name and parameter as `InferenceEngine.shutdown`, different
+    behaviour: one scheduler thread joined with a timeout means a short timeout
+    is genuinely short, and the work still running is abandoned rather than
+    finished. Both are documented; both are pinned, because `ServingEngine`
+    would otherwise imply they are interchangeable in this respect.
+    """
+    running = engine(
+        runner=EchoStepwiseRunner(per_step_seconds=0.02),
+        max_batch_size=2,
+        generation=GenerationConfig(max_new_tokens=200),
+    )
+    futures = [running.submit(f"p{index}") for index in range(8)]
+    time.sleep(0.05)
+
+    started = time.monotonic()
+    running.shutdown(timeout=0.05)
+    elapsed = time.monotonic() - started
+
+    # 8 sequences x 200 tokens at 20 ms would take minutes if it waited.
+    assert elapsed < 1.0, f"shutdown took {elapsed:.2f}s; did it ignore the timeout?"
+
+    abandoned = 0
+    for future in futures:
+        try:
+            future.result(timeout=10)
+        except EngineClosedError:
+            abandoned += 1
+        assert future.done()
+    assert abandoned > 0, "unfinished work should be abandoned, not silently completed"

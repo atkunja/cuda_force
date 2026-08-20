@@ -171,7 +171,16 @@ class ContinuousEngine:
         return snapshot
 
     def shutdown(self, timeout: float = 30.0) -> None:
-        """Drain in-flight work and release resources. Idempotent."""
+        """Drain in-flight work and release resources. Idempotent.
+
+        `timeout` bounds this call, unlike `InferenceEngine.shutdown` — there is
+        one scheduler thread rather than a pool, and joining it with a timeout
+        leaves anything unfinished to be abandoned. So a short timeout really is
+        short, and really does fail futures that had not completed.
+
+        Both engines guarantee the same thing: no future is left pending. They
+        differ in how much work they finish first.
+        """
         if self._closed.is_set():
             return
         self._closed.set()

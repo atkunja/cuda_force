@@ -162,8 +162,70 @@ def test_a_runner_returning_the_wrong_row_count_is_reported_as_an_error():
     assert any(not response.ok for response in results)
 
 
-def test_outstanding_futures_are_failed_at_shutdown():
-    # A caller blocked on result() must not hang when the engine goes away.
+def test_shutting_down_mid_submission_settles_every_future():
+    """The same property as the test below, but during the race rather than after it.
+
+    That test submits everything and *then* shuts down, so the two paths never
+    overlap. Here submissions are still arriving as `shutdown` walks the
+    outstanding futures — the window in which one could be claimed by neither
+    side and left pending forever. It is a few instructions wide, so a single
+    run is not evidence.
+    """
+    import contextlib
+    import random
+
+    def worker_threads() -> set[int]:
+        return {
+            thread.ident
+            for thread in threading.enumerate()
+            if "cudaforge-worker" in thread.name and thread.ident is not None
+        }
+
+    pre_existing = worker_threads()
+    random.seed(1)
+
+    for _ in range(10):
+        config = EngineConfig(
+            max_batch_size=4, queue_capacity=64, worker_threads=2, warmup_iterations=0
+        )
+        engine = InferenceEngine(config=config)
+        submitted: list[object] = []
+        guard = threading.Lock()
+
+        def submitter(target=engine, collected=submitted, lock=guard):
+            for index in range(20):
+                try:
+                    future = target.submit(f"p{index}")
+                except EngineClosedError:
+                    return
+                with lock:
+                    collected.append(future)
+
+        threads = [threading.Thread(target=submitter) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        threading.Event().wait(random.uniform(0.0, 0.008))
+        engine.shutdown(timeout=10)
+        for thread in threads:
+            thread.join(timeout=10)
+
+        for future in submitted:
+            with contextlib.suppress(EngineClosedError):
+                future.result(timeout=10)
+            assert future.done(), "a future was claimed by neither path"
+
+    leaked = worker_threads() - pre_existing
+    assert not leaked, f"{len(leaked)} worker thread(s) outlived their engine"
+
+
+def test_every_future_is_settled_at_shutdown():
+    """A caller blocked on result() must not hang when the engine goes away.
+
+    Named for what it checks. It does *not* prove futures are failed: the
+    executor drains everything first, so they are settled by completing. The
+    abandonment branch is nearly unreachable here — removing it entirely leaves
+    this test green — which the shutdown docstring explains.
+    """
     started = threading.Event()
 
     class Slow:
@@ -379,3 +441,46 @@ def test_the_snapshot_carries_labels_for_the_info_metric():
     assert extra["device"] in {"cpu", "mps"} or extra["device"].startswith("cuda")
     assert extra["max_batch_size"] == 12
     assert "EchoRunner" in extra["runner"]
+
+
+def test_shutdown_waits_for_dispatched_batches_regardless_of_timeout():
+    """`timeout` bounds the batcher drain, not the whole call.
+
+    Pinned because the signature suggests otherwise, and because
+    `ContinuousEngine.shutdown` — same name, same parameter — does bound itself.
+    A caller that swapped one for the other on the strength of `ServingEngine`
+    should find the difference documented and tested, not by measuring it.
+    """
+    import time as clock
+
+    class Blocking:
+        def warmup(self, iterations: int) -> None:
+            return None
+
+        def generate(self, prompts, settings):
+            clock.sleep(0.3)
+            return [GenerationResult(text=p, prompt_tokens=1, generated_tokens=1) for p in prompts]
+
+        @property
+        def description(self) -> str:
+            return "Blocking"
+
+    config = EngineConfig(
+        max_batch_size=2,
+        max_wait_us=500,
+        queue_capacity=64,
+        worker_threads=1,
+        warmup_iterations=0,
+    )
+    engine = InferenceEngine(config=config, runner=Blocking())
+    futures = [engine.submit(f"p{index}") for index in range(6)]
+    time.sleep(0.05)
+
+    started = time.monotonic()
+    engine.shutdown(timeout=0.01)
+    elapsed = time.monotonic() - started
+
+    # Three batches of two at 0.3 s on one worker: far longer than the timeout.
+    assert elapsed > 0.3, f"shutdown returned in {elapsed:.3f}s; did it stop waiting?"
+    assert all(future.done() for future in futures)
+    assert all(future.result().ok for future in futures), "queued work should still complete"

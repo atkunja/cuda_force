@@ -111,7 +111,15 @@ class ServingEngine(Protocol):
 
     def snapshot(self) -> MetricsSnapshot: ...
 
-    def shutdown(self, timeout: float = 30.0) -> None: ...
+    def shutdown(self, timeout: float = 30.0) -> None:
+        """Drain in-flight work and release resources. Idempotent.
+
+        `timeout` bounds the *scheduler* drain, not total shutdown time, and the
+        two implementations differ in what happens afterwards — see each one.
+        Both guarantee only this: every outstanding future is settled, with a
+        result or with `EngineClosedError`. Never left pending.
+        """
+        ...
 
     # Both engines are context managers, and the server and CLI use them that
     # way; without these the protocol would not actually describe how they are
@@ -263,7 +271,20 @@ class InferenceEngine:
         return snapshot
 
     def shutdown(self, timeout: float = 30.0) -> None:
-        """Drain in-flight work and release resources. Idempotent."""
+        """Drain in-flight work and release resources. Idempotent.
+
+        `timeout` bounds the batcher drain only. Total shutdown time is **not**
+        bounded by it: `ThreadPoolExecutor.shutdown(wait=True)` takes no timeout
+        and waits for every dispatched batch, including ones still queued behind
+        a slow runner. A `shutdown(timeout=0.01)` against a runner taking two
+        seconds a batch returns in about eight, not in ten milliseconds.
+
+        That is deliberate — a running batch cannot be interrupted, and dropping
+        queued ones would abandon work that is about to succeed. The consequence
+        is that the abandonment path below almost never fires here, because the
+        executor has already settled everything. `ContinuousEngine` bounds its
+        wait instead and abandons what is left; see its `shutdown`.
+        """
         if self._closed.is_set():
             return
         self._closed.set()
