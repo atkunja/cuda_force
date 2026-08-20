@@ -136,6 +136,12 @@ class TransformersStepwiseRunner:
 
         #: Sequence ids in cache-row order. The single source of truth for which
         #: row belongs to which sequence; every cache operation reindexes it.
+        #: Call counts, not timings: continuous batching trades a few wide
+        #: prefills for many narrow ones, and that trade is invisible in a decode
+        #: step count. Counters are cheap enough to leave on.
+        self.prefills = 0
+        self.steps = 0
+
         self._rows: list[int] = []
         self._cache: Any | None = None
         self._mask: torch.Tensor | None = None
@@ -215,6 +221,7 @@ class TransformersStepwiseRunner:
     def prefill(self, states: list[SequenceState]) -> None:
         if not states:
             return
+        self.prefills += 1
 
         encoded = self._tokenizer(
             [state.prompt for state in states],
@@ -258,6 +265,7 @@ class TransformersStepwiseRunner:
         active = [state for state in states if not state.finished]
         if not active or self._cache is None or self._last is None:
             return
+        self.steps += 1
 
         # The scheduler's active set and the cache's rows must agree; it may have
         # retired a sequence since the last step.
