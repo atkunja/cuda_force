@@ -16,6 +16,8 @@ add_executable(cudaforge_cuda_tests
 target_link_libraries(cudaforge_cuda_tests
   PRIVATE cudaforge::kernels Catch2::Catch2WithMain)
 
-set_target_properties(cudaforge_cuda_tests PROPERTIES CUDA_STANDARD 17)
+# C++20 for the same reason as the kernel library: these link against the
+# portable runtime's headers, which use concepts.
+set_target_properties(cudaforge_cuda_tests PROPERTIES CUDA_STANDARD 20)
 
 catch_discover_tests(cudaforge_cuda_tests)

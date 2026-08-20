@@ -40,7 +40,11 @@ target_include_directories(cudaforge_kernels
 
 set_target_properties(cudaforge_kernels PROPERTIES
   CUDA_SEPARABLE_COMPILATION ON
-  CUDA_STANDARD 17
+  # C++20, matching the portable runtime. It is not optional: the CUDA targets
+  # include cpp/include headers that use concepts and std::bit_ceil, so building
+  # them as C++17 fails on the shared code rather than on anything CUDA. nvcc
+  # has supported C++20 since CUDA 12.0.
+  CUDA_STANDARD 20
   CUDA_STANDARD_REQUIRED ON
   POSITION_INDEPENDENT_CODE ON)
 
@@ -70,5 +74,5 @@ if(CUDAFORGE_BUILD_BENCHMARKS)
   add_executable(bench_kernels ${CMAKE_SOURCE_DIR}/benchmarks/benchmark_kernels.cu)
   target_link_libraries(bench_kernels PRIVATE cudaforge::kernels)
   target_include_directories(bench_kernels PRIVATE ${CMAKE_SOURCE_DIR}/benchmarks)
-  set_target_properties(bench_kernels PROPERTIES CUDA_STANDARD 17)
+  set_target_properties(bench_kernels PROPERTIES CUDA_STANDARD 20)
 endif()

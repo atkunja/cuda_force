@@ -65,6 +65,9 @@ def build_extensions() -> tuple[list, dict]:
                 "cxx": ["-O3", "-std=c++20"],
                 "nvcc": [
                     "-O3",
+                    # Matches the host flags and the CMake build. The bindings
+                    # pull in the portable headers, which are C++20.
+                    "-std=c++20",
                     "--expt-relaxed-constexpr",
                     # Maps profiler counters back to source lines without the
                     # optimisation loss that -G would cause.
