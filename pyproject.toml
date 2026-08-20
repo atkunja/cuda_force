@@ -41,6 +41,10 @@ dev = [
   "pytest-cov>=5.0",
   "ruff>=0.5",
   "mypy>=1.10",
+  # Pinned exactly, and installed rather than taken from the system. Different
+  # clang-format releases format this code differently, so an unpinned one makes
+  # the formatting gate depend on who runs it.
+  "clang-format==20.1.7",
 ]
 
 [project.urls]

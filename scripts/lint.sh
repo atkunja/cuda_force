@@ -26,14 +26,20 @@ PYTHON="${PYTHON:-python}"
 # bash 3.2, so this script would fail on the platform it is most often run on.
 CPP_SOURCES=(-name '*.cpp' -o -name '*.hpp' -o -name '*.cu' -o -name '*.cuh')
 
-if command -v clang-format >/dev/null 2>&1; then
+# Prefer the pinned clang-format from the virtualenv over whatever is on PATH:
+# releases disagree about this code, so an unpinned one makes the result depend
+# on the machine.
+CLANG_FORMAT="clang-format"
+[[ -x .venv/bin/clang-format ]] && CLANG_FORMAT="$PWD/.venv/bin/clang-format"
+
+if command -v "$CLANG_FORMAT" >/dev/null 2>&1 || [[ -x "$CLANG_FORMAT" ]]; then
   if [[ $FIX -eq 1 ]]; then
     check "clang-format (fixing)" \
-      find cpp cuda tests benchmarks \( "${CPP_SOURCES[@]}" \) -exec clang-format -i {} +
+      find cpp cuda tests benchmarks \( "${CPP_SOURCES[@]}" \) -exec "$CLANG_FORMAT" -i {} +
   else
     check "clang-format" \
       find cpp cuda tests benchmarks \( "${CPP_SOURCES[@]}" \) \
-        -exec clang-format --dry-run --Werror {} +
+        -exec "$CLANG_FORMAT" --dry-run --Werror {} +
   fi
 else
   echo "==> clang-format not found; skipping C++ formatting"

@@ -30,8 +30,13 @@ if [[ -n "$STAGED_PY" ]]; then
   echo "$STAGED_PY" | xargs "$PYTHON" -m ruff check || status=1
 fi
 
-if [[ -n "$STAGED_CPP" ]] && command -v clang-format >/dev/null 2>&1; then
-  echo "$STAGED_CPP" | xargs clang-format --dry-run --Werror || status=1
+# The pinned clang-format from the virtualenv, for the same reason CI uses it:
+# releases disagree, and a hook that disagrees with CI is worse than no hook.
+CLANG_FORMAT="clang-format"
+[[ -x .venv/bin/clang-format ]] && CLANG_FORMAT=".venv/bin/clang-format"
+
+if [[ -n "$STAGED_CPP" ]] && command -v "$CLANG_FORMAT" >/dev/null 2>&1; then
+  echo "$STAGED_CPP" | xargs "$CLANG_FORMAT" --dry-run --Werror || status=1
 fi
 
 if [[ -n "$STAGED_CPP" ]]; then
