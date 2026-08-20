@@ -86,6 +86,30 @@ The last one found a real bug: a runner returning the wrong row count raised
 outside the engine's guard, so no future was completed and every caller blocked
 until its timeout.
 
+### A fixture that can actually fail
+
+Randomly initialised transformers are close to useless for testing anything that
+touches a KV cache. Their argmax barely moves with context, so corrupting the
+cache produces the *same tokens* and the test stays green.
+
+This is not hypothetical. It hid a real bug: the speculative decoder's draft
+model never ingested its own final proposal, leaving a gap in its history. Every
+transformer-based test passed. Only once the fixture's output genuinely depended
+on its whole history did the failure appear — an identical draft accepting 7% of
+its own proposals where it must accept 100%.
+
+`ChainModel` in `tests/python/test_speculative.py` computes its next token from
+its entire history, so any mis-rollback changes the answer. Its `ListCache` is
+the whole cache interface the decoder requires — a single `crop` — which keeps
+those tests runnable without transformers installed and pins the contract: if
+the decoder starts calling something else, the double fails loudly rather than
+silently binding to a library type.
+
+The same reasoning drove the step-wise runner's tests toward asserting the
+left-padding invariant structurally rather than through generated tokens.
+Padding the wrong side keeps cache and mask consistent with each other and only
+corrupts positions, which a small model absorbs without changing its argmax.
+
 ## Cross-implementation conformance
 
 The batcher exists twice — once in C++, once in Python — and the documentation
