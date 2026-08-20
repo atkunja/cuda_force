@@ -351,14 +351,23 @@ the vectorised paths so the scalar fallbacks are exercised rather than assumed.
 
 Ordered by expected value:
 
-1. **Paged KV cache** — the largest single win, and the main thing between this
-   and a serious serving runtime.
-2. **Continuous batching** — admit new requests mid-generation.
+1. **Paged attention kernel** — the block allocator and cache manager are done;
+   what is missing is the attention gather that reads through a block table.
+   The largest single win, and the main thing between this and a serious serving
+   runtime. Needs a GPU.
+2. **Wire the paged cache to the scheduler** — the cache manager is C++ and the
+   continuous batcher is Python, so admission is currently bounded by
+   `max_batch_size` alone rather than by cache capacity. Blocked on 1.
 3. **Stream-ordered allocation** — adopt `cudaMallocAsync` semantics and remove
    limitation 2.
 4. **Tensor-core matmul** — via CUTLASS rather than by hand.
-5. **Speculative decoding.**
+5. **Batched speculation** — the single-sequence decoder is implemented; batching
+   it needs per-row acceptance lengths, which the contiguous cache cannot
+   express. Blocked on 1.
 6. **Tensor-parallel inference** across GPUs.
 7. **Persistent kernels** for the small elementwise ops.
 8. **GPU-measured benchmarks** — the harness is complete; only hardware is
    missing.
+
+Continuous batching and speculative decoding were on this list and are now
+implemented; both are recorded above with what they measured.
