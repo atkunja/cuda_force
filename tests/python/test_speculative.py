@@ -7,8 +7,11 @@ speculation does not change what the target model would have produced.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
+
 from cudaforge.config import GenerationConfig
 from cudaforge.speculative import SpeculativeDecoder, SpeculativeStats, _distribution
 
@@ -34,6 +37,96 @@ def greedy_reference(target, input_ids: torch.Tensor, tokens: int) -> list[int]:
             produced.append(token)
             step = torch.tensor([[token]])
     return produced
+
+
+class ChainModel:
+    """A causal model whose next token depends on its entire history.
+
+    Randomly initialised transformers are useless for testing cache handling:
+    their argmax barely moves with context, so a corrupted KV cache yields the
+    same tokens and the bug passes unnoticed. That is not hypothetical — it hid
+    a real desynchronisation between the draft's cache and its own proposals,
+    which only surfaced once the fixture actually depended on history.
+
+    Here the history lives in the cache tensors themselves, so any mis-rollback
+    changes the prediction. `stumble` makes the model disagree with an otherwise
+    identical one every nth call, which is how a partially-accurate draft is
+    simulated deterministically.
+    """
+
+    def __init__(self, vocab: int = 31, stumble: int = 0) -> None:
+        self.vocab = vocab
+        self.stumble = stumble
+        self.calls = 0
+
+    def __call__(self, input_ids, past_key_values=None, use_cache=True):
+        from transformers import DynamicCache
+
+        cache = past_key_values if past_key_values is not None else DynamicCache()
+        fresh = input_ids.view(1, 1, -1, 1).float()
+        cache.update(fresh, fresh, 0)
+
+        history = cache.layers[0].keys.view(-1)
+        added = input_ids.shape[1]
+        before = history.numel() - added
+
+        self.calls += 1
+        drift = 1 if self.stumble and self.calls % self.stumble == 0 else 0
+
+        rows = []
+        for offset in range(added):
+            prefix = history[: before + offset + 1]
+            value = int(prefix.sum().item() * 5 + prefix.numel() * 13 + drift) % self.vocab
+            row = torch.full((self.vocab,), -8.0)
+            row[value] = 8.0
+            rows.append(row)
+
+        return SimpleNamespace(logits=torch.stack(rows).unsqueeze(0), past_key_values=cache)
+
+
+CHAIN_PROMPT = torch.tensor([[3, 1, 4, 1, 5]])
+
+
+def test_a_history_dependent_model_is_decoded_exactly(pair_unused=None):
+    """Greedy equality on a model that actually reads its cache.
+
+    The transformer fixtures above accept every proposal, so they never reach
+    the rejection or rollback paths. This draft is deliberately wrong every
+    third call, forcing both.
+    """
+    target = ChainModel()
+    draft = ChainModel(stumble=3)
+
+    produced, stats = SpeculativeDecoder(target, draft, lookahead=4).generate(
+        CHAIN_PROMPT, GenerationConfig(max_new_tokens=20, temperature=0.0)
+    )
+
+    assert produced == greedy_reference(ChainModel(), CHAIN_PROMPT, 20)
+
+    # Pinned rather than bounded. Nothing here is random, so the exact counts are
+    # reproducible — and acceptance is the only signal that catches a draft
+    # decoding from a corrupted cache, which costs speed without ever changing
+    # the output. A loose `0 < rate < 1` bound lets that through.
+    assert stats.proposed == 38
+    assert stats.accepted == 10
+    assert stats.target_calls == 11
+
+
+def test_an_identical_draft_is_accepted_in_full_on_a_history_dependent_model():
+    """Catches the draft cache falling out of step with its own proposals.
+
+    A draft that *is* the target must agree every time. When the draft failed to
+    ingest the last proposal of each block, its history developed a gap and this
+    fell to 7% — while every transformer-based test stayed green.
+    """
+    target = ChainModel()
+    produced, stats = SpeculativeDecoder(target, ChainModel(), lookahead=4).generate(
+        CHAIN_PROMPT, GenerationConfig(max_new_tokens=20, temperature=0.0)
+    )
+
+    assert produced == greedy_reference(ChainModel(), CHAIN_PROMPT, 20)
+    assert stats.acceptance_rate == 1.0
+    assert stats.tokens_per_target_call == 5.0
 
 
 @pytest.fixture(scope="module")
