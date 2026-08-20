@@ -373,10 +373,16 @@ where a row says otherwise:
 | C++ suite | 183 cases, 49,983 assertions, clean under TSan / ASan / UBSan |
 | Python suite | 570 tests, 95% statement / 85% branch coverage |
 
-These measure the **scheduler**, not model throughput — execution is simulated
-so the variable under study is isolated and the benchmark runs without a GPU.
-**No CUDA kernel number exists**; the harness is complete and runs unchanged on
-NVIDIA hardware. See [docs/benchmarking.md](docs/benchmarking.md).
+Most of these measure the **scheduler**, not model throughput: execution is
+simulated so the variable under study is isolated and the benchmark runs without
+a GPU. The two rows marked *real transformer* are the exception — they drive an
+actual model, one token at a time, over a KV cache that is resized as sequences
+join and leave. Its weights are random, so the generated text is meaningless;
+nothing measured depends on it.
+
+**No CUDA kernel number exists anywhere.** The harness is complete and runs
+unchanged on NVIDIA hardware — `scripts/validate_gpu.sh` is the one command.
+See [docs/benchmarking.md](docs/benchmarking.md).
 
 ## Testing
 
