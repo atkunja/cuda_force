@@ -35,7 +35,16 @@ endif()
 
 if(CUDAFORGE_BUILD_TESTS)
   enable_testing()
+
+  # tests/cpp first: it fetches Catch2 and includes the module that defines
+  # catch_discover_tests, which tests/cuda then uses. Adding the CUDA tests from
+  # cuda/CMakeLists.txt instead put them before that happened, so a CUDA-enabled
+  # configure failed on an undefined function.
   add_subdirectory(tests/cpp)
+
+  if(CUDAFORGE_ENABLE_CUDA)
+    add_subdirectory(tests/cuda)
+  endif()
 endif()
 
 if(CUDAFORGE_BUILD_BENCHMARKS)

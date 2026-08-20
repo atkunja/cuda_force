@@ -66,10 +66,6 @@ if(CUDAFORGE_DEBUG_SYNC)
   target_compile_definitions(cudaforge_kernels PUBLIC CUDAFORGE_DEBUG_SYNC)
 endif()
 
-if(CUDAFORGE_BUILD_TESTS)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/tests/cuda ${CMAKE_BINARY_DIR}/tests/cuda)
-endif()
-
 if(CUDAFORGE_BUILD_BENCHMARKS)
   add_executable(bench_kernels ${CMAKE_SOURCE_DIR}/benchmarks/benchmark_kernels.cu)
   target_link_libraries(bench_kernels PRIVATE cudaforge::kernels)
