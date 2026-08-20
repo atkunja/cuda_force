@@ -120,7 +120,7 @@ compose services, pre-commit config, a Makefile, and 17 documents.
 | Engine under concurrent load | **run** — 160 requests, avg batch 8.0 |
 | HTTP server under load | **run** — 300 requests at concurrency 32, no failures |
 | `ruff check` / `ruff format --check` | **clean** |
-| `mypy` | **clean**, 8 source files |
+| `mypy` | **clean**, 23 source files — all three packages (`cudaforge`, `inference`, `training`), not just the library. Each ships `py.typed`, so a consumer of the wheel sees the annotations rather than `Any` |
 | `clang-format --dry-run --Werror` | **clean**, 46 files |
 | `shellcheck scripts/*.sh` | **clean** |
 | CUDA structural checks | **clean**, 22 files |
