@@ -273,7 +273,24 @@ Real ones, not hedges:
 
 ## Recommended GPU validation
 
-On a Linux machine with an NVIDIA GPU and CUDA 12.x:
+On a Linux machine with an NVIDIA GPU and CUDA 12.x, everything below is one
+command:
+
+```bash
+git clone https://github.com/atkunja/cuda_force.git && cd cuda_force
+./scripts/setup.sh && source .venv/bin/activate
+./scripts/validate_gpu.sh
+```
+
+It preflights before building, runs every stage even if an earlier one fails,
+and writes a Markdown report plus a full log into `validation-<timestamp>/`.
+Copy that directory off the machine before it is destroyed.
+
+**Expect the first run to fail somewhere.** The CUDA sources compile in CI but
+have never executed; this is the run that finds out whether they are correct,
+and a clean pass would be the surprising outcome.
+
+The stages individually:
 
 ```bash
 git clone https://github.com/atkunja/cuda_force.git && cd cuda_force

@@ -269,9 +269,18 @@ and sanitizer coverage regardless of what hardware is present.
 
 ### On CUDA hardware
 
+Everything that needs a GPU, in one command — preflighted, logged, and written
+up as a Markdown report:
+
+```bash
+./scripts/validate_gpu.sh
+```
+
+Or the stages individually:
+
 ```bash
 ./scripts/build.sh --cuda
-./build-cuda/tests/cuda/cudaforge_cuda_tests
+./build-cuda/tests/cuda/cudaforge_cuda_tests      # the one that matters
 ./build-cuda/benchmarks/bench_kernels > benchmarks/results/cuda-kernels.json
 ./scripts/profile.sh
 ```

@@ -44,6 +44,11 @@ benchmarks/results/*.csv
 benchmarks/results/*.md
 !benchmarks/results/README.md
 
+# GPU validation output. Generated on whatever machine ran it; the numbers
+# belong in the docs, not as a committed artefact.
+validation-*/
+profiles/
+
 # Profiling output
 *.nsys-rep
 *.ncu-rep
