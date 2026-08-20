@@ -121,43 +121,59 @@ def test_batch_width_never_exceeds_capacity():
 
 
 def test_a_freed_row_is_refilled_rather_than_left_idle():
-    # The defining behaviour. One long sequence alongside many short ones: with
-    # static batching the short rows idle until the long one finishes.
+    # The defining behaviour, stated as the sharpest available property: no
+    # scheduler can finish in fewer steps than its longest sequence, and
+    # continuous batching reaches exactly that bound by backfilling the rows the
+    # short sequences free.
     collector = Collector()
-    lengths = [40] + [2] * 20
+    longest = 40
+    lengths = [longest] + [2] * 40
     collector.expect(len(lengths))
     runner = EchoStepwiseRunner(per_step_seconds=0.0005)
 
-    with ContinuousBatcher(runner, collector, max_batch_size=4, queue_capacity=64) as batcher:
+    with ContinuousBatcher(runner, collector, max_batch_size=4, queue_capacity=128) as batcher:
         submit_all(batcher, lengths)
         assert collector.wait()
 
-    # 40 + 20*2 = 80 tokens at width 4 is 20 steps ideally. Static batching
-    # would take 40 steps for the first batch alone, since every row waits for
-    # the 40-token member.
-    assert runner.steps < 40
+    # No scheduler can finish in fewer steps than its longest sequence.
+    assert runner.steps >= longest
+    # And continuous batching reaches that bound: the 40 short sequences, 80
+    # token-steps in total, fit in the three rows the long one does not occupy.
+    # The small slack is admission timing — the producer and the scheduler run
+    # concurrently, so a sequence can be admitted a step or two later than the
+    # earliest moment a row was free. Asserting exact equality would make this
+    # depend on that interleaving.
+    assert runner.steps <= longest + 4
 
 
 def test_continuous_beats_static_on_a_long_tailed_workload():
     # The comparison the scheduler exists to win. Both sides use the identical
     # runner, so the difference is attributable to scheduling alone.
-    lengths = [2, 2, 2, 2, 2, 2, 2, 2, 60, 2, 2, 2, 2, 2, 2, 2]
+    #
+    # The shape matters: one long sequence with enough short work behind it to
+    # backfill the rows it does not occupy. With the long sequence arriving last
+    # there is nothing left to overlap it with, and the two schedules tie — a
+    # real property, and the reason this workload is specified rather than
+    # arbitrary.
+    lengths = [40] + [2] * 40
     work = [
         (f"p{index}", GenerationConfig(max_new_tokens=length))
         for index, length in enumerate(lengths)
     ]
 
-    static = run_static(EchoStepwiseRunner(), work, max_batch_size=8)
+    static = run_static(EchoStepwiseRunner(), work, max_batch_size=4)
 
     collector = Collector()
     collector.expect(len(lengths))
     runner = EchoStepwiseRunner(per_step_seconds=0.0005)
-    with ContinuousBatcher(runner, collector, max_batch_size=8, queue_capacity=64) as batcher:
+    with ContinuousBatcher(runner, collector, max_batch_size=4, queue_capacity=128) as batcher:
         submit_all(batcher, lengths)
         assert collector.wait()
     continuous = batcher.stats()
 
     assert continuous.completions == static.completions == len(lengths)
+    # Static pays 40 steps for the batch holding the long sequence and then
+    # works through the rest; continuous overlaps them.
     assert continuous.decode_steps < static.decode_steps
     assert continuous.utilisation > static.utilisation
 

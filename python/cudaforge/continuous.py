@@ -120,6 +120,10 @@ class ContinuousBatcher:
         self._stats = ContinuousStats()
         self._stats_lock = threading.Lock()
         self._stopping = threading.Event()
+        #: Set once the shutdown sentinel has been seen, meaning no further
+        #: request can arrive. Distinct from `_stopping`, which only stops new
+        #: submissions being accepted.
+        self._closed = False
 
         self._thread = threading.Thread(target=self._run, name="cudaforge-continuous", daemon=True)
         self._thread.start()
@@ -199,9 +203,13 @@ class ContinuousBatcher:
                 break
 
             if request is None:
+                # The sentinel is the last thing shutdown() enqueues, and
+                # submit() refuses everything afterwards, so nothing can arrive
+                # behind it. It is consumed rather than re-posted: leaving it in
+                # the queue would make "drained" untestable, and re-posting it
+                # each pass spins.
                 self._stopping.set()
-                with contextlib.suppress(queue.Full):
-                    self._queue.put_nowait(None)
+                self._closed = True
                 break
 
             request.dequeued_at = time.monotonic()
@@ -253,11 +261,13 @@ class ContinuousBatcher:
 
     def _run(self) -> None:
         while True:
-            if not self._stopping.is_set():
-                self._admit()
+            # Admission continues after shutdown so that work already accepted
+            # is not abandoned. `submit` stops accepting new work at that point,
+            # so this drains a bounded backlog rather than running forever.
+            self._admit()
 
             if not self._running:
-                if self._stopping.is_set():
+                if self._closed and self._queue.empty():
                     return
                 continue
 
