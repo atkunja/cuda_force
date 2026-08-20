@@ -220,3 +220,42 @@ def test_no_test_imports_a_benchmark_or_example():
     assert not offenders, "tests must not import from benchmarks/ or examples/:\n" + "\n".join(
         offenders
     )
+
+
+def test_the_documented_test_count_is_not_badly_stale():
+    """Catch documentation drifting away from the suite it describes.
+
+    A tolerance rather than an exact match: requiring the number to be updated
+    on every added test would make the check noise, and noise gets silenced.
+
+    Ten percent, not fifteen. The case that motivated this — a README claiming
+    486 tests against a suite of 570 — is 14.7% off, so a fifteen-point band
+    would have let through the exact drift it was written to catch.
+
+    Counted by collecting rather than by parsing, so the number is the real one.
+    """
+    import re
+    import subprocess
+
+    collected = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/python", "--collect-only", "-q"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    match = re.search(r"(\d+) tests? collected", collected.stdout)
+    assert match, f"could not read the collected count from:\n{collected.stdout[-500:]}"
+    actual = int(match.group(1))
+
+    for path in (REPO_ROOT / "README.md", REPO_ROOT / "PROJECT_STATUS.md"):
+        text = path.read_text()
+        claims = re.findall(r"(\d+) tests(?:,| —)", text)
+        assert claims, f"{path.name} no longer states a test count"
+        for claim in claims:
+            documented = int(claim)
+            drift = abs(documented - actual) / actual
+            assert drift < 0.10, (
+                f"{path.name} claims {documented} tests, the suite collects {actual} "
+                f"({drift:.0%} off) — update the figure"
+            )
