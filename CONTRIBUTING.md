@@ -75,6 +75,26 @@ Conventional prefixes: `feat`, `fix`, `test`, `docs`, `bench`, `build`, `style`,
 Keep them small and self-contained. A commit that changes one thing can be
 reverted; one that changes six cannot.
 
+## Dependencies must be declared, not merely installed
+
+A dependency that happens to be in your virtualenv but is not in `pyproject.toml`
+passes locally and fails in CI. This has happened here: `pyyaml`, `httpx` and
+`httpx2` were all present on the development machine and missing from the
+extras that needed them.
+
+Before adding an import, check it is declared in the right extra — and if you
+are unsure, verify against a clean environment rather than yours:
+
+```bash
+python3 -m venv /tmp/check
+/tmp/check/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+/tmp/check/bin/pip install -e ".[dev,serve]"
+/tmp/check/bin/pytest tests/python -q
+```
+
+Note the bare `pytest`, not `python -m pytest`. The latter puts the current
+directory on `sys.path` and hides imports that only work from a checkout.
+
 ## Before opening a pull request
 
 ```bash
