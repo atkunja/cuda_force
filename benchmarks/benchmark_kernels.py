@@ -26,6 +26,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from functools import partial
 
 import torch
 
@@ -86,14 +87,31 @@ def measure(
     )
 
 
+def _torch_rmsnorm(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+    """The reference RMSNorm, as a function so it can be bound with `partial`."""
+    return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * weight
+
+
+def _torch_lora_linear(
+    x: torch.Tensor, weight: torch.Tensor, lora_a: torch.Tensor, lora_b: torch.Tensor
+) -> torch.Tensor:
+    """The reference LoRA projection, matching `ops.lora_linear`'s scale of 2.0."""
+    return x @ weight + 2.0 * ((x @ lora_a) @ lora_b)
+
+
 def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
     """Build every case and time it.
 
-    Each lambda binds its tensors as default arguments. Python closes over the
-    *variable*, not its value, so a bare `lambda x=x, weight=weight: ops.rmsnorm(x, weight)` inside
+    Each case binds its tensors with `functools.partial`. Python closes over the
+    *variable*, not its value, so a bare `lambda: ops.rmsnorm(x, weight)` inside
     a loop would capture whichever tensors the loop had reached by the time it
     ran — the classic late-binding trap, and one that would silently benchmark
     the same shape repeatedly.
+
+    `partial` rather than the `lambda x=x` idiom, which binds correctly but
+    gives the callable parameters it does not want: it no longer matches the
+    `Callable[[], object]` that `measure` takes, and the type checker cannot see
+    that the defaults make it callable with no arguments.
     """
     results: list[Measurement] = []
 
@@ -107,7 +125,7 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "rmsnorm",
                 "cudaforge",
                 shape,
-                lambda x=x, weight=weight: ops.rmsnorm(x, weight),
+                partial(ops.rmsnorm, x, weight),
                 warmup,
                 runs,
             )
@@ -117,19 +135,17 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "rmsnorm",
                 "torch",
                 shape,
-                lambda x=x, weight=weight: (
-                    x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + 1e-6) * weight
-                ),
+                partial(_torch_rmsnorm, x, weight),
                 warmup,
                 runs,
             )
         )
 
         results.append(
-            measure("softmax", "cudaforge", shape, lambda x=x: ops.softmax(x), warmup, runs)
+            measure("softmax", "cudaforge", shape, partial(ops.softmax, x), warmup, runs)
         )
         results.append(
-            measure("softmax", "torch", shape, lambda x=x: torch.softmax(x, dim=-1), warmup, runs)
+            measure("softmax", "torch", shape, partial(torch.softmax, x, dim=-1), warmup, runs)
         )
 
     for batch, in_features, out_features, rank in [(32, 1024, 1024, 8), (128, 4096, 4096, 16)]:
@@ -144,9 +160,7 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "lora_linear",
                 "cudaforge",
                 shape,
-                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: ops.lora_linear(
-                    x, weight, lora_a, lora_b, 2.0
-                ),
+                partial(ops.lora_linear, x, weight, lora_a, lora_b, 2.0),
                 warmup,
                 runs,
             )
@@ -156,9 +170,7 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "lora_linear",
                 "torch",
                 shape,
-                lambda x=x, weight=weight, lora_a=lora_a, lora_b=lora_b: (
-                    x @ weight + 2.0 * ((x @ lora_a) @ lora_b)
-                ),
+                partial(_torch_lora_linear, x, weight, lora_a, lora_b),
                 warmup,
                 runs,
             )
@@ -171,15 +183,15 @@ def run(device: torch.device, warmup: int, runs: int) -> list[Measurement]:
                 "quantize_int8",
                 "cudaforge",
                 str(count),
-                lambda x=x: ops.quantize_int8(x),
+                partial(ops.quantize_int8, x),
                 warmup,
                 runs,
             )
         )
         results.append(
-            measure("sum", "cudaforge", str(count), lambda x=x: ops.sum_reduce(x), warmup, runs)
+            measure("sum", "cudaforge", str(count), partial(ops.sum_reduce, x), warmup, runs)
         )
-        results.append(measure("sum", "torch", str(count), lambda x=x: x.sum(), warmup, runs))
+        results.append(measure("sum", "torch", str(count), partial(torch.sum, x), warmup, runs))
 
     return results
 

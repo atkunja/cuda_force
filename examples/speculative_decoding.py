@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
 import torch
 
@@ -30,7 +31,7 @@ from cudaforge.config import GenerationConfig
 from cudaforge.speculative import SpeculativeDecoder, expected_tokens_per_call
 
 
-def build(layers: int, width: int, heads: int, vocab: int, seed: int) -> object:
+def build(layers: int, width: int, heads: int, vocab: int, seed: int) -> Any:
     from transformers import GPT2Config, GPT2LMHeadModel
 
     torch.manual_seed(seed)
@@ -39,9 +40,7 @@ def build(layers: int, width: int, heads: int, vocab: int, seed: int) -> object:
     ).eval()
 
 
-def decode_one_at_a_time(
-    target: object, prompt: torch.Tensor, tokens: int
-) -> tuple[list[int], int]:
+def decode_one_at_a_time(target: Any, prompt: torch.Tensor, tokens: int) -> tuple[list[int], int]:
     """Ordinary greedy decoding: one target call per token."""
     produced: list[int] = []
     step, cache = prompt, None

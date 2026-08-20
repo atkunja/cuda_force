@@ -126,7 +126,9 @@ def main(argv: list[str] | None = None) -> int:
     dataset = build_dataset(CORPUS, tokenizer, block_size=64)
     # The sampler gives each rank a disjoint shard. Without it every rank would
     # train on the whole dataset and the effective batch would be wrong.
-    sampler = DistributedSampler(dataset, num_replicas=world_size, rank=rank, shuffle=True)
+    sampler: DistributedSampler[int] = DistributedSampler(
+        dataset, num_replicas=world_size, rank=rank, shuffle=True
+    )
     loader = DataLoader(dataset, batch_size=args.batch_size, sampler=sampler)
 
     trainable = [p for p in model.parameters() if p.requires_grad]

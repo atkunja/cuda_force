@@ -142,11 +142,13 @@ warn_unused_ignores = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
-# All three packages, not just `cudaforge`. They ship together and import each
+# Everything, not just `cudaforge`. The packages ship together and import each
 # other, so checking one of them proves less than it appears to: `inference`
-# consumes the engine's types, and a signature change that breaks it should
-# fail here rather than at import time.
-files = ["python/cudaforge", "inference", "training"]
+# consumes the engine's types, and a signature change that breaks it should fail
+# here rather than at import time. `examples` and `benchmarks` are included
+# because they are read as documentation — a type error in the code someone
+# copies is worse than one in code they only run.
+files = ["python/cudaforge", "inference", "training", "examples", "benchmarks"]
 # So `cudaforge.*` resolves from a checkout regardless of how — or whether —
 # the package is installed.
 mypy_path = "python"

@@ -92,10 +92,10 @@ def run(device: torch.device) -> list[Check]:
             )
         )
 
-    for shape in [(64,), (4, 17), (8, 4096)]:
-        gate = torch.randn(*shape, device=device)
-        up = torch.randn(*shape, device=device)
-        label = "x".join(str(dim) for dim in shape)
+    for dims in [(64,), (4, 17), (8, 4096)]:
+        gate = torch.randn(*dims, device=device)
+        up = torch.randn(*dims, device=device)
+        label = "x".join(str(dim) for dim in dims)
 
         checks.append(compare("silu", label, ops.silu(gate), torch.nn.functional.silu(gate), 1e-5))
         checks.append(

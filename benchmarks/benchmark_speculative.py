@@ -49,6 +49,28 @@ from cudaforge.config import GenerationConfig
 from cudaforge.speculative import SpeculativeDecoder, expected_tokens_per_call
 
 
+class ListCache:
+    """The whole cache interface `SpeculativeDecoder` requires: `crop`.
+
+    The decoder only ever rolls a cache back, and by a count rather than to an
+    absolute length. Writing that out keeps this benchmark independent of
+    transformers and pins the contract — if the decoder starts calling something
+    else, this fails loudly instead of silently binding to a library type.
+    """
+
+    def __init__(self) -> None:
+        self.tokens: list[int] = []
+
+    def extend(self, ids: list[int]) -> None:
+        self.tokens.extend(ids)
+
+    def crop(self, amount: int) -> None:
+        # Negative-only, matching the non-deprecated transformers signature.
+        # `crop(0)` would mean "keep nothing", so the decoder must never send it.
+        assert amount < 0, f"crop expects a negative count, got {amount}"
+        del self.tokens[amount:]
+
+
 class ChainModel:
     """A causal model whose next token depends on its whole history.
 
@@ -62,23 +84,18 @@ class ChainModel:
     def __call__(
         self,
         input_ids: torch.Tensor,
-        past_key_values: object | None = None,
+        past_key_values: ListCache | None = None,
         use_cache: bool = True,
     ) -> SimpleNamespace:
-        from transformers import DynamicCache
-
-        cache = past_key_values if past_key_values is not None else DynamicCache()
-        fresh = input_ids.view(1, 1, -1, 1).float()
-        cache.update(fresh, fresh, 0)
-
-        history = cache.layers[0].keys.view(-1)
-        added = input_ids.shape[1]
-        before = history.numel() - added
+        cache = past_key_values if past_key_values is not None else ListCache()
+        added = input_ids[0].tolist()
+        before = list(cache.tokens)
+        cache.extend(added)
 
         rows = []
-        for offset in range(added):
-            prefix = history[: before + offset + 1]
-            value = int(prefix.sum().item() * 5 + prefix.numel() * 13) % self.vocab
+        for offset in range(len(added)):
+            prefix = before + added[: offset + 1]
+            value = int(sum(prefix) * 5 + len(prefix) * 13) % self.vocab
             row = torch.full((self.vocab,), -8.0)
             row[value] = 8.0
             rows.append(row)
@@ -97,7 +114,7 @@ class ImperfectDraft(ChainModel):
     def __call__(
         self,
         input_ids: torch.Tensor,
-        past_key_values: object | None = None,
+        past_key_values: ListCache | None = None,
         use_cache: bool = True,
     ) -> SimpleNamespace:
         output = super().__call__(input_ids, past_key_values, use_cache)
