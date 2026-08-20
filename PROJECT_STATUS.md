@@ -199,7 +199,12 @@ Recorded because each was found by a test that was written to look for it:
     `Convert::` with nothing behind it. It compiles nowhere, but the development
     host has no nvcc, so only the CUDA CI job caught it. Now covered by a
     structural rule.
-25. **The sanitizer was not applied to the benchmark targets**, so they linked
+25. **The CUDA targets were built as C++17** while the portable headers they
+    include are C++20. The errors pointed at `memory_pool.hpp` — a file that
+    compiles fine in the portable build — and mentioned concepts and
+    `std::bit_ceil` rather than the standard, which made it read as a header bug
+    rather than a flag one.
+26. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run

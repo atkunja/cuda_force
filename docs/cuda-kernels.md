@@ -491,6 +491,18 @@ __global__ void rmsnorm_reduced(const T* input, ...) {
 Two copies of the same kernel body would drift — the FP32-accumulator rule is
 exactly the kind of detail that gets fixed in one and forgotten in the other.
 
+## The CUDA targets are C++20, not C++17
+
+nvcc has supported C++20 since CUDA 12.0, and this project requires it — not for
+anything in the kernels, but because the CUDA targets include the portable
+headers. `MemoryPool` is constrained by a `concept` and rounds with
+`std::bit_ceil`, so a C++17 CUDA build fails on the *shared* code while the
+`.cu` files themselves would have been fine.
+
+That is worth stating because the failure is misleading: the errors point at
+`cpp/include/cudaforge/memory_pool.hpp`, which compiles perfectly well in the
+portable build, and nothing in them mentions the standard.
+
 ## Autograd
 
 The kernels are **inference-only**. No backward kernels exist for them.
