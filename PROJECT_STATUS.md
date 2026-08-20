@@ -141,6 +141,8 @@ throughput.
 | Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
 | Continuous vs static batching | 62% fewer decode steps on long-tailed traffic, 76% on bimodal, 42% on uniform, −2% on constant lengths |
 | Continuous vs static batching, **real transformer** | 6-layer GPT-2, 128 requests: 70% fewer decode steps and **1.44× wall-clock** at batch 32, falling to 0.83× at batch 4 — refilling rows one at a time fragments prefill (4 → 33 calls at batch 32, 32 → 126 at batch 4) |
+| Prefill cost vs batch width | A 6-token prompt costs **7.9× less** to prefill in a batch of 32 than alone (1.863 → 0.235 ms/prompt). This, not any fixed per-call overhead, is why continuous batching's prefill is dearer: it prefills at width ~4 where static prefills at ~32 |
+| Admission batching (tested, **rejected**) | Holding admission until 8 rows are free cuts prefill calls 33 → 24 but buys only **1.8% of wall-clock**, and decode slows as occupancy falls 49.6% → 48.3%. Prefilling wide needs a drained batch, which is the state continuous batching exists to avoid |
 | Speculative decoding throughput | Tokens per target call tracks the closed form `(1 - a^(k+1))/(1 - a)` across acceptance 0.3-0.9 and lookahead 1-8: e.g. 4.12 measured against 4.10 predicted at a=0.9, k=4. Acceptance is an imposed input, not a measured property of real models |
 | Block allocator throughput | 163–180M operations/second |
 | Bounded queue scaling | 2.39M items/s at 1×1, falling to 774k at 8×8 — where the single mutex becomes the bottleneck |
