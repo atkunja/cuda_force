@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <atomic>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -316,4 +317,69 @@ TEST_CASE("stream priorities are within the device range", "[cuda][scheduler]") 
 
     REQUIRE_NOTHROW(CudaStream(highest));
     REQUIRE_NOTHROW(CudaStream(lowest));
+}
+
+TEST_CASE("the stream-ordered pool reuses allocations", "[cuda][pool][async]") {
+    if (!supports_stream_ordered_allocation()) {
+        SKIP("device does not support cudaMallocAsync memory pools");
+    }
+    CudaStream stream;
+    MemoryPool<StreamOrderedAllocatorBackend> pool{StreamOrderedAllocatorBackend{stream}};
+
+    void* first = pool.allocate(1 << 20);
+    REQUIRE(first != nullptr);
+    pool.deallocate(first);
+
+    void* second = pool.allocate(1 << 20);
+    REQUIRE(second == first);
+
+    // One backend call for two allocations of the same size class is the whole
+    // point of the pool; an asynchronous backend does not change that.
+    REQUIRE(pool.stats().backend_allocations == 1);
+    REQUIRE(pool.stats().reuse_count == 1);
+    pool.deallocate(second);
+}
+
+TEST_CASE("the stream-ordered backend names itself", "[cuda][pool][async]") {
+    REQUIRE(std::string(MemoryPool<StreamOrderedAllocatorBackend>::backend_name()) ==
+            "device-async");
+}
+
+TEST_CASE("returning a buffer a running kernel still reads is safe", "[cuda][pool][async]") {
+    // The constraint the synchronous backend carries and this one removes.
+    // `cudaFreeAsync` orders the free within the stream, so handing a buffer
+    // back while earlier work on that stream is still reading it is defined:
+    // the memory returns when the stream reaches the free, not immediately.
+    //
+    // With `cudaFree` the same sequence only works because `cudaFree`
+    // synchronises the device first. The point is not that this becomes legal —
+    // it is that it stops costing a device-wide stall to be legal.
+    if (!supports_stream_ordered_allocation()) {
+        SKIP("device does not support cudaMallocAsync memory pools");
+    }
+    constexpr std::size_t kCount = 1 << 16;
+
+    CudaStream stream;
+    MemoryPool<StreamOrderedAllocatorBackend> pool{StreamOrderedAllocatorBackend{stream}};
+
+    auto* input = static_cast<float*>(pool.allocate(kCount * sizeof(float)));
+    auto* output = static_cast<float*>(pool.allocate(sizeof(float)));
+    REQUIRE(input != nullptr);
+    REQUIRE(output != nullptr);
+
+    const std::vector<float> host(kCount, 1.0F);
+    CUDAFORGE_CHECK(cudaMemcpyAsync(input, host.data(), kCount * sizeof(float),
+                                    cudaMemcpyHostToDevice, stream));
+    launch_reduce_sum(input, output, kCount, ReductionKernel::WarpOptimised, stream);
+
+    // Returned before anything has waited on the kernel above.
+    pool.deallocate(input);
+
+    float result = -1.0F;
+    CUDAFORGE_CHECK(
+        cudaMemcpyAsync(&result, output, sizeof(float), cudaMemcpyDeviceToHost, stream));
+    stream.synchronize();
+
+    REQUIRE(result == static_cast<float>(kCount));
+    pool.deallocate(output);
 }

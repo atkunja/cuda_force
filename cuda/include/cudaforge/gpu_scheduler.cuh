@@ -167,6 +167,78 @@ public:
     [[nodiscard]] static const char* name() { return "device"; }
 };
 
+/// True when the device backs `cudaMallocAsync` with a memory pool.
+///
+/// Checked rather than assumed: the API exists from CUDA 11.2 but a device may
+/// still not support pools, and `cudaMallocAsync` then fails at the first call
+/// rather than at startup.
+[[nodiscard]] inline bool supports_stream_ordered_allocation() {
+    int device = 0;
+    if (cudaGetDevice(&device) != cudaSuccess) {
+        return false;
+    }
+    int supported = 0;
+    if (cudaDeviceGetAttribute(&supported, cudaDevAttrMemoryPoolsSupported, device) !=
+        cudaSuccess) {
+        return false;
+    }
+    return supported != 0;
+}
+
+/// Stream-ordered device backend, over `cudaMallocAsync` / `cudaFreeAsync`.
+///
+/// ## What this changes
+///
+/// `cudaFree` is a device-wide synchronisation: it waits for everything in
+/// flight, because the driver cannot know whether some kernel still holds the
+/// pointer. That is why `DeviceAllocatorBackend` above carries a
+/// "do not free in-flight buffers" constraint — freeing one is correct but
+/// drains the pipeline the scheduler exists to keep full.
+///
+/// `cudaFreeAsync` instead *orders* the free in the stream. The memory is
+/// returned when preceding work on that stream reaches the free, not before, so
+/// handing back a buffer a running kernel is still reading is both safe and
+/// free of a barrier. The constraint disappears rather than being worked
+/// around.
+///
+/// ## What it costs
+///
+/// The allocation belongs to its stream. Using it on another stream needs an
+/// event to establish the ordering, exactly as with any cross-stream data
+/// dependency — the allocator does not make that problem go away, it just stops
+/// solving it with a device-wide stall.
+///
+/// Construct with the stream the buffers will be used on:
+///
+///     MemoryPool<StreamOrderedAllocatorBackend> pool{
+///         StreamOrderedAllocatorBackend{stream}};
+class StreamOrderedAllocatorBackend {
+public:
+    StreamOrderedAllocatorBackend() = default;
+    explicit StreamOrderedAllocatorBackend(cudaStream_t stream) : stream_(stream) {}
+
+    [[nodiscard]] void* allocate(std::size_t bytes) const {
+        void* pointer = nullptr;
+        if (cudaMallocAsync(&pointer, bytes, stream_) != cudaSuccess) {
+            // Same contract as the synchronous backend: null lets MemoryPool
+            // trim and retry rather than turning OOM into an exception.
+            return nullptr;
+        }
+        return pointer;
+    }
+
+    void deallocate(void* pointer, std::size_t /*bytes*/) const noexcept {
+        static_cast<void>(cudaFreeAsync(pointer, stream_));
+    }
+
+    [[nodiscard]] cudaStream_t stream() const noexcept { return stream_; }
+
+    [[nodiscard]] static const char* name() { return "device-async"; }
+
+private:
+    cudaStream_t stream_ = nullptr;
+};
+
 /// Pinned-host backend, for staging buffers on the copy path.
 class PinnedAllocatorBackend {
 public:
