@@ -28,8 +28,9 @@ import threading
 from dataclasses import asdict, dataclass
 
 from cudaforge.config import GenerationConfig
-from cudaforge.continuous import ContinuousBatcher, run_static
+from cudaforge.continuous import ContinuousBatcher, ContinuousStats, run_static
 from cudaforge.scheduler import Request
+from cudaforge.stepwise import SequenceState
 from cudaforge.stepwise import EchoStepwiseRunner
 
 #: A decode step must cost something, or the producer becomes the bottleneck and
@@ -86,12 +87,12 @@ def workloads(count: int, seed: int) -> list[tuple[str, str, list[int]]]:
     ]
 
 
-def run_continuous(lengths: list[int], max_batch_size: int):
+def run_continuous(lengths: list[int], max_batch_size: int) -> ContinuousStats:
     completed = threading.Event()
     seen = 0
     lock = threading.Lock()
 
-    def on_complete(_request, _state) -> None:
+    def on_complete(_request: Request, _state: SequenceState) -> None:
         nonlocal seen
         with lock:
             seen += 1
