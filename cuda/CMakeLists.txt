@@ -30,6 +30,7 @@ add_library(cudaforge_kernels
   src/lora_linear.cu
   src/quantization.cu
   src/gpu_scheduler.cu
+  src/paged_attention.cu
 )
 add_library(cudaforge::kernels ALIAS cudaforge_kernels)
 

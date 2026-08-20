@@ -54,6 +54,10 @@ using DeviceBlockId = std::uint32_t;
 /// and sum are rescaled whenever a larger score appears, so no scores array is
 /// materialised and context length is bounded only by the cache, not by shared
 /// memory. Same recurrence as the `Online` softmax variant, for the same reason.
+/// `head_dim` must be at most 1024 (one thread serves one element) and
+/// `num_heads` must be a multiple of `num_kv_heads`. Both are refused rather
+/// than approximated: a clamped `head_dim` would leave part of every output row
+/// untouched, which is worse than doing nothing.
 void launch_paged_attention(const float* query, const float* k_cache, const float* v_cache,
                             const DeviceBlockId* block_tables, const int* context_lens, float* out,
                             int num_sequences, int num_heads, int num_kv_heads, int head_dim,

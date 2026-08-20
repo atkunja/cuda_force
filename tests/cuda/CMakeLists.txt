@@ -11,6 +11,7 @@ add_executable(cudaforge_cuda_tests
   test_lora.cu
   test_quantization.cu
   test_scheduler.cu
+  test_paged_attention.cu
 )
 
 target_link_libraries(cudaforge_cuda_tests
