@@ -70,10 +70,16 @@ def setup() -> tuple[int, int, int]:
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
 
+    # Before init_process_group, not after. NCCL binds to whatever device is
+    # current when it initialises, so setting it afterwards leaves every rank
+    # bound to device 0 — which surfaces as a duplicate-GPU error or, worse, a
+    # hang that burns a few minutes before anything says so. It ran "fine" on a
+    # single GPU for exactly as long as there was only one device to bind to.
+    torch.cuda.set_device(local_rank)
+
     # NCCL is the only backend with a fast path over NVLink and InfiniBand; gloo
     # is a CPU fallback and would make the collectives the bottleneck.
     dist.init_process_group(backend="nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(local_rank)
     return rank, local_rank, world_size
 
 
