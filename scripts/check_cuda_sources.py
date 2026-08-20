@@ -244,14 +244,13 @@ def check_convert_alias_is_declared(path: Path, lines: list[str]) -> list[Findin
     class of mistake this host cannot catch by building.
     """
     findings: list[Finding] = []
-    declared_at = -1
+    declared = False
+    depth = 0
 
     for index, line in enumerate(lines):
-        if line.startswith("}"):
-            declared_at = -1
         if "using Convert" in line:
-            declared_at = index
-        if "Convert::" in line and "using Convert" not in line and declared_at < 0:
+            declared = True
+        elif "Convert::" in line and not declared:
             findings.append(
                 Finding(
                     path,
@@ -261,6 +260,14 @@ def check_convert_alias_is_declared(path: Path, lines: list[str]) -> list[Findin
                     "in the enclosing function",
                 )
             )
+
+        # Brace depth rather than a column-zero `}`: the alias is scoped to its
+        # function, and indentation is not a reliable way to find the end of
+        # one. Nested blocks raise and lower the depth without clearing it.
+        depth += line.count("{") - line.count("}")
+        if depth <= 0:
+            depth = 0
+            declared = False
 
     return findings
 
