@@ -353,7 +353,8 @@ start at zero, in [docs/fine-tuning.md](docs/fine-tuning.md).
 Results are written to `benchmarks/results/` and are **not** committed —
 committed numbers would be numbers from someone else's machine.
 
-What has been measured, on an Apple M5 Pro with a simulated executor:
+What has been measured, on an Apple M5 Pro. Execution is simulated except
+where a row says otherwise:
 
 | Measurement | Result |
 | --- | --- |
@@ -367,6 +368,8 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, client p99 279 ms vs server p99 1.03 ms |
 | Paged KV cache | **13.2× more concurrent sequences** than contiguous on chat-shaped traffic; waste 93% → 4.8% |
 | Continuous batching | **62% fewer decode steps** on long-tailed traffic; utilisation 30% → 78% (−2% when lengths are constant) |
+| Continuous batching, **real transformer** | 70% fewer decode steps and **1.44× wall-clock** at batch 32 — and 0.83× at batch 4, where refilling rows one at a time fragments prefill |
+| Speculative decoding | Tokens per target call tracks the closed form `(1 − a^(k+1))/(1 − a)` across acceptance 0.3–0.9; lossless by construction, checked against the target's own distribution |
 | C++ suite | 183 cases, 49,983 assertions, clean under TSan / ASan / UBSan |
 | Python suite | 570 tests, 95% statement / 85% branch coverage |
 
