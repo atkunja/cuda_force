@@ -136,7 +136,9 @@ TEST_CASE("bucket boundaries are monotonic across magnitudes", "[histogram][buck
     // A non-monotonic bucket layout would make percentiles jump backwards at
     // magnitude changes — the kind of defect that only shows up as a confusing
     // dashboard, never as an error.
-    LatencyHistogram histogram;
+    //
+    // Each value goes into its own histogram so the reported percentile is that
+    // value's bucket rather than a mixture.
     std::uint64_t previous = 0;
 
     for (std::uint64_t value = 1; value < (1ULL << 32); value = value + 1 + value / 8) {
