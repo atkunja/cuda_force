@@ -39,6 +39,8 @@ that looks like a bad model rather than a bad harness.
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 
 from cudaforge.config import EngineConfig, GenerationConfig
@@ -100,11 +102,16 @@ class TransformersStepwiseRunner:
     model-independent.
     """
 
+    # `Any` rather than a transformers type, matching TransformersRunner: these
+    # are injection points for stubs, not a claim about the library's classes.
+    _model: Any
+    _tokenizer: Any
+
     def __init__(
         self,
         config: EngineConfig,
-        model: object | None = None,
-        tokenizer: object | None = None,
+        model: Any | None = None,
+        tokenizer: Any | None = None,
     ) -> None:
         self._config = config
         self._device = config.resolve_device()
@@ -130,7 +137,7 @@ class TransformersStepwiseRunner:
         #: Sequence ids in cache-row order. The single source of truth for which
         #: row belongs to which sequence; every cache operation reindexes it.
         self._rows: list[int] = []
-        self._cache: object | None = None
+        self._cache: Any | None = None
         self._mask: torch.Tensor | None = None
         self._last: torch.Tensor | None = None
 
@@ -147,7 +154,7 @@ class TransformersStepwiseRunner:
         pad = torch.zeros(shape, dtype=tensor.dtype, device=tensor.device)
         return torch.cat([pad, tensor], dim=dim)
 
-    def _merge_cache(self, incoming: object, incoming_mask: torch.Tensor) -> None:
+    def _merge_cache(self, incoming: Any, incoming_mask: torch.Tensor) -> None:
         """Concatenate new rows onto the running cache, aligning their lengths."""
         from transformers import DynamicCache  # imported lazily
 
@@ -155,6 +162,7 @@ class TransformersStepwiseRunner:
             self._cache, self._mask = incoming, incoming_mask
             return
 
+        assert self._mask is not None, "a populated cache always carries its mask"
         existing_length = self._cache.layers[0].keys.shape[2]
         incoming_length = incoming.layers[0].keys.shape[2]
         common = max(existing_length, incoming_length)

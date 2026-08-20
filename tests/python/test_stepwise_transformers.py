@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 import torch
+
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.stepwise import SequenceState, StepwiseRunner
 
