@@ -217,33 +217,79 @@ TEST_CASE("paged attention matches a host reference", "[cuda][paged]") {
 }
 
 TEST_CASE("paged attention actually follows the block table", "[cuda][paged]") {
-    // The property that makes every other test here meaningful. Reading the
-    // same cache through a different table must give a different answer; if it
-    // does not, the kernel is ignoring the indirection and the paged cache is
-    // decorative.
+    // The property that makes every other test here meaningful: the kernel must
+    // read through the table rather than assuming token `t` sits at slot `t`.
+    //
+    // The first version of this *permuted* two table entries and required the
+    // output to change. It does not, and cannot: attention is a softmax-weighted
+    // sum over the whole context with no positional term inside the kernel, so
+    // it is invariant under reordering the context. The test asserted something
+    // mathematically false and failed against a correct kernel.
+    //
+    // Repointing a logical block at *different data* is the real check. Only a
+    // kernel that follows the table can notice.
     PagedFixture fixture = make_fixture(1, 1, 1, 32, 4, {8}, 3);
     const float scale = 1.0F / std::sqrt(32.0F);
     const std::vector<float> original = run_paged_attention(fixture, scale);
 
     REQUIRE(fixture.tables.size() >= 2);
-    std::swap(fixture.tables[0], fixture.tables[1]);
-    const std::vector<float> swapped = run_paged_attention(fixture, scale);
+    // `make_fixture` allocates more physical blocks than any sequence uses, so
+    // there is always a spare holding different random contents.
+    const DeviceBlockId used_first = fixture.tables[0];
+    const DeviceBlockId used_second = fixture.tables[1];
+    DeviceBlockId spare = 0;
+    const int total_blocks =
+        static_cast<int>(fixture.k_cache.size() / (static_cast<std::size_t>(fixture.block_size) *
+                                                   fixture.kv_heads * fixture.head_dim));
+    for (int candidate = 0; candidate < total_blocks; ++candidate) {
+        const auto id = static_cast<DeviceBlockId>(candidate);
+        if (id != used_first && id != used_second) {
+            spare = id;
+            break;
+        }
+    }
+    REQUIRE(spare != used_first);
+
+    fixture.tables[0] = spare;
+    const std::vector<float> repointed = run_paged_attention(fixture, scale);
 
     bool differs = false;
     for (std::size_t i = 0; i < original.size(); ++i) {
-        if (std::fabs(original[i] - swapped[i]) > 1e-6F) {
+        if (std::fabs(original[i] - repointed[i]) > 1e-6F) {
             differs = true;
             break;
         }
     }
     REQUIRE(differs);
 
-    // And swapping back restores it exactly, so the difference above is the
-    // table and not run-to-run noise.
-    std::swap(fixture.tables[0], fixture.tables[1]);
+    // Restoring the entry restores the answer exactly, so the difference above
+    // is the table and not run-to-run noise.
+    fixture.tables[0] = used_first;
     const std::vector<float> restored = run_paged_attention(fixture, scale);
     for (std::size_t i = 0; i < original.size(); ++i) {
         REQUIRE(restored[i] == Catch::Approx(original[i]).margin(1e-6));
+    }
+}
+
+TEST_CASE("paged attention is invariant under reordering the context", "[cuda][paged]") {
+    // The property the test above was originally written against, stated as the
+    // fact it is rather than the bug it looked like. Attention sums over the
+    // whole context symmetrically and this kernel carries no positional term —
+    // positions are baked into K and V by the caller — so permuting the block
+    // table cannot change the result.
+    //
+    // Worth pinning: if this ever starts failing, the kernel has acquired a
+    // dependence on physical block order, which would be a bug.
+    PagedFixture fixture = make_fixture(1, 1, 1, 32, 4, {8}, 3);
+    const float scale = 1.0F / std::sqrt(32.0F);
+    const std::vector<float> original = run_paged_attention(fixture, scale);
+
+    std::swap(fixture.tables[0], fixture.tables[1]);
+    const std::vector<float> permuted = run_paged_attention(fixture, scale);
+
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        INFO("index " << i);
+        REQUIRE(permuted[i] == Catch::Approx(original[i]).margin(1e-6));
     }
 }
 

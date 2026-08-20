@@ -24,10 +24,19 @@ constexpr int kFragK = 8;
 constexpr int kWarpsX = 4;
 constexpr int kWarpsY = 4;
 
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
-#define CUDAFORGE_HAS_TF32_WMMA 1
-#else
-#define CUDAFORGE_HAS_TF32_WMMA 0
+// A guard whose failure mode is an empty kernel body is worse than no guard.
+// The first version of this compiled to a no-op below sm_80, launched cleanly,
+// and wrote nothing — so the output was exactly zero and indistinguishable from
+// a kernel that had correctly computed zero. It cost a GPU round trip to find.
+//
+// Every architecture this project targets is 80 or later, so anything else is a
+// build the author did not intend, and saying so at compile time is the only
+// honest option.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
+#error \
+    "tensor_core_matmul.cu needs compute capability 8.0+ for TF32 WMMA. \
+Build with CMAKE_CUDA_ARCHITECTURES=80 or later, or drop this file from the \
+target; launch_matmul_tensor_core() already refuses older devices at runtime."
 #endif
 
 /// One warp per 16x16 tile of C.
@@ -39,7 +48,6 @@ constexpr int kWarpsY = 4;
 /// without approaching cuBLAS.
 __global__ void matmul_tf32_wmma(const float* __restrict__ a, const float* __restrict__ b,
                                  float* __restrict__ c, int m, int n, int k) {
-#if CUDAFORGE_HAS_TF32_WMMA
     using namespace nvcuda;
 
     // Lane layout: threadIdx.x spans warps in the n direction, threadIdx.y in
@@ -95,17 +103,6 @@ __global__ void matmul_tf32_wmma(const float* __restrict__ a, const float* __res
     const std::size_t c_offset = static_cast<std::size_t>(tile_row) * static_cast<std::size_t>(n) +
                                  static_cast<std::size_t>(tile_col);
     wmma::store_matrix_sync(c + c_offset, accumulator, n, wmma::mem_row_major);
-#else
-    // Unreachable: the launcher checks the device's capability first. Present
-    // so the translation unit compiles for older architectures in the same
-    // multi-target build.
-    (void)a;
-    (void)b;
-    (void)c;
-    (void)m;
-    (void)n;
-    (void)k;
-#endif
 }
 
 }  // namespace
