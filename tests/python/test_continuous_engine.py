@@ -236,3 +236,69 @@ def test_the_snapshot_identifies_the_scheduler():
     assert snapshot.extra["scheduler"] == "continuous"
     assert snapshot.extra["max_batch_size"] == 4
     assert "runner" in snapshot.extra
+
+
+def test_shutting_down_mid_submission_settles_every_future():
+    """The race between `shutdown` failing futures and the scheduler settling them.
+
+    Both paths take the same lock and check `done()`, so neither can corrupt the
+    other — but "cannot corrupt" is not "cannot hang". A future that neither
+    side claims would leave its caller blocked until its own timeout, with
+    nothing explaining why.
+
+    Repetition rather than inspection: the window is a few instructions wide,
+    and a single run walks through it far too rarely to be evidence.
+    """
+    import contextlib
+    import random
+
+    def scheduler_threads() -> set[int]:
+        return {
+            thread.ident
+            for thread in threading.enumerate()
+            if "cudaforge-continuous" in thread.name and thread.ident is not None
+        }
+
+    # Scoped to this test's own threads. Other tests here shut down with a short
+    # timeout on purpose, so a global "no scheduler threads alive" assertion
+    # would be measuring them instead.
+    pre_existing = scheduler_threads()
+
+    random.seed(0)
+    for _ in range(12):
+        config = EngineConfig(
+            max_batch_size=4,
+            queue_capacity=64,
+            generation=GenerationConfig(max_new_tokens=6),
+        )
+        running = ContinuousEngine(
+            config=config, runner=EchoStepwiseRunner(per_step_seconds=0.0005)
+        )
+        submitted: list[object] = []
+        lock = threading.Lock()
+
+        def submitter(engine=running, collected=submitted, guard=lock):
+            for index in range(20):
+                try:
+                    future = engine.submit(f"p{index}")
+                except EngineClosedError:
+                    return
+                with guard:
+                    collected.append(future)
+
+        threads = [threading.Thread(target=submitter) for _ in range(3)]
+        for thread in threads:
+            thread.start()
+        # Shut down at an arbitrary moment while submissions are still arriving.
+        threading.Event().wait(random.uniform(0.0, 0.008))
+        running.shutdown(timeout=5.0)
+        for thread in threads:
+            thread.join(timeout=10)
+
+        for future in submitted:
+            with contextlib.suppress(EngineClosedError):
+                future.result(timeout=10)
+            assert future.done(), "a future was claimed by neither path"
+
+    leaked = scheduler_threads() - pre_existing
+    assert not leaked, f"{len(leaked)} scheduler thread(s) outlived their engine"
