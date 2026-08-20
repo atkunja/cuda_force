@@ -166,6 +166,23 @@ to be subtly wrong — accumulation, the unscale-then-clip ordering, left paddin
 per-row truncation — are tested without a network round trip. Code that can only
 be run by downloading something is code that does not get tested.
 
+## The local suite reproduces the CI gates
+
+Several failures reached CI green-locally, red-remotely, and every one came from
+the local run differing from the CI run rather than from a flaky test:
+
+| Difference | What it hid |
+| --- | --- |
+| `python -m pytest` vs bare `pytest` | the working directory on `sys.path`, masking that `inference` and `training` were not installed |
+| No `-Werror` locally | an unused variable that only Linux clang rejects |
+| A hand-populated virtualenv | three dependencies that were never declared |
+| Unpinned clang-format | three versions disagreeing about the same file |
+
+`scripts/test.sh` now runs the warnings-as-errors build and invokes `pytest`
+the way CI does. The remaining gap — that a developer's environment has packages
+the extras do not declare — is only closable against a clean environment, which
+[CONTRIBUTING.md](../CONTRIBUTING.md) gives the recipe for.
+
 ## Isolation
 
 Tests that touch process-wide state restore it. `cli.serve` configures the

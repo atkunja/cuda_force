@@ -174,7 +174,27 @@ Recorded because each was found by a test that was written to look for it:
 17. **Unbounded device buffer copies.** `copy_from_host` took a count and did
     not check it against the allocation. A device-side overrun does not fault
     at the copy — it corrupts the next allocation and surfaces elsewhere.
-18. **The sanitizer was not applied to the benchmark targets**, so they linked
+18. **`inference` and `training` were never installed as packages.** Only
+    `cudaforge` was, so `cudaforge-serve` — which starts uvicorn with the import
+    string `"inference.server:app"` — worked solely when the current directory
+    happened to be the repository root. The same gap made a bare `pytest` fail
+    while `python -m pytest` passed, because the latter puts the working
+    directory on `sys.path`.
+19. **Three undeclared dependencies.** `pyyaml`, `httpx` and `httpx2` were
+    present on the development machine and missing from the extras that needed
+    them, so a clean install failed 16 tests that passed locally.
+20. **An unused variable that only Linux clang rejects.** The local build did
+    not run with `-Werror`, and Apple clang does not warn for an unused object
+    with a non-trivial constructor.
+21. **Three different clang-format versions** in play — Homebrew's locally,
+    apt's in CI, and a third pinned in pre-commit — which disagreed about the
+    same file. Now one pinned version everywhere.
+22. **A CMake ordering bug reachable only with CUDA enabled.** `tests/cuda` was
+    added from `cuda/CMakeLists.txt`, before `tests/cpp` had fetched Catch2 and
+    defined `catch_discover_tests`.
+23. **`tomllib` used on Python 3.10**, where it is not in the standard library,
+    despite the package declaring 3.10 as its floor.
+24. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run
