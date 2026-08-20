@@ -247,11 +247,17 @@ def main() -> int:
                     "static": {
                         "decode_steps": static.decode_steps,
                         "utilisation": static.utilisation,
+                        "prefill_calls": static_timed.inner.prefills,
+                        "prefill_seconds": static_timed.prefill_seconds,
+                        "decode_seconds": static_timed.decode_seconds,
                         "seconds": static_seconds,
                     },
                     "continuous": {
                         "decode_steps": continuous.decode_steps,
                         "utilisation": continuous.utilisation,
+                        "prefill_calls": continuous_timed.inner.prefills,
+                        "prefill_seconds": continuous_timed.prefill_seconds,
+                        "decode_seconds": continuous_timed.decode_seconds,
                         "seconds": continuous_seconds,
                     },
                 },
