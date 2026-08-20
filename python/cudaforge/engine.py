@@ -22,7 +22,7 @@ import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.metrics import MetricsRegistry, MetricsSnapshot
@@ -63,6 +63,55 @@ class Response:
 
 class EngineClosedError(RuntimeError):
     """Raised when work is submitted to an engine that is shutting down."""
+
+
+@runtime_checkable
+class ServingEngine(Protocol):
+    """The surface a serving engine presents, whichever way it schedules.
+
+    Two implementations ship: `InferenceEngine` forms a batch and runs it to
+    completion, `ContinuousEngine` schedules at iteration level. They are
+    separate classes rather than one class with a mode flag because they require
+    incompatible runners — a one-shot `ModelRunner` against a step-wise
+    `StepwiseRunner` — and a constructor that accepted either would have to
+    reject most combinations at runtime.
+
+    This is what callers should type against, so the server and the load driver
+    work with both. It is `runtime_checkable`, so a test can assert an
+    implementation still satisfies it rather than comparing attribute names.
+    """
+
+    @property
+    def config(self) -> EngineConfig: ...
+
+    @property
+    def metrics(self) -> MetricsRegistry: ...
+
+    @property
+    def queue_depth(self) -> int: ...
+
+    def submit(
+        self,
+        prompt: str,
+        generation: GenerationConfig | None = None,
+        block_when_full: bool = True,
+        deadline_seconds: float | None = None,
+    ) -> Future[Response]: ...
+
+    def generate(
+        self, prompt: str, generation: GenerationConfig | None = None, timeout: float = 60.0
+    ) -> Response: ...
+
+    def generate_many(
+        self,
+        prompts: list[str],
+        generation: GenerationConfig | None = None,
+        timeout: float = 120.0,
+    ) -> list[Response]: ...
+
+    def snapshot(self) -> MetricsSnapshot: ...
+
+    def shutdown(self, timeout: float = 30.0) -> None: ...
 
 
 class InferenceEngine:
@@ -342,4 +391,4 @@ class InferenceEngine:
             future.set_result(response)
 
 
-__all__ = ["BatchTrigger", "EngineClosedError", "InferenceEngine", "Response"]
+__all__ = ["BatchTrigger", "EngineClosedError", "InferenceEngine", "Response", "ServingEngine"]

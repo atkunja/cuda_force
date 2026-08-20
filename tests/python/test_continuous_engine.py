@@ -14,7 +14,7 @@ import pytest
 
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.continuous_engine import ContinuousEngine
-from cudaforge.engine import EngineClosedError, InferenceEngine
+from cudaforge.engine import EngineClosedError, InferenceEngine, ServingEngine
 from cudaforge.stepwise import EchoStepwiseRunner
 
 
@@ -199,21 +199,18 @@ def test_a_full_queue_sheds_load_when_asked():
 # --- substitutability -------------------------------------------------------
 
 
-def test_the_two_engines_present_the_same_surface():
-    """The reason this is a sibling class rather than a flag.
+def test_both_engines_satisfy_the_serving_protocol():
+    """The reason this is a sibling class rather than a mode flag.
 
-    A caller written against `InferenceEngine` must be able to take a
-    `ContinuousEngine` instead. If a public method is added to one and not the
-    other, that stops being true silently.
+    A caller written against `ServingEngine` must accept either. Checked against
+    the protocol rather than by comparing attribute names, so a method that
+    exists but has drifted in signature is still caught by mypy, and a missing
+    one is caught here.
     """
-    surface = {
-        name
-        for name in dir(InferenceEngine)
-        if not name.startswith("_") and callable(getattr(InferenceEngine, name, None))
-    }
-    provided = {name for name in dir(ContinuousEngine) if not name.startswith("_")}
-    missing = surface - provided
-    assert not missing, f"ContinuousEngine is missing {sorted(missing)}"
+    config = EngineConfig(max_batch_size=2, generation=GenerationConfig(max_new_tokens=2))
+    with ContinuousEngine(config=config) as continuous, InferenceEngine(config=config) as static:
+        assert isinstance(continuous, ServingEngine)
+        assert isinstance(static, ServingEngine)
 
 
 def test_both_engines_answer_the_same_prompts():
