@@ -195,19 +195,20 @@ Static batching prefills a full batch at once. Continuous batching refills rows
 as they free, and rows free in ones and twos — so the same prompts arrive as
 many narrow prefills instead of a few wide ones.
 
-The cost of that is **not** a fixed per-call overhead, which was the first
-explanation here and was wrong. It is that a narrow prefill underuses the
-hardware. Timing the same 6-token prompt at increasing widths on the 6-layer
-model:
+What that costs is set by the **width** each prefill achieves, not by how many
+prefills there are — a distinction worth making because it predicts which fixes
+work. Timing the same 6-token prompt at increasing widths on the 6-layer model:
 
 | prompts per prefill |   1   |   2   |   4   |   8   |  16   |  32   |
 | ------------------: | :---- | :---- | :---- | :---- | :---- | :---- |
 |         ms / prompt | 1.863 | 0.964 | 0.839 | 0.471 | 0.339 | 0.235 |
 
-A prompt costs **7.9x less** to prefill in a batch of 32 than alone. Static
-batching prefills at width ~32 and continuous at width ~4, and that ratio
-predicts the measured times: 128 prompts at 0.235 ms is 0.030 s against 0.037 s
-measured, and at 0.839 ms is 0.107 s against 0.133 s.
+A prompt costs **7.9x less** to prefill in a batch of 32 than alone: a width-32
+call does 32 prompts for four times the wall-clock of a width-1 call, because at
+width 1 almost all of the pass is overhead the work never fills. Static batching
+prefills at width ~32 and continuous at width ~4, and that ratio predicts the
+measured times — 128 prompts at 0.235 ms is 0.030 s against 0.037 s measured, and
+at 0.839 ms is 0.107 s against 0.133 s.
 
 ### The obvious fix does not work
 
@@ -220,10 +221,15 @@ prefill wide. Tried, at thresholds of 2, 4 and 8 free rows before admitting:
 |     8     |       24 |      0.117 s |     0.333 s | 0.502 | 48.3%     |
 
 A 27% cut in prefill calls buys 1.8% of wall-clock, and decode gets *slower*
-because occupancy drops. The reason is structural rather than tunable: prefilling
-at width 32 requires 32 free rows, and 32 free rows means the batch has drained —
-which is the exact state continuous batching exists to avoid. Wide prefill wants
-an empty batch; continuous batching wants a full one.
+because occupancy drops. That is the width argument paying off as a prediction:
+the merged calls went from width ~4 to width ~5, and the per-prompt curve is
+already flattening there, so fewer calls at nearly the same width saves almost
+nothing. Counting calls would have predicted a 27% saving.
+
+And it cannot be tuned further. Prefilling at width 32 requires 32 free rows,
+and 32 free rows means the batch has drained — the exact state continuous
+batching exists to avoid. Wide prefill wants an empty batch; continuous batching
+wants a full one.
 
 So the tax is close to irreducible by scheduling alone, while the decode saving
 grows with batch size — which is why the two cross over around batch 8 here.
@@ -231,12 +237,13 @@ Production systems attack it from the other side, with chunked prefill or by
 separating prefill from decode onto different workers. This implementation does
 neither.
 
-Two honest limits on the table. The model is small enough that fixed per-call
-overhead is a large share of every forward pass, which inflates the prefill tax
-relative to a production-sized model. And CPU decode is compute-bound where GPU
-decode is memory-bandwidth-bound, so a wider batch is closer to free on a GPU
-than it is here — meaning these figures likely *understate* the gain. Both
-directions are stated because neither has been measured on a GPU.
+Two honest limits on the table, pulling in opposite directions. The model is
+small, so a narrow pass wastes proportionally more of the hardware than a
+production-sized one would — which inflates the prefill tax here. But CPU decode
+is compute-bound where GPU decode is memory-bandwidth-bound, so a wider decode
+step is closer to free on a GPU than it is here, which would inflate the decode
+saving. Neither has been measured on a GPU, so both are stated rather than
+netted off into a guess.
 
 ## What is still missing
 
