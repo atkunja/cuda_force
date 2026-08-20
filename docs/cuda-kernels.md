@@ -554,6 +554,7 @@ the code accountable:
    | `divergent-barrier` | `__syncthreads()` reached conditionally |
    | `unbarriered-reduction-return` | a block reduction returning straight from shared memory |
    | `narrow-index-arithmetic` | `blockIdx.x * blockDim.x` computed in 32-bit |
+   | `undeclared-convert-alias` | `Convert::` used without the `using` that defines it |
 
    It parses logical statements rather than physical lines, so a call the
    formatter split across lines is still matched. Each rule is tested in both

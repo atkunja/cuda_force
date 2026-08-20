@@ -194,7 +194,12 @@ Recorded because each was found by a test that was written to look for it:
     defined `catch_discover_tests`.
 23. **`tomllib` used on Python 3.10**, where it is not in the standard library,
     despite the package declaring 3.10 as its floor.
-24. **The sanitizer was not applied to the benchmark targets**, so they linked
+24. **A half-applied template conversion.** The BF16 change converted the SwiGLU
+    kernel's *body* to use the `Convert` alias but not its signature, leaving
+    `Convert::` with nothing behind it. It compiles nowhere, but the development
+    host has no nvcc, so only the CUDA CI job caught it. Now covered by a
+    structural rule.
+25. **The sanitizer was not applied to the benchmark targets**, so they linked
     an instrumented runtime without the sanitizer runtime and the whole
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run
