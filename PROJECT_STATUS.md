@@ -299,6 +299,30 @@ live rather than against the reference fallback.
 | `examples/distributed_train.py` | still unverified — needs two GPUs |
 | Dockerfile and compose services | still unverified — ran outside the image |
 
+### Written since, and not yet executed
+
+Three pieces were added after the RTX 3090 session and have only been
+*compiled*, in the same CI job that compiles everything else. They are marked
+`[~]` in the README's roadmap rather than checked off, because the whole point
+of the section above is that compiling and working are different things.
+
+| Added | Status |
+| --- | --- |
+| `launch_paged_attention` — gather through the block table | compiles; 4 test cases written |
+| `StreamOrderedAllocatorBackend` — `cudaMallocAsync` | compiles; 3 test cases written |
+| Tiled rewrite of the fused LoRA kernel | compiles; existing LoRA tests cover it |
+
+A second validation run would settle all three. `./scripts/validate_gpu.sh`
+already picks them up — the CUDA tests and the kernel benchmark both enumerate
+what is built, so nothing needs changing to include them.
+
+The LoRA rewrite is the one to watch. It was measured at 21.8-32.3x slower than
+the unfused path, diagnosed as a missing tiling rather than the tensor-core
+deficit first claimed here, and rewritten to tile. Whether that closes the gap
+is unknown until it runs; the prediction on record is that it should land within
+a small factor of the unfused path, and if it does not, the diagnosis was
+incomplete.
+
 ### Why there are still no Nsight profiles
 
 `ncu` connects and runs the binary, then reports `ERR_NVGPUCTRPERM`: NVIDIA

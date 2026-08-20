@@ -533,11 +533,18 @@ docs/      the reasoning behind all of the above
 
 Honest about what is not here:
 
+Legend: `[x]` done and verified, `[~]` written and compiling in CI but **not
+yet executed on a GPU**, `[ ]` not started.
+
 - [x] **Paged KV cache — block allocator.** Reference-counted blocks, per-sequence
       block tables, copy-on-write for shared prefixes. Host-side and fully
       tested; see [kv-cache.md](docs/kv-cache.md).
-- [ ] **Paged KV cache — attention gather.** The allocator is done; the kernel
-      that reads through the block table is not, so nothing uses it yet.
+- [~] **Paged KV cache — attention gather.** Written and compiling:
+      `launch_paged_attention` reads K and V through the block table, with
+      grouped-query support and an online softmax so context is bounded by the
+      cache rather than by shared memory. Tests include one that swaps two
+      block-table entries and requires the output to change — without it a
+      kernel ignoring the indirection would pass. **Not yet run on a GPU.**
 - [x] **Preemption policy.** Newest-first and largest-first eviction, livelock-free
       admission, feasibility decided before anything is destroyed. Host-side and
       fully tested; see [continuous-batching.md](docs/continuous-batching.md).
@@ -557,9 +564,10 @@ Honest about what is not here:
       is not competitive with cuBLAS, by design.
 - [ ] **FP8.** Hopper and later. The `ReducedPrecision` traits are the seam a
       third format would slot into.
-- [ ] **Stream-ordered allocation.** The pool frees immediately; adopting
-      `cudaMallocAsync` semantics would remove the "do not free in-flight
-      buffers" constraint.
+- [~] **Stream-ordered allocation.** Written and compiling:
+      `StreamOrderedAllocatorBackend` over `cudaMallocAsync`/`cudaFreeAsync`
+      orders the free within the stream, so returning a buffer a running kernel
+      still reads costs no device-wide stall. **Not yet run on a GPU.**
 - [x] **Speculative decoding.** A draft model proposes `k` tokens and the target
       verifies them in one pass. Lossless by construction — greedy matches the
       target token for token, and sampling uses the `min(1, p/q)` rule with a
