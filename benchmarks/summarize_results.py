@@ -376,6 +376,40 @@ def summarize_memory(payload: dict[str, Any]) -> str:
     return "".join(out)
 
 
+def summarize_continuous(payload: dict[str, Any]) -> str:
+    out = [f"### Continuous vs static batching — batch {payload.get('max_batch_size', '?')}\n"]
+    if note := payload.get("note"):
+        out.append(f"\n{note}\n\n")
+
+    out.append(
+        table(
+            ["workload", "median", "max", "ideal", "static", "continuous", "fewer", "util"],
+            [
+                [
+                    case["workload"],
+                    str(case["median_length"]),
+                    str(case["max_length"]),
+                    str(case["ideal_steps"]),
+                    str(case["static_steps"]),
+                    str(case["continuous_steps"]),
+                    f"{(1 - case['continuous_steps'] / case['static_steps']) * 100:.0f}%"
+                    if case["static_steps"]
+                    else "—",
+                    f"{case['static_utilisation'] * 100:.0f}% -> "
+                    f"{case['continuous_utilisation'] * 100:.0f}%",
+                ]
+                for case in payload.get("comparisons", [])
+            ],
+        )
+    )
+    out.append(
+        "\n`ideal` is the lower bound — total work spread across the batch, or the "
+        "longest single sequence, whichever is larger. A constant-length workload "
+        "shows no gain, because no row is ever freed early.\n"
+    )
+    return "".join(out)
+
+
 SUMMARIES = {
     "cuda_kernels": summarize_cuda_kernels,
     "dynamic_batching": summarize_batching,
@@ -383,6 +417,7 @@ SUMMARIES = {
     "latency_histogram": summarize_histogram,
     "kv_cache_occupancy": summarize_kv_cache,
     "metrics_overhead": summarize_metrics,
+    "continuous_batching": summarize_continuous,
     "concurrent_queue": summarize_queue,
     "dynamic_batcher": summarize_scheduler,
     "memory_pool": summarize_memory,

@@ -43,6 +43,10 @@ echo "==> metrics overhead"
 "$PYTHON" benchmarks/benchmark_metrics.py \
   --output "$RESULTS/metrics-${STAMP}.json"
 
+echo "==> continuous vs static batching"
+"$PYTHON" benchmarks/benchmark_continuous.py \
+  --output "$RESULTS/continuous-${STAMP}.json"
+
 echo "==> batching sweep"
 "$PYTHON" benchmarks/benchmark_batching.py \
   --output "$RESULTS/batching-${STAMP}.json"

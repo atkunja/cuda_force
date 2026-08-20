@@ -9,6 +9,7 @@ implementation the dispatcher selects, not the API.
 from __future__ import annotations
 
 from cudaforge.config import EngineConfig, GenerationConfig
+from cudaforge.continuous import ContinuousBatcher, ContinuousStats
 from cudaforge.engine import EngineClosedError, InferenceEngine, Response
 from cudaforge.metrics import LatencyHistogram, MetricsRegistry, MetricsSnapshot
 from cudaforge.ops import (
@@ -29,6 +30,7 @@ from cudaforge.ops import (
 )
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
+from cudaforge.stepwise import EchoStepwiseRunner, SequenceState, StepwiseRunner
 
 __version__ = "0.1.0"
 
@@ -37,8 +39,11 @@ __all__ = [
     "KERNEL_DTYPES",
     "Batch",
     "BatchTrigger",
+    "ContinuousBatcher",
+    "ContinuousStats",
     "DynamicBatcher",
     "EchoRunner",
+    "EchoStepwiseRunner",
     "EngineClosedError",
     "EngineConfig",
     "GenerationConfig",
@@ -50,6 +55,8 @@ __all__ = [
     "ModelRunner",
     "Request",
     "Response",
+    "SequenceState",
+    "StepwiseRunner",
     "__version__",
     "backend_report",
     "dequantize_int8",
