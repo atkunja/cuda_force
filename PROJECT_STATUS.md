@@ -24,6 +24,7 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | `Metrics` | Counters plus queue-delay and latency percentiles, JSON serialisation. |
 | `KVCacheManager` | Admission, extension and recompute-based preemption over the block allocator. Newest-first and largest-first policies, livelock-free (never evicts the requester), and feasibility decided before anything is destroyed. |
 | `ContinuousBatcher` | Iteration-level scheduling over a step-wise runner: rows freed by finished sequences are refilled at the next decode step, with deadline-aware admission and a drain on shutdown. |
+| `TransformersStepwiseRunner` | Drives a real causal model one token at a time, owning the KV cache. Rows are added on admission and removed on eviction, ragged lengths handled by left-padding so every row's newest token stays at the position a decode step reads. Verified against an uncached greedy loop. |
 | `BlockAllocator` / `SequenceBlockTable` | Paged KV cache bookkeeping: reference-counted blocks, per-sequence block tables, copy-on-write for shared prefixes, exhaustion as a value rather than an exception. |
 | `RuntimeConfig` | Validation at construction, including the queue-smaller-than-batch trap. |
 
@@ -116,6 +117,7 @@ throughput.
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, 0 failures; client p99 279 ms against server p99 1.03 ms |
 | Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
 | Continuous vs static batching | 62% fewer decode steps on long-tailed traffic, 76% on bimodal, 42% on uniform, −2% on constant lengths |
+| Continuous vs static batching, **real transformer** | 6-layer GPT-2, 128 requests: 70% fewer decode steps and **1.44× wall-clock** at batch 32, falling to 0.83× at batch 4 — refilling rows one at a time fragments prefill (4 → 33 calls at batch 32, 32 → 126 at batch 4) |
 | Block allocator throughput | 163–180M operations/second |
 | Bounded queue scaling | 2.39M items/s at 1×1, falling to 774k at 8×8 — where the single mutex becomes the bottleneck |
 | Latency histogram (C++) | worst error **4.95%** against a documented 6.25% bound, over four distributions |
