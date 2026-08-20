@@ -31,7 +31,15 @@ train = [
   "accelerate>=0.30",
   "pyyaml>=6.0",
 ]
-serve = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
+serve = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "pydantic>=2.6",
+  # The HTTP load generator's client. Not a server dependency as such, but it
+  # belongs with the serving extra rather than in `dev`, since benchmarking a
+  # deployment is a serving activity.
+  "httpx>=0.27",
+]
 # bitsandbytes is Linux/CUDA only, which is why QLoRA is its own extra rather
 # than part of `train`: installing `train` must not fail on macOS.
 quantize = ["bitsandbytes>=0.43; platform_system == 'Linux'"]
@@ -45,6 +53,11 @@ dev = [
   # clang-format releases format this code differently, so an unpinned one makes
   # the formatting gate depend on who runs it.
   "clang-format==20.1.7",
+  # starlette.testclient needs this. Without it TestClient raises at import with
+  # a RuntimeError rather than an ImportError, so `pytest.importorskip` does not
+  # catch it and the HTTP tests error instead of skipping. Starlette also
+  # accepts the older `httpx`, with a deprecation warning.
+  "httpx2>=2.0",
 ]
 
 [project.urls]

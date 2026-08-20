@@ -103,9 +103,13 @@ jobs:
       image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     steps:
       - name: Install build tools
+        # cmake from pip, not apt: Ubuntu 22.04 ships 3.22 and this project
+        # requires 3.24. The pip wheel is also the same version on every runner,
+        # which the distro package is not.
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends cmake ninja-build git ca-certificates
+          apt-get install -y --no-install-recommends git ca-certificates python3-pip
+          pip3 install --no-cache-dir "cmake>=3.24" ninja
 
       - uses: actions/checkout@v7
 
