@@ -551,8 +551,13 @@ yet executed on a GPU**, `[ ]` not started.
 - [x] **Continuous batching.** Iteration-level scheduling: rows freed by finished
       sequences are refilled at the next decode step. **62% fewer decode steps**
       on long-tailed traffic, utilisation 30% → 78%.
-- [ ] **Wire the two together.** The cache manager is C++, the scheduler is
-      Python, and connecting them needs the attention gather below.
+- [x] **Wire the two together.** `ContinuousBatcher` now bounds admission by
+      real cache capacity instead of row count: a pool of 8 blocks x 4 tokens
+      holds the batch to 2 despite a 16-row limit. `python/cudaforge/kv_cache.py`
+      mirrors the C++ manager, and 14 conformance scenarios drive both through
+      identical scripts and compare every decision — not just the totals, since
+      reaching the same state by evicting different sequences is still wrong.
+      Host-side, so this needed no GPU.
 - [x] **A step-wise runner over a real model.**
       `TransformersStepwiseRunner` drives a transformer one token at a time and
       owns the KV cache, adding and removing rows as sequences join and leave.
