@@ -14,10 +14,12 @@
 ---
 
 > **On measurement.** This project was developed on Apple Silicon, which has no
-> CUDA path. The kernels **compile in CI** — nvcc 12.4, compute capability 8.0,
-> on every push — but nothing CUDA has ever *executed*, so **no GPU performance
-> number appears anywhere in this repository**. Host-side results are labelled
-> with the machine that produced them. See
+> CUDA path, so for most of its life nothing CUDA had ever executed. On
+> 2026-08-20 the whole suite was run on a rented **RTX 3090** (driver 580.126.09,
+> CUDA 12.8): every kernel executed, **19,511 assertions passed across 69 test
+> cases**, and the figures in
+> [GPU kernel measurements](#gpu-kernel-measurements) are real. Everything else
+> is host-side and labelled with the machine that produced it. See
 > [PROJECT_STATUS.md](PROJECT_STATUS.md) for the exact split.
 
 ## What this is
@@ -383,6 +385,78 @@ nothing measured depends on it.
 **No CUDA kernel number exists anywhere.** The harness is complete and runs
 unchanged on NVIDIA hardware — `scripts/validate_gpu.sh` is the one command.
 See [docs/benchmarking.md](docs/benchmarking.md).
+
+## GPU kernel measurements
+
+Run on a rented **NVIDIA RTX 3090** (compute capability 8.6, 82 SMs, theoretical
+bandwidth 936 GB/s), driver 580.126.09, CUDA 12.8, on 2026-08-20 — the first and
+so far only execution of this CUDA code. Reproduce with
+`./scripts/validate_gpu.sh`.
+
+`of peak` is the number that matters. A kernel near the device's bandwidth is
+finished; getting further needs an algorithmic change, not more tuning.
+
+### The reduction hierarchy, which is the whole argument
+
+| elements | naive | shared memory | warp shuffle |
+| -------: | ----: | ------------: | -----------: |
+|      64K | 0.126 ms | 0.0082 ms | 0.0082 ms |
+|       1M | 1.913 ms | 0.0113 ms | 0.0102 ms |
+|      16M | **26.67 ms** | 0.0932 ms | **0.0922 ms** |
+
+**289x** at 16M, and the optimised variants reach **78% of peak**. One
+`atomicAdd` per element serialises the entire grid; that is what the first
+column costs.
+
+The shuffle beats shared memory by **1%** at 16M and 9.7% at 1M. Both are
+bandwidth-bound, so the shuffle is nearly free and — at scale — nearly
+pointless. It is in the repository because the technique is worth knowing, not
+because it wins here.
+
+### Everything else
+
+| kernel | variant | shape | median ms | GB/s | of peak |
+| --- | --- | --- | --- | --- | --- |
+| softmax | naive | 128x8192 | 0.0164 | 512.0 | 55% |
+| softmax | online | 128x8192 | 0.0154 | 546.1 | **58%** |
+| rmsnorm | scalar | 4096x1024 | 0.0911 | 368.2 | 39% |
+| rmsnorm | float4 | 4096x1024 | 0.0440 | 762.0 | **81%** |
+| rmsnorm | scalar | 2048x4096 | 0.0829 | 809.1 | 86% |
+| rmsnorm | float4 | 2048x4096 | 0.0829 | 809.1 | 86% |
+| silu | scalar | 16M | 0.1567 | 856.8 | 92% |
+| swiglu | scalar | 16M | 0.2294 | 877.7 | **94%** |
+| fused_residual_rmsnorm | fused | 2048x4096 | 0.1597 | 840.2 | 90% |
+| fused_residual_rmsnorm | separate | 2048x4096 | 0.1997 | 840.2 | 90% |
+| quantize_int8 | blockwise | 16M | 0.1915 | 438.1 | 47% |
+| dequantize_int8 | blockwise | 16M | 0.1126 | 744.7 | 80% |
+
+Three things worth reading off that table.
+
+**`float4` is shape-dependent, not a free win.** RMSNorm at 4096x1024 goes 39% ->
+81% of peak, a genuine 2.07x. At 2048x4096 the two variants are *identical*: once
+rows are wide enough for scalar access to saturate, vectorising buys nothing.
+
+**The activation kernels are done.** SwiGLU at 94% of theoretical bandwidth has
+no tuning left in it.
+
+**Fusion pays, modestly.** Residual+RMSNorm fused is 1.23-1.45x faster than the
+separate pair. Both sit at the same GB/s; the fused kernel simply moves less.
+
+### The fused LoRA kernel is slower. Much slower.
+
+| shape | unfused | fused | |
+| --- | ---: | ---: | ---: |
+| 32x1024x1024 r8 | 0.0850 ms | 1.8493 ms | **21.8x slower** |
+| 64x2048x2048 r16 | 0.3640 ms | 11.759 ms | **32.3x slower** |
+| 128x4096x4096 r16 | 2.0562 ms | 46.666 ms | **22.7x slower** |
+
+The fusion does what it claims — the `batch x rank` intermediate never reaches
+global memory — and it does not matter at all, because the hand-written matmul
+inside it gives up an order of magnitude of compute to cuBLAS's tensor cores.
+Saving bandwidth is worthless when you have surrendered the arithmetic.
+
+This is the kernel the documentation was most confident about before anything
+ran. Use the unfused path.
 
 ## Testing
 
