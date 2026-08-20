@@ -71,6 +71,19 @@ class SpeculativeStats:
 
     @property
     def acceptance_rate(self) -> float:
+        """Accepted proposals over proposals *made*.
+
+        Not the per-token probability that the draft agrees with the target. A
+        block stops at its first rejection, but the draft has already generated
+        the whole lookahead, and those unused proposals still count here — they
+        cost draft time. So this figure falls as `lookahead` rises even when the
+        draft is exactly as good: at a true 0.9 agreement it reads 0.92 at k=1
+        and 0.62 at k=8.
+
+        That makes it the right number for "what fraction of draft work was
+        wasted" and the wrong one for "how well does the draft track the
+        target". Use `tokens_per_target_call` to compare lookaheads.
+        """
         return self.accepted / self.proposed if self.proposed else 0.0
 
     @property
