@@ -30,6 +30,7 @@ from cudaforge.ops import (
 )
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
+from cudaforge.speculative import SpeculativeDecoder, SpeculativeStats
 from cudaforge.stepwise import EchoStepwiseRunner, SequenceState, StepwiseRunner
 
 __version__ = "0.1.0"
@@ -56,6 +57,8 @@ __all__ = [
     "Request",
     "Response",
     "SequenceState",
+    "SpeculativeDecoder",
+    "SpeculativeStats",
     "StepwiseRunner",
     "__version__",
     "backend_report",
