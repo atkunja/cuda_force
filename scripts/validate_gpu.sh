@@ -163,9 +163,25 @@ stage "Python tests (cuda-marked now run)" "$PYTHON" -m pytest tests/python -q
 
 stage "benchmarks" ./scripts/benchmark.sh
 
-if [[ -x build-cuda/benchmarks/bench_kernels ]]; then
+# Located rather than assumed: the target is declared in cuda/CMakeLists.txt, so
+# it lands under build-cuda/cuda/ and not the benchmarks/ path a reader expects.
+# Guessing one path made this skip with "was not built" when it had built fine —
+# the most misleading kind of skip, because it reads as a build problem.
+BENCH_KERNELS=""
+for candidate in \
+  build-cuda/cuda/bench_kernels \
+  build-cuda/benchmarks/bench_kernels \
+  build-cuda/bench_kernels
+do
+  [[ -x "$candidate" ]] && BENCH_KERNELS="$candidate" && break
+done
+if [[ -z "$BENCH_KERNELS" ]]; then
+  BENCH_KERNELS="$(find build-cuda -name bench_kernels -type f -perm -u+x 2>/dev/null | head -1)"
+fi
+
+if [[ -n "$BENCH_KERNELS" ]]; then
   stage "CUDA kernel benchmarks" bash -c \
-    "./build-cuda/benchmarks/bench_kernels > '$OUT/cuda-kernels.json'"
+    "'$BENCH_KERNELS' > '$OUT/cuda-kernels.json'"
 else
   skip "CUDA kernel benchmarks" "bench_kernels was not built"
 fi
