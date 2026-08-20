@@ -177,10 +177,16 @@ void benchmark_rmsnorm(JsonWriter& writer, cudaStream_t stream) {
                 launch_rmsnorm(input.data(), weight.data(), output.data(), rows, cols, 1e-6F,
                                variant, stream);
             });
-            // Input is read twice (once for the reduction, once to normalise)
-            // and output written once.
+            // One read and one write of DRAM traffic. The kernel touches the
+            // input twice — once for the reduction, once to normalise — but the
+            // second touch hits L1/L2, because a row is still resident from the
+            // reduction moments earlier. Counting it as a third DRAM access
+            // inflated this figure by 1.5x and reported rmsnorm at 131% of the
+            // device's theoretical bandwidth, which is not a thing that can
+            // happen. A number above 100% of peak is a bug in the byte model,
+            // never a fast kernel.
             emit(writer, "rmsnorm", name, std::to_string(rows) + "x" + std::to_string(cols), timing,
-                 effective_bandwidth(3 * elements * sizeof(float), timing.median_ms));
+                 effective_bandwidth(2 * elements * sizeof(float), timing.median_ms));
         }
     }
 }
@@ -292,8 +298,11 @@ void benchmark_fused_norm(JsonWriter& writer, cudaStream_t stream) {
             launch_rmsnorm(residual_out.data(), weight.data(), output.data(), rows, cols, 1e-6F,
                            RMSNormKernel::Naive, stream);
         });
+        // add: two reads and a write. rmsnorm: a read and a write, its second
+        // touch of the intermediate being cache-resident as above. Five, not
+        // six — the same over-count that put the fused pair above 100% of peak.
         emit(writer, "fused_residual_rmsnorm", "separate", label, unfused,
-             effective_bandwidth(6 * elements * sizeof(float), unfused.median_ms));
+             effective_bandwidth(5 * elements * sizeof(float), unfused.median_ms));
     }
 }
 
