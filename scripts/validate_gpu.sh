@@ -114,7 +114,7 @@ echo "    [PASS] CUDA build" | tee -a "$LOG"
 # everything after this is performance.
 
 stage "CUDA correctness tests" ./build-cuda/tests/cuda/cudaforge_cuda_tests
-stage "portable C++ tests" ./build/tests/cpp/cudaforge_tests
+stage "portable C++ tests" ./build-cuda/tests/cpp/cudaforge_tests
 
 # --- the PyTorch extension --------------------------------------------------
 
