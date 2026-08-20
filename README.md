@@ -399,6 +399,7 @@ warp shuffles, and conditionally-reached `__syncthreads()`.
 | [performance.md](docs/performance.md) | every optimisation as baseline → bottleneck → change → measured |
 | [kv-cache.md](docs/kv-cache.md) | why contiguous caches waste memory, and what paging changes |
 | [continuous-batching.md](docs/continuous-batching.md) | iteration-level scheduling, eviction policy, and what each recovers |
+| [speculative-decoding.md](docs/speculative-decoding.md) | why draft-and-verify is lossless, and what tokens-per-target-call does and does not promise |
 | [testing.md](docs/testing.md) | what each suite asserts and why |
 | [deployment.md](docs/deployment.md) | containers, probes, graceful shutdown, sizing, alerts |
 | [troubleshooting.md](docs/troubleshooting.md) | symptoms, diagnoses and fixes |
@@ -450,7 +451,12 @@ Honest about what is not here:
 - [ ] **Stream-ordered allocation.** The pool frees immediately; adopting
       `cudaMallocAsync` semantics would remove the "do not free in-flight
       buffers" constraint.
-- [ ] **Speculative decoding.**
+- [x] **Speculative decoding.** A draft model proposes `k` tokens and the target
+      verifies them in one pass. Lossless by construction — greedy matches the
+      target token for token, and sampling uses the `min(1, p/q)` rule with a
+      residual draw, checked against the target's own distribution. Throughput
+      tracks the closed form `(1 - a^(k+1))/(1 - a)`; batch size 1 only. See
+      [speculative-decoding.md](docs/speculative-decoding.md).
 - [ ] **Multi-GPU inference.** Training has a DDP example; serving is
       single-device.
 - [ ] **GPU-measured benchmarks.** Everything is in place; only hardware is

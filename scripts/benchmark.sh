@@ -58,6 +58,10 @@ else
   echo "==> continuous vs static batching, real transformer — skipped, no transformers"
 fi
 
+echo "==> speculative decoding"
+"$PYTHON" benchmarks/benchmark_speculative.py \
+  --output "$RESULTS/speculative-${STAMP}.json"
+
 echo "==> batching sweep"
 "$PYTHON" benchmarks/benchmark_batching.py \
   --output "$RESULTS/batching-${STAMP}.json"
