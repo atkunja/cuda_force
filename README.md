@@ -436,9 +436,13 @@ Honest about what is not here:
       on long-tailed traffic, utilisation 30% → 78%.
 - [ ] **Wire the two together.** The cache manager is C++, the scheduler is
       Python, and connecting them needs the attention gather below.
-- [ ] **A step-wise `TransformersRunner`.** The protocol exists and the
-      deterministic runner implements it; driving a real model one token at a
-      time with an explicit KV cache is unwritten.
+- [x] **A step-wise runner over a real model.**
+      `TransformersStepwiseRunner` drives a transformer one token at a time and
+      owns the KV cache, adding and removing rows as sequences join and leave.
+      On a 6-layer GPT-2 at batch 32 it turns the scheduling win into **70%
+      fewer decode steps and 1.44x wall-clock** — and at batch 4 into a net
+      loss, because refilling rows one at a time fragments prefill. Both are in
+      [continuous-batching.md](docs/continuous-batching.md#measured-on-a-real-model).
 - [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and
       is not competitive with cuBLAS, by design.
 - [ ] **FP8.** Hopper and later. The `ReducedPrecision` traits are the seam a
