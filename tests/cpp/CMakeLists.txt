@@ -41,6 +41,10 @@ add_executable(batcher_scenario batcher_scenario.cpp)
 target_link_libraries(batcher_scenario PRIVATE cudaforge::runtime cudaforge_warnings)
 cudaforge_apply_sanitizer(batcher_scenario)
 
+add_executable(kv_cache_scenario kv_cache_scenario.cpp)
+target_link_libraries(kv_cache_scenario PRIVATE cudaforge::runtime cudaforge_warnings)
+cudaforge_apply_sanitizer(kv_cache_scenario)
+
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 catch_discover_tests(cudaforge_tests)
