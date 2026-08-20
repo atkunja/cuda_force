@@ -218,3 +218,85 @@ def test_serve_flags_override_the_config_file(monkeypatch):
 
     assert captured["CUDAFORGE_MAX_BATCH"] == "8"
     assert captured["CUDAFORGE_MAX_WAIT_US"] == "20000"
+
+
+# --- scheduler selection ----------------------------------------------------
+
+
+def test_bench_reports_scheduling_counters_in_continuous_mode(capsys):
+    """Batch-formation counters must not be printed by a scheduler that has none.
+
+    An iteration-level scheduler never forms a batch, so `avg batch size` would
+    read 0.00 and `batches` 0 — which looks like "nothing was batched" rather
+    than "this scheduler does not work that way".
+    """
+    exit_code = cli.bench(
+        [
+            "--echo-runner",
+            "--continuous",
+            "--clients",
+            "2",
+            "--requests-per-client",
+            "5",
+            "--max-new-tokens",
+            "4",
+        ]
+    )
+    assert exit_code == 0
+
+    output = capsys.readouterr().out
+    assert "scheduler        continuous" in output
+    assert "decode steps" in output
+    assert "row occupancy" in output
+    assert "avg batch size" not in output
+    assert "batches  " not in output
+
+
+def test_bench_still_reports_batch_formation_in_static_mode(capsys):
+    cli.bench(["--echo-runner", "--clients", "2", "--requests-per-client", "5"])
+    output = capsys.readouterr().out
+    assert "scheduler        static" in output
+    assert "avg batch size" in output
+    assert "decode steps" not in output
+
+
+def test_bench_json_names_the_scheduler(capsys):
+    cli.bench(
+        ["--echo-runner", "--continuous", "--clients", "2", "--requests-per-client", "5", "--json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["config"]["scheduler"] == "continuous"
+    assert payload["load"]["completed"] == 10
+    assert payload["scheduling"]["completions"] == 10
+    assert payload["scheduling"]["decode_steps"] > 0
+
+
+def test_bench_json_omits_scheduling_for_the_static_engine(capsys):
+    cli.bench(["--echo-runner", "--clients", "2", "--requests-per-client", "5", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["config"]["scheduler"] == "static"
+    assert "scheduling" not in payload
+
+
+def test_serve_passes_the_scheduler_choice_through_the_environment(monkeypatch):
+    import os
+
+    captured: dict[str, str] = {}
+
+    def fake_run(*_args, **_kwargs):
+        captured.update(
+            {key: value for key, value in os.environ.items() if key.startswith("CUDAFORGE_")}
+        )
+
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    cli.serve(["--echo-runner", "--continuous"])
+    assert captured["CUDAFORGE_CONTINUOUS"] == "1"
+
+    captured.clear()
+    monkeypatch.delenv("CUDAFORGE_CONTINUOUS", raising=False)
+    cli.serve(["--echo-runner"])
+    assert "CUDAFORGE_CONTINUOUS" not in captured

@@ -313,3 +313,48 @@ def test_the_prometheus_endpoint_carries_the_engine_configuration(client):
     # Lets a dashboard group or filter by model and batching configuration.
     assert "cudaforge_build_info" in text
     assert 'max_batch_size="8"' in text
+
+
+def test_build_engine_selects_the_continuous_scheduler(monkeypatch):
+    """`CUDAFORGE_CONTINUOUS` is how `cudaforge-serve --continuous` reaches here."""
+    from cudaforge.continuous_engine import ContinuousEngine
+
+    monkeypatch.setenv("CUDAFORGE_ECHO_RUNNER", "1")
+    monkeypatch.setenv("CUDAFORGE_CONTINUOUS", "1")
+
+    engine = server.build_engine(EngineConfig(warmup_iterations=0))
+    try:
+        assert isinstance(engine, ContinuousEngine)
+        assert engine.generate("hello").ok
+    finally:
+        engine.shutdown()
+
+
+def test_build_engine_defaults_to_the_static_scheduler(monkeypatch):
+    from cudaforge.engine import InferenceEngine
+
+    monkeypatch.setenv("CUDAFORGE_ECHO_RUNNER", "1")
+    monkeypatch.delenv("CUDAFORGE_CONTINUOUS", raising=False)
+
+    engine = server.build_engine(EngineConfig(warmup_iterations=0))
+    try:
+        assert isinstance(engine, InferenceEngine)
+    finally:
+        engine.shutdown()
+
+
+def test_the_continuous_engine_falls_back_when_the_model_cannot_load(monkeypatch):
+    """A model failure must degrade the runner, not the scheduler choice."""
+    from cudaforge.continuous_engine import ContinuousEngine
+
+    monkeypatch.delenv("CUDAFORGE_ECHO_RUNNER", raising=False)
+    monkeypatch.setenv("CUDAFORGE_CONTINUOUS", "1")
+
+    engine = server.build_engine(
+        EngineConfig(model_name="does-not-exist-anywhere", warmup_iterations=0)
+    )
+    try:
+        assert isinstance(engine, ContinuousEngine)
+        assert engine.generate("hello").ok
+    finally:
+        engine.shutdown()
