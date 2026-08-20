@@ -354,6 +354,14 @@ arbitrarily — occupancy belongs to the schedule, and `stats()` reports it.
 Select the scheduler from the CLI with `--continuous`, on both
 `cudaforge-serve` and `cudaforge-bench`. The server reads `CUDAFORGE_CONTINUOUS`.
 
+`shutdown(timeout=...)` differs between them, which the protocol cannot express.
+Both settle every outstanding future — none is ever left pending — but
+`InferenceEngine` waits for every dispatched batch regardless of the timeout,
+because a running batch cannot be interrupted and dropping queued ones would
+abandon work about to succeed. `ContinuousEngine` joins its single scheduler
+thread with the timeout and abandons whatever is still running. So a short
+timeout is advisory on one and binding on the other.
+
 ## Metrics
 
 `LatencyHistogram` holds the samples — a recency window with exact percentiles,
