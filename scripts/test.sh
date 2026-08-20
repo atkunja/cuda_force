@@ -88,6 +88,10 @@ run_stage "Python tests" "$PYTEST" tests/python -q --cov --cov-report=term:skip-
 run_stage "Operator parity" "$PYTHON" examples/kernel_parity.py
 run_stage "Transformer block parity" "$PYTHON" examples/transformer_block.py
 run_stage "Example: single request" "$PYTHON" examples/simple_inference.py --echo-runner
+# Verifies the speculative decoder against ordinary decoding on every run: the
+# example exits non-zero if the two sequences differ, so this is a correctness
+# stage wearing a documentation disguise.
+run_stage "Example: speculative decoding" "$PYTHON" examples/speculative_decoding.py --tokens 32
 
 if "$PYTHON" -c "import ruff" >/dev/null 2>&1 || command -v ruff >/dev/null 2>&1; then
   run_stage "ruff check" "$PYTHON" -m ruff check .

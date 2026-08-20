@@ -179,6 +179,9 @@ python examples/kernel_parity.py
 
 # The operators composed into a LLaMA-style block, checked against PyTorch
 python examples/transformer_block.py
+
+# Speculative decoding against ordinary decoding — same tokens, fewer target calls
+python examples/speculative_decoding.py
 ```
 
 ### Using the operators
