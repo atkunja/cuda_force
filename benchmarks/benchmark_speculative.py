@@ -46,7 +46,7 @@ from types import SimpleNamespace
 import torch
 
 from cudaforge.config import GenerationConfig
-from cudaforge.speculative import SpeculativeDecoder
+from cudaforge.speculative import SpeculativeDecoder, expected_tokens_per_call
 
 
 class ChainModel:
@@ -111,13 +111,6 @@ class ImperfectDraft(ChainModel):
         return output
 
 
-def expected_tokens(rate: float, lookahead: int) -> float:
-    """Closed form for E[tokens per target call] at acceptance `rate`."""
-    if rate >= 1.0:
-        return float(lookahead + 1)
-    return (1.0 - rate ** (lookahead + 1)) / (1.0 - rate)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tokens", type=int, default=600)
@@ -140,7 +133,7 @@ def main() -> int:
             _, stats = SpeculativeDecoder(
                 ChainModel(), ImperfectDraft(rate, args.seed), lookahead=lookahead
             ).generate(prompt, settings)
-            predicted = expected_tokens(rate, lookahead)
+            predicted = expected_tokens_per_call(rate, lookahead)
             print(
                 header.format(
                     f"{rate:.1f}",

@@ -197,3 +197,26 @@ def test_the_api_reference_does_not_name_removed_exports():
 
     stale = documented - exported
     assert stale == set(), f"documented but not exported: {sorted(stale)}"
+
+
+def test_no_test_imports_a_benchmark_or_example():
+    """Tests must stand on the installed package alone.
+
+    `scripts/test.sh` and CI both run the `pytest` console script rather than
+    `python -m pytest`, so the checkout is not on `sys.path`. A test importing
+    `benchmarks.*` or `examples.*` therefore passes when run one way and fails
+    when run the other — which is exactly how two tests reached CI green-locally
+    and red-remotely. Shared helpers belong in the package or in the test file.
+    """
+    offenders = []
+    for path in (REPO_ROOT / "tests").rglob("*.py"):
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith(("import benchmarks", "from benchmarks")) or stripped.startswith(
+                ("import examples", "from examples")
+            ):
+                offenders.append(f"{path.relative_to(REPO_ROOT)}:{number}: {stripped}")
+
+    assert not offenders, "tests must not import from benchmarks/ or examples/:\n" + "\n".join(
+        offenders
+    )

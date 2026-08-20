@@ -122,6 +122,32 @@ def _distribution(logits: torch.Tensor, generation: GenerationConfig) -> torch.T
     return probabilities
 
 
+def expected_tokens_per_call(acceptance: float, lookahead: int) -> float:
+    """Tokens per target call predicted for i.i.d. acceptance probability.
+
+    The accepted count is geometric capped at `lookahead`, and every block emits
+    one further token — the target's own on rejection, or the free trailing one
+    on a full accept. So the expectation is `1 + sum(a**i for i in 1..k)`, which
+    telescopes to the closed form below.
+
+    Useful for choosing a lookahead without running anything: returns saturate
+    once `a**k` is small, so raising `k` past that point buys nothing but wasted
+    draft work. At `a = 0.5` the value is already 1.94 by `k = 4` against a
+    ceiling of 2.0.
+
+    This is an upper bound on realisable speedup, not the speedup: it ignores
+    what the draft costs. With a draft costing `c` times the target, the gain is
+    roughly `expected_tokens_per_call(a, k) / (1 + k * c)`.
+    """
+    if not 0.0 <= acceptance <= 1.0:
+        raise ValueError(f"acceptance must be a probability, got {acceptance}")
+    if lookahead < 1:
+        raise ValueError(f"lookahead must be at least 1, got {lookahead}")
+    if acceptance >= 1.0:
+        return float(lookahead + 1)
+    return (1.0 - acceptance ** (lookahead + 1)) / (1.0 - acceptance)
+
+
 class SpeculativeDecoder:
     """Runs a target model with a draft model proposing ahead of it.
 

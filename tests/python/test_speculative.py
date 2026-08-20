@@ -13,7 +13,12 @@ import pytest
 import torch
 
 from cudaforge.config import GenerationConfig
-from cudaforge.speculative import SpeculativeDecoder, SpeculativeStats, _distribution
+from cudaforge.speculative import (
+    SpeculativeDecoder,
+    SpeculativeStats,
+    _distribution,
+    expected_tokens_per_call,
+)
 
 
 def model(layers: int, width: int, heads: int, vocab: int = 64, seed: int = 0):
@@ -313,45 +318,91 @@ def test_only_one_prompt_at_a_time(pair):
         decoder.generate(torch.randint(1, 60, (5,)), GenerationConfig(max_new_tokens=4))
 
 
+class ImperfectDraft(ChainModel):
+    """Agrees with an identical target with probability `rate`, per token.
+
+    Defined here rather than imported from `benchmarks/`: `scripts/test.sh` runs
+    the `pytest` console script, which does not put the checkout on `sys.path`,
+    so a test that imports a benchmark passes locally and fails in the suite.
+    """
+
+    def __init__(self, rate: float, seed: int, vocab: int = 64) -> None:
+        super().__init__(vocab)
+        self.rate = rate
+        self._rng = torch.Generator().manual_seed(seed)
+
+    def __call__(self, input_ids, past_key_values=None, use_cache=True):
+        output = super().__call__(input_ids, past_key_values, use_cache)
+        logits = output.logits
+        for position in range(logits.shape[1]):
+            if float(torch.rand(1, generator=self._rng)) >= self.rate:
+                # Shift the peak one token over, so this proposal is rejected.
+                best = int(logits[0, position].argmax())
+                logits[0, position, best] = -8.0
+                logits[0, position, (best + 1) % self.vocab] = 8.0
+        return output
+
+
 def test_throughput_matches_the_closed_form():
     """Validates the accept-and-bonus arithmetic against theory.
 
-    With acceptance probability `a` per token, the accepted count is geometric
+    With acceptance probability `a` per token the accepted count is geometric
     capped at `k`, and every block emits one further token — the target's own on
     rejection, or the free trailing one on a full accept. So
 
         E[tokens per target call] = (1 - a^(k+1)) / (1 - a)
 
-    Checking against this catches off-by-one errors in the bonus token and in
-    the verification window that token-equality tests cannot see, because those
-    errors change *how many* tokens each call yields without making any
-    individual token wrong.
+    This catches off-by-one errors in the bonus token and in the verification
+    window that token-equality tests cannot see, because those change *how many*
+    tokens a call yields without making any individual token wrong. Dropping the
+    bonus fails this while leaving the generated sequence identical.
     """
-    import benchmarks.benchmark_speculative as bench
-
     prompt = torch.tensor([[3, 1, 4, 1, 5]])
     settings = GenerationConfig(max_new_tokens=600, temperature=0.0)
 
     for rate in (0.5, 0.7, 0.9):
         for lookahead in (1, 2, 4):
             _, stats = SpeculativeDecoder(
-                bench.ChainModel(), bench.ImperfectDraft(rate, seed=7), lookahead=lookahead
+                ChainModel(vocab=64), ImperfectDraft(rate, seed=7), lookahead=lookahead
             ).generate(prompt, settings)
 
-            predicted = bench.expected_tokens(rate, lookahead)
+            predicted = expected_tokens_per_call(rate, lookahead)
             measured = stats.tokens_per_target_call
-            # 600 tokens is enough that sampling noise stays well under 8%.
+            # 600 tokens keeps sampling noise well under 8%.
             assert abs(measured - predicted) / predicted < 0.08, (
                 f"a={rate} k={lookahead}: measured {measured:.3f}, expected {predicted:.3f}"
             )
 
 
 def test_a_perfect_draft_reaches_the_ceiling():
-    """Acceptance 1.0 must give exactly lookahead + 1 tokens per call."""
-    import benchmarks.benchmark_speculative as bench
-
     for lookahead in (1, 3, 5):
-        assert bench.expected_tokens(1.0, lookahead) == lookahead + 1
+        assert expected_tokens_per_call(1.0, lookahead) == lookahead + 1
+
+
+def test_the_closed_form_saturates_with_lookahead():
+    """The property that makes a large lookahead pointless at low acceptance.
+
+    The limit as `k` grows is `1 / (1 - a)`, and it is approached fast: at
+    `a = 0.5` a lookahead of 4 already captures 97% of what an infinite one
+    would. Every proposal past that point is draft work thrown away.
+    """
+    limit = 1 / (1 - 0.5)
+    assert expected_tokens_per_call(0.5, 4) / limit > 0.96
+    assert expected_tokens_per_call(0.5, 4) < limit
+    # Far enough out the double-precision result reaches the limit exactly,
+    # which is the saturation being asserted rather than a defect.
+    assert expected_tokens_per_call(0.5, 64) == limit
+
+    # A good draft keeps paying off much longer: at a = 0.9 the limit is 10 and
+    # a lookahead of 8 has reached only two thirds of it.
+    assert expected_tokens_per_call(0.9, 8) / (1 / (1 - 0.9)) < 0.7
+
+
+def test_the_closed_form_rejects_nonsense():
+    with pytest.raises(ValueError, match="probability"):
+        expected_tokens_per_call(1.5, 4)
+    with pytest.raises(ValueError, match="lookahead"):
+        expected_tokens_per_call(0.5, 0)
 
 
 # --- statistics and filtering ----------------------------------------------
