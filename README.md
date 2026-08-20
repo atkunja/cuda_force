@@ -80,6 +80,14 @@ explains *why* each thing is shaped the way it is.
 Each stage decouples a rate mismatch. Details in
 [docs/architecture.md](docs/architecture.md).
 
+That is the **static** path: a batch is formed, run to completion, and replaced.
+The runtime also ships an **iteration-level** path, where `ContinuousBatcher`
+stands in for `DynamicBatcher` and refills a row the moment a sequence finishes
+rather than waiting for the slowest member of its batch. Both sit behind one
+`ServingEngine` protocol, so the HTTP server takes either — `cudaforge-serve
+--continuous` picks the second. See
+[docs/continuous-batching.md](docs/continuous-batching.md).
+
 ## Technical highlights
 
 <table>
@@ -107,7 +115,8 @@ Each stage decouples a rate mismatch. Details in
 **C++20 / systems**
 
 - Paged KV cache: block allocator, refcounted prefix sharing, eviction policy
-- Continuous batching: iteration-level scheduling, 62% fewer decode steps
+- Continuous batching: iteration-level scheduling — **70% fewer decode
+  steps, 1.44x wall-clock** on a real transformer at batch 32
 - Bounded MPMC queue: mutex + condition variables
 - Predicate waits — no bare `wait`, no spurious-wakeup bugs
 - Thread pool with futures and graceful drain
@@ -119,6 +128,8 @@ Each stage decouples a rate mismatch. Details in
 
 **ML**
 
+- Speculative decoding: draft-and-verify, **lossless** — the accepted tokens
+  come from the target's own distribution, tested against it
 - LoRA from scratch + PEFT integration
 - QLoRA via bitsandbytes NF4 (scope stated, not overclaimed)
 - Block-wise INT8 quantisation with a proven error bound
