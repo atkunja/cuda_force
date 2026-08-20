@@ -209,7 +209,7 @@ same guarantee `DynamicBatcher` makes.
 the fraction of the batch that held a live sequence. That is the number static
 batching loses and this recovers.
 
-### `StepwiseRunner`, `SequenceState`, `EchoStepwiseRunner`
+### `StepwiseRunner`, `SequenceState`, `EchoStepwiseRunner`, `TransformersStepwiseRunner`
 
 The protocol continuous batching needs: `prefill`, `decode_step` and `evict`.
 `decode_step` advances **every** active sequence by exactly one token, because a
@@ -221,6 +221,18 @@ for.
 `stopped_early` (the model emitted end-of-sequence) from exhausting the token
 budget. `EchoStepwiseRunner` is the deterministic implementation, with optional
 per-step cost and forced early stops so scheduling can be tested without a model.
+
+`TransformersStepwiseRunner(config, model=None, tokenizer=None)` implements the
+protocol against a real causal model, owning the KV cache rather than delegating
+to `generate`. `prefill` appends rows to that cache, `evict` removes them, and
+ragged lengths are left-padded so every row's newest token sits where a decode
+step reads. Position ids are derived from the mask, not from the index —
+otherwise a padded row is told its padding is real history. `prefills` and
+`steps` count the calls; `active_rows` and `cache_length` expose the cache shape.
+
+Sampling is vectorised across rows, so each sequence keeps its own
+`temperature`, `top_k` and `top_p` — a batch mixes requests, and one row being
+greedy must not pin the others.
 
 See [continuous-batching.md](continuous-batching.md).
 
