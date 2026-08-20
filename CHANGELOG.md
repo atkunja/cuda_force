@@ -53,6 +53,10 @@ development host has no NVIDIA GPU.
 - `Metrics`: counters plus queue-delay and latency percentiles, JSON output.
 - Paged KV cache block allocator: reference-counted blocks, per-sequence block
   tables, copy-on-write for shared prefixes.
+- `KVCacheManager`: admission, extension and recompute-based preemption, with
+  newest-first and largest-first eviction policies.
+- `ContinuousBatcher`: iteration-level scheduling that refills rows freed by
+  finished sequences, and the step-wise runner protocol it needs.
 
 ### Added — Python
 

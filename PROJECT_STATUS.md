@@ -22,6 +22,8 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | `MemoryPool<Backend>` | Size-class caching allocator, concept-constrained backend, allocation accounting, `trim()`, foreign-pointer rejection. |
 | `LatencyHistogram` | Fixed-memory log-linear buckets, 16 sub-buckets per magnitude, bounded 6.25% relative error, exact mean. |
 | `Metrics` | Counters plus queue-delay and latency percentiles, JSON serialisation. |
+| `KVCacheManager` | Admission, extension and recompute-based preemption over the block allocator. Newest-first and largest-first policies, livelock-free (never evicts the requester), and feasibility decided before anything is destroyed. |
+| `ContinuousBatcher` | Iteration-level scheduling over a step-wise runner: rows freed by finished sequences are refilled at the next decode step, with deadline-aware admission and a drain on shutdown. |
 | `BlockAllocator` / `SequenceBlockTable` | Paged KV cache bookkeeping: reference-counted blocks, per-sequence block tables, copy-on-write for shared prefixes, exhaustion as a value rather than an exception. |
 | `RuntimeConfig` | Validation at construction, including the queue-smaller-than-batch trap. |
 
@@ -113,6 +115,7 @@ throughput.
 | Memory pool | 2,020 allocations, 5 backend calls, reuse rate 0.9975 |
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, 0 failures; client p99 279 ms against server p99 1.03 ms |
 | Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
+| Continuous vs static batching | 62% fewer decode steps on long-tailed traffic, 76% on bimodal, 42% on uniform, −2% on constant lengths |
 | Block allocator throughput | 163–180M operations/second |
 | Bounded queue scaling | 2.39M items/s at 1×1, falling to 774k at 8×8 — where the single mutex becomes the bottleneck |
 | Latency histogram (C++) | worst error **4.95%** against a documented 6.25% bound, over four distributions |
@@ -256,8 +259,9 @@ Real ones, not hedges:
    tested, but nothing reads through it: the attention gather that would make
    it useful is not written, and no preemption policy decides which sequence to
    evict. Each request still re-runs its prompt.
-5. **Batches are static once formed.** No continuous batching, so a batch runs
-   until its longest member finishes.
+5. **The cache manager and the scheduler are not connected.** `KVCacheManager`
+   implements admission and preemption in C++; `ContinuousBatcher` schedules in
+   Python and has no cache to page. Wiring them needs the attention gather.
 6. **Single-device serving.** DDP covers training only.
 7. **`benchmark_kernels.py` on a CPU host compares PyTorch to PyTorch.** The
    output says so, in the results file.

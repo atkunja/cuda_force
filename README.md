@@ -106,7 +106,8 @@ Each stage decouples a rate mismatch. Details in
 
 **C++20 / systems**
 
-- Paged KV cache block allocator with refcounted prefix sharing
+- Paged KV cache: block allocator, refcounted prefix sharing, eviction policy
+- Continuous batching: iteration-level scheduling, 62% fewer decode steps
 - Bounded MPMC queue: mutex + condition variables
 - Predicate waits — no bare `wait`, no spurious-wakeup bugs
 - Thread pool with futures and graceful drain
@@ -339,6 +340,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Latency histogram | worst error **4.95%** vs its documented 6.25% bound, at 76–120M records/s |
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, client p99 279 ms vs server p99 1.03 ms |
 | Paged KV cache | **13.2× more concurrent sequences** than contiguous on chat-shaped traffic; waste 93% → 4.8% |
+| Continuous batching | **62% fewer decode steps** on long-tailed traffic; utilisation 30% → 78% (−2% when lengths are constant) |
 | C++ suite | 164 cases, 49,876 assertions, clean under TSan / ASan / UBSan |
 | Python suite | 450 tests, 91% statement coverage |
 
@@ -387,6 +389,7 @@ warp shuffles, and conditionally-reached `__syncthreads()`.
 | [profiling.md](docs/profiling.md) | Nsight Systems and Compute, what each counter means |
 | [performance.md](docs/performance.md) | every optimisation as baseline → bottleneck → change → measured |
 | [kv-cache.md](docs/kv-cache.md) | why contiguous caches waste memory, and what paging changes |
+| [continuous-batching.md](docs/continuous-batching.md) | iteration-level scheduling, eviction policy, and what each recovers |
 | [testing.md](docs/testing.md) | what each suite asserts and why |
 | [deployment.md](docs/deployment.md) | containers, probes, graceful shutdown, sizing, alerts |
 | [troubleshooting.md](docs/troubleshooting.md) | symptoms, diagnoses and fixes |
@@ -416,10 +419,17 @@ Honest about what is not here:
       tested; see [kv-cache.md](docs/kv-cache.md).
 - [ ] **Paged KV cache — attention gather.** The allocator is done; the kernel
       that reads through the block table is not, so nothing uses it yet.
-- [ ] **Preemption policy.** The allocator supports evicting a sequence; nothing
-      decides which one.
-- [ ] **Continuous batching.** Batches are static once formed. Admitting new
-      requests mid-generation would raise utilisation substantially.
+- [x] **Preemption policy.** Newest-first and largest-first eviction, livelock-free
+      admission, feasibility decided before anything is destroyed. Host-side and
+      fully tested; see [continuous-batching.md](docs/continuous-batching.md).
+- [x] **Continuous batching.** Iteration-level scheduling: rows freed by finished
+      sequences are refilled at the next decode step. **62% fewer decode steps**
+      on long-tailed traffic, utilisation 30% → 78%.
+- [ ] **Wire the two together.** The cache manager is C++, the scheduler is
+      Python, and connecting them needs the attention gather below.
+- [ ] **A step-wise `TransformersRunner`.** The protocol exists and the
+      deterministic runner implements it; driving a real model one token at a
+      time with an explicit KV cache is unwritten.
 - [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and
       is not competitive with cuBLAS, by design.
 - [ ] **FP8.** Hopper and later. The `ReducedPrecision` traits are the seam a
