@@ -102,7 +102,21 @@ if command -v ncu >/dev/null 2>&1; then
     --force-overwrite \
     --export "$OUTPUT/kernels-$STAMP" \
     "$BINARY" > "$OUTPUT/ncu-$STAMP.txt" 2>&1 || true
-  echo "    wrote $OUTPUT/kernels-$STAMP.ncu-rep"
+
+  # ncu exits non-zero for many reasons and this script deliberately continues,
+  # so the output is inspected rather than the status. Counter access is the
+  # one failure worth naming: it is not a bug in anything here, and it is not
+  # fixable from inside a container.
+  if grep -q "ERR_NVGPUCTRPERM" "$OUTPUT/ncu-$STAMP.txt" 2>/dev/null; then
+    echo "    ncu could not read performance counters (ERR_NVGPUCTRPERM)."
+    echo "    NVIDIA restricts them to admin users by default. Enabling it needs"
+    echo "    a host kernel-module flag (NVreg_RestrictProfilingToAdminUsers=0),"
+    echo "    so on a rented container this is generally not obtainable — the"
+    echo "    host would have to set it. Timings from ncu are also heavily"
+    echo "    instrumented and are not benchmark numbers."
+  else
+    echo "    wrote $OUTPUT/kernels-$STAMP.ncu-rep"
+  fi
 else
   echo "==> ncu not found; skipping the kernel profile"
 fi
