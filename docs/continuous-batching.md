@@ -134,6 +134,68 @@ free.
   through the block table, which needs a GPU.
 * **No attention kernel reads the block table.** See
   [kv-cache.md](kv-cache.md#what-is-not-implemented).
-* **`TransformersRunner` is not step-wise.** `EchoStepwiseRunner` implements the
-  protocol; adapting a real model means driving `generate` one token at a time
-  with an explicit past-key-value cache, which is straightforward and unwritten.
+
+## Measured on a real model
+
+`EchoStepwiseRunner` sleeps instead of computing, so the numbers above describe
+the scheduler with a per-step cost the benchmark chose.
+`TransformersStepwiseRunner` drives an actual transformer — real attention over a
+real KV cache, resized as sequences join and leave — so the per-step cost is
+whatever a forward pass costs.
+
+    python benchmarks/benchmark_continuous_model.py --requests 128 --batch 16 \
+        --layers 6 --heads 6 --width 384
+
+128 requests, one in eight generating 60-100 tokens and the rest 4-12, against a
+6-layer/384-wide GPT-2 with random weights on CPU:
+
+| batch | decode steps          | occupancy      | decode time | wall-clock |
+| ----: | :-------------------- | :------------- | :---------- | :--------- |
+|     4 | 914 -> 478  (-47.7%)  | 46.9% -> 89.7% | -6.6%       | **0.83x**  |
+|     8 | 710 -> 262  (-63.1%)  | 30.2% -> 81.8% | -37.8%      | **1.06x**  |
+|    16 | 502 -> 157  (-68.7%)  | 21.4% -> 68.3% | -51.5%      | **1.26x**  |
+|    32 | 360 -> 108  (-70.0%)  | 14.9% -> 49.6% | -53.1%      | **1.44x**  |
+
+The weights are random, so the generated text is meaningless. Nothing in the
+table depends on it: step counts, occupancy and timings come from real forward
+passes, and token *identity* never enters the measurement.
+
+### The step saving is not the whole story
+
+Continuous batching cuts decode steps by 47-70%, and that saving is a property
+of the schedule alone — it would hold on any hardware. Wall-clock does not
+follow it, and at batch 4 the policy is a net **loss**.
+
+The cause is visible in the benchmark's own output: the prefill call count.
+
+| batch | prefill calls (static -> continuous) | prefill time     |
+| ----: | :----------------------------------- | :--------------- |
+|     4 | 32 -> 126                            | 0.113s -> 0.434s |
+|    32 | 4 -> 33                              | 0.033s -> 0.138s |
+
+Static batching prefills a full batch at once. Continuous batching refills rows
+as they free, and rows free in ones and twos — so the same prompts arrive as
+many narrow prefills instead of a few wide ones. Each carries a fixed
+framework cost that no amount of scheduling removes.
+
+That tax is roughly constant while the decode saving grows with batch size,
+which is why the two cross over around batch 8 on this hardware. Production
+systems attack it directly — chunked prefill, or separating prefill from decode
+entirely — and this implementation does neither.
+
+Two honest limits on the table. The model is small enough that fixed per-call
+overhead is a large share of every forward pass, which inflates the prefill tax
+relative to a production-sized model. And CPU decode is compute-bound where GPU
+decode is memory-bandwidth-bound, so a wider batch is closer to free on a GPU
+than it is here — meaning these figures likely *understate* the gain. Both
+directions are stated because neither has been measured on a GPU.
+
+## What is still missing
+
+* **The runner's cache is contiguous, not paged.** Ragged rows are left-padded
+  to a common length, and that padding is wasted memory. Admission also copies
+  the whole cache to concatenate a row, where a paged implementation would
+  update a block table. This is the interim: correct, and wasteful in exactly
+  the way `KVCacheManager` exists to fix.
+* **Sequence length is bounded by the padded maximum.** One long sequence sets
+  the cache width for every row sharing the batch.
