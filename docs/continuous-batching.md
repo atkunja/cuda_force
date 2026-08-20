@@ -125,6 +125,29 @@ implicit.
 Swapping is not implemented. Saying so is more useful than implying eviction is
 free.
 
+## Reaching it from the server
+
+`ContinuousBatcher` is the scheduler; `ContinuousEngine` is the serving engine
+wrapped around it, presenting the same `ServingEngine` surface as
+`InferenceEngine` so a caller can take either.
+
+    cudaforge-serve --continuous
+    cudaforge-bench --continuous --echo-runner
+
+They are separate engine classes rather than one class with a mode flag, because
+the two schedulers need incompatible runners: `ModelRunner` hands over prompts
+and gets text back, while iteration-level scheduling has to see individual
+decode steps. One constructor accepting either would reject most combinations at
+runtime instead of at type-check time.
+
+Two reported values change meaning. `Response.batch_size` is always 0 — a
+request shares a changing set of rows for its whole life, so any single number
+would be a moment picked arbitrarily; occupancy is a property of the schedule
+and `stats()` reports it. The benchmark output drops the batch-formation
+counters for the same reason and prints decode steps and row occupancy instead:
+printing "0 batches" for a scheduler that never forms one reads as a failure
+rather than a category error.
+
 ## Measured on a real model
 
 `EchoStepwiseRunner` sleeps instead of computing, so the numbers above describe

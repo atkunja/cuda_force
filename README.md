@@ -171,6 +171,9 @@ python examples/simple_inference.py --echo-runner
 # What dynamic batching buys
 python examples/concurrent_requests.py
 
+# The same load under iteration-level scheduling, for comparison
+python -c "from cudaforge.cli import bench; bench(['--echo-runner','--continuous'])"
+
 # A real LoRA fine-tune, CPU, under a minute, no downloads beyond the model
 python examples/fine_tune.py
 
