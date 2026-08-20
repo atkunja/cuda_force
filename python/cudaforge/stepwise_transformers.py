@@ -246,6 +246,10 @@ class TransformersStepwiseRunner:
         self._merge_cache(output.past_key_values, mask)
         self._rows.extend(state.sequence_id for state in states)
 
+        # Per row, excluding the padding the batch added.
+        for state, length in zip(states, mask.sum(dim=1).tolist(), strict=True):
+            state.prompt_tokens = int(length)
+
         # The first generated token comes from the prompt's final position.
         first = _sample(output.logits[:, -1, :], [state.generation for state in states])
         self._last = (

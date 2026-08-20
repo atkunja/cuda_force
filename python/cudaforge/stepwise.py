@@ -38,6 +38,10 @@ class SequenceState:
     #: hitting the token budget. Both finish a sequence; only the first means
     #: the model considered itself done.
     stopped_early: bool = False
+    #: Prompt length in tokens, filled by runners that tokenise. Zero means "not
+    #: reported" rather than "empty prompt": the step-wise protocol is defined
+    #: over text, and a runner is free not to have a tokeniser at all.
+    prompt_tokens: int = 0
 
     @property
     def generated(self) -> int:
