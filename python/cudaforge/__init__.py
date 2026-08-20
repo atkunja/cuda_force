@@ -12,6 +12,7 @@ from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.continuous import ContinuousBatcher, ContinuousStats
 from cudaforge.continuous_engine import ContinuousEngine
 from cudaforge.engine import EngineClosedError, InferenceEngine, Response, ServingEngine
+from cudaforge.kv_cache import KVCacheManager, PreemptionPolicy
 from cudaforge.metrics import LatencyHistogram, MetricsRegistry, MetricsSnapshot
 from cudaforge.ops import (
     CUDA_KERNELS_AVAILABLE,
@@ -29,6 +30,7 @@ from cudaforge.ops import (
     sum_reduce,
     swiglu,
 )
+from cudaforge.replicated import ReplicatedEngine
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
 from cudaforge.speculative import (
@@ -56,10 +58,13 @@ __all__ = [
     "GenerationConfig",
     "GenerationResult",
     "InferenceEngine",
+    "KVCacheManager",
     "LatencyHistogram",
     "MetricsRegistry",
     "MetricsSnapshot",
     "ModelRunner",
+    "PreemptionPolicy",
+    "ReplicatedEngine",
     "Request",
     "Response",
     "SequenceState",

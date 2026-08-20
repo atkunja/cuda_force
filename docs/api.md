@@ -362,6 +362,49 @@ abandon work about to succeed. `ContinuousEngine` joins its single scheduler
 thread with the timeout and abandons whatever is still running. So a short
 timeout is advisory on one and binding on the other.
 
+## Paged KV cache — `KVCacheManager`
+
+`KVCacheManager(block_count, block_size, policy=PreemptionPolicy.NEWEST)` is the
+Python mirror of the C++ manager, so the engine works with no compiled
+extension. `admit`, `extend`, `preempt` and `release` are the scheduler's
+interface; `free_blocks`, `utilisation`, `preemption_count` and
+`recomputed_tokens` are what it reports.
+
+`PreemptionPolicy.NEWEST` evicts the most recently admitted sequence — older
+ones are closer to finishing, so protecting them keeps requests completing.
+`LARGEST` frees the most memory per eviction at the cost of discarding the most
+invested work.
+
+Three behaviours worth knowing, all shared with the C++ side and checked against
+it by 14 conformance scenarios in `tests/python/test_kv_cache_conformance.py`:
+a request larger than the entire cache fails without evicting anything; the
+requester is never its own victim, which is what stops a large admission
+livelocking; and a preempted sequence stays *known*, so it can be re-admitted
+and its prompt recomputed.
+
+Pass one to `ContinuousBatcher(cache=...)` and admission is bounded by cache
+capacity rather than by `max_batch_size`. Rows are the wrong unit — four
+sequences of sixteen tokens and four of four thousand occupy the same number of
+rows and only the second set can exhaust a device.
+
+## Serving across GPUs — `ReplicatedEngine`
+
+`ReplicatedEngine(replicas, config)` runs one engine per device and routes each
+request to the replica with the shallowest queue, ties broken by rotation.
+`ReplicatedEngine.across_devices(devices, build)` constructs them.
+
+It satisfies `ServingEngine`, so the server takes it as it takes any engine.
+
+This is **data parallelism**: every replica holds the whole model, so throughput
+multiplies but the model must still fit on one GPU. Serving a model larger than
+one device needs tensor parallelism — weights split across GPUs, a collective on
+the critical path of every layer — which is not implemented.
+
+`snapshot()` sums counters across replicas but reports latency percentiles from
+replica 0 only, and says so in `extra`. Two histograms cannot be merged into the
+histogram of their combined samples, and averaging percentiles produces a number
+describing no request that ever ran.
+
 ## Metrics
 
 `LatencyHistogram` holds the samples — a recency window with exact percentiles,
