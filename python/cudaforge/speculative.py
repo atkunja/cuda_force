@@ -292,11 +292,12 @@ class SpeculativeDecoder:
             # The residual is what the target wanted but the draft under-proposed.
             # Sampling it here is what keeps the composite distribution exactly p.
             residual = (target - draft).clamp(min=0.0)
+            # Both distributions are normalised, so the residual sums to zero
+            # only when p equals q — and then the acceptance ratio is 1 and this
+            # branch is never reached. Asserted rather than guarded: a guard here
+            # would be a line no test can reach.
             total = float(residual.sum())
-            if total <= 0.0:
-                # Only when p is entirely covered by q, which the acceptance test
-                # above should already have caught. Fall back to the target.
-                return index, int(torch.multinomial(target, 1, generator=rng))
+            assert total > 0.0, "a rejected proposal implies a non-empty residual"
             return index, int(torch.multinomial(residual / total, 1, generator=rng))
 
         # Every proposal held, so the trailing logits give a token for free.

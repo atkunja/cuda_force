@@ -236,6 +236,36 @@ greedy must not pin the others.
 
 See [continuous-batching.md](continuous-batching.md).
 
+### `SpeculativeDecoder` and `SpeculativeStats`
+
+`SpeculativeDecoder(target, draft, lookahead=4)` runs a cheap draft model ahead
+of an expensive target one. The draft proposes `lookahead` tokens; the target
+checks all of them in a single forward pass, because decoding at batch size 1 is
+bandwidth-bound and a pass over several candidate tokens costs about what a pass
+over one costs.
+
+`generate(input_ids, generation, seed=None)` returns the tokens and a
+`SpeculativeStats`. Batch size 1 only — batched speculation makes the KV cache
+ragged, since rows accept different numbers of tokens.
+
+The output is **not an approximation**. Greedy keeps a proposal only when it
+equals the target's own argmax. Sampling keeps it with probability
+`min(1, p(x)/q(x))` and otherwise draws from the normalised residual
+`max(0, p - q)`, which composes back to exactly `p`. The draft's quality
+therefore affects speed alone: a bad draft is rejected more often and saves
+less, but cannot change the distribution. Both properties are asserted in
+`tests/python/test_speculative.py`, the second by comparing an empirical
+distribution against the target's own.
+
+Progress is guaranteed: a rejected position emits the target's own token, so
+every target call yields at least one token. When every proposal is accepted the
+trailing logits yield a free bonus token, for `lookahead + 1` tokens from one
+call.
+
+`SpeculativeStats` reports `acceptance_rate` (how well the draft tracks the
+target) and `tokens_per_target_call` (the speed signal — exactly 1.0 without
+speculation).
+
 ### `Request` and `Batch`
 
 `Request` carries the prompt, its `GenerationConfig`, timestamps, and an
