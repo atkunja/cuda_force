@@ -3,6 +3,7 @@
 
 add_library(cudaforge_runtime
   src/kv_cache.cpp
+  src/kv_cache_manager.cpp
   src/metrics.cpp
   src/dynamic_batcher.cpp
 )
