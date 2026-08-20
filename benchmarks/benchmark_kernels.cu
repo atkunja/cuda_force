@@ -19,9 +19,12 @@
 //     compares to another implementation.
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "bench_common.hpp"
@@ -29,6 +32,7 @@
 #include "cudaforge/cuda_raii.cuh"
 #include "cudaforge/fused_norm.cuh"
 #include "cudaforge/lora_linear.cuh"
+#include "cudaforge/paged_attention.cuh"
 #include "cudaforge/quantization.cuh"
 #include "cudaforge/reduction.cuh"
 #include "cudaforge/rmsnorm.cuh"
@@ -348,6 +352,91 @@ void write_device_info(JsonWriter& writer) {
 
 }  // namespace
 
+/// Paged attention against the same work through an identity table.
+///
+/// The identity table is the contiguous case: token `t` at slot `t`. Both runs
+/// execute exactly the same kernel over exactly the same data, so the
+/// difference between them is the cost of the block-table indirection alone —
+/// one extra dependent load per token — and nothing else.
+///
+/// That is the number the paged cache has to be worth. `bench_kv_cache`
+/// measures what it buys (13.2x more concurrent sequences on chat traffic);
+/// this measures what it costs.
+void benchmark_paged_attention(JsonWriter& writer, cudaStream_t stream) {
+    struct Shape {
+        int sequences;
+        int heads;
+        int kv_heads;
+        int head_dim;
+        int context;
+    };
+    constexpr int kBlockSize = 16;
+    const Shape shapes[] = {
+        {16, 32, 32, 128, 512},
+        {64, 32, 8, 128, 1024},
+        {128, 32, 8, 128, 256},
+    };
+
+    for (const Shape& shape : shapes) {
+        const int blocks_per_sequence = ceil_div(shape.context, kBlockSize);
+        const std::size_t total_blocks =
+            static_cast<std::size_t>(shape.sequences) * blocks_per_sequence;
+        const std::size_t cache_elements =
+            total_blocks * kBlockSize * shape.kv_heads * static_cast<std::size_t>(shape.head_dim);
+        const std::size_t query_elements = static_cast<std::size_t>(shape.sequences) * shape.heads *
+                                           static_cast<std::size_t>(shape.head_dim);
+
+        DeviceBuffer<float> query(query_elements);
+        DeviceBuffer<float> k_cache(cache_elements);
+        DeviceBuffer<float> v_cache(cache_elements);
+        DeviceBuffer<float> out(query_elements);
+        DeviceBuffer<DeviceBlockId> tables(total_blocks);
+        DeviceBuffer<int> contexts(static_cast<std::size_t>(shape.sequences));
+        for (DeviceBuffer<float>* buffer : {&query, &k_cache, &v_cache}) {
+            buffer->fill_zero(stream);
+        }
+
+        std::vector<int> host_context(static_cast<std::size_t>(shape.sequences), shape.context);
+        contexts.copy_from_host(host_context.data(), host_context.size(), stream);
+
+        // Identity: logical block i of every sequence maps to a distinct
+        // physical block, laid out in order. This is the contiguous layout.
+        std::vector<DeviceBlockId> identity(total_blocks);
+        for (std::size_t i = 0; i < total_blocks; ++i) {
+            identity[i] = static_cast<DeviceBlockId>(i);
+        }
+
+        // Scattered: the same blocks, reversed, so consecutive logical tokens
+        // land in physically distant blocks. This is what a pool under real
+        // allocation churn looks like.
+        std::vector<DeviceBlockId> scattered(total_blocks);
+        for (std::size_t i = 0; i < total_blocks; ++i) {
+            scattered[i] = static_cast<DeviceBlockId>(total_blocks - 1 - i);
+        }
+
+        const std::string label =
+            std::to_string(shape.sequences) + "seq_" + std::to_string(shape.context) + "ctx_h" +
+            std::to_string(shape.heads) + "kv" + std::to_string(shape.kv_heads);
+        const float scale = 1.0F / std::sqrt(static_cast<float>(shape.head_dim));
+
+        for (const auto& [name, table] :
+             {std::pair<const char*, const std::vector<DeviceBlockId>*>{"contiguous", &identity},
+              std::pair<const char*, const std::vector<DeviceBlockId>*>{"scattered", &scattered}}) {
+            tables.copy_from_host(table->data(), table->size(), stream);
+            const Timing timing = time_kernel(stream, [&] {
+                launch_paged_attention(query.data(), k_cache.data(), v_cache.data(), tables.data(),
+                                       contexts.data(), out.data(), shape.sequences, shape.heads,
+                                       shape.kv_heads, shape.head_dim, kBlockSize,
+                                       blocks_per_sequence, scale, stream);
+            });
+            // No bandwidth figure: the kernel reads the same cache twice, once
+            // for K and once for V, and the gather makes the effective traffic
+            // a property of the table rather than of the shapes.
+            emit(writer, "paged_attention", name, label, timing, 0.0);
+        }
+    }
+}
+
 int main() {
     try {
         CudaStream stream;
@@ -367,6 +456,7 @@ int main() {
         benchmark_activations(writer, stream);
         benchmark_fused_norm(writer, stream);
         benchmark_quantization(writer, stream);
+        benchmark_paged_attention(writer, stream);
 
         writer.end_array();
         writer.end_object();
