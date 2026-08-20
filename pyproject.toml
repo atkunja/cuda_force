@@ -50,11 +50,26 @@ Repository = "https://github.com/atkunja/cuda_force"
 cudaforge-serve = "cudaforge.cli:serve"
 cudaforge-bench = "cudaforge.cli:bench"
 
+# All three are installed packages, not just `cudaforge`.
+#
+# `cudaforge-serve` starts uvicorn with the import string
+# "inference.server:app", so `inference` has to be importable from an installed
+# wheel, not merely from a checkout. Leaving it out made the entry point work
+# only when the current directory happened to be the repository root — which is
+# also why a bare `pytest` failed while `python -m pytest` passed.
 [tool.setuptools]
-package-dir = { "" = "python" }
+packages = ["cudaforge", "inference", "training"]
 
-[tool.setuptools.packages.find]
-where = ["python"]
+[tool.setuptools.package-dir]
+cudaforge = "python/cudaforge"
+inference = "inference"
+training = "training"
+
+# The YAML configs are referenced by path from the docs and by the serve entry
+# point, so they ship with the package rather than only existing in a checkout.
+[tool.setuptools.package-data]
+inference = ["configs/*.yaml"]
+training = ["configs/*.yaml"]
 
 [tool.ruff]
 line-length = 100
