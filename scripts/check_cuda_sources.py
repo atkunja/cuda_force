@@ -234,6 +234,37 @@ def check_syncthreads_not_divergent(path: Path, lines: list[str]) -> list[Findin
     return findings
 
 
+def check_convert_alias_is_declared(path: Path, lines: list[str]) -> list[Finding]:
+    """A kernel using `Convert::` must declare the alias.
+
+    The FP16 and BF16 kernels share one templated body through
+    `using Convert = ReducedPrecision<T>;`. A half-applied edit that converts a
+    body but not its signature leaves `Convert::` with nothing behind it — which
+    does not compile, but only on a machine with nvcc. That is precisely the
+    class of mistake this host cannot catch by building.
+    """
+    findings: list[Finding] = []
+    declared_at = -1
+
+    for index, line in enumerate(lines):
+        if line.startswith("}"):
+            declared_at = -1
+        if "using Convert" in line:
+            declared_at = index
+        if "Convert::" in line and "using Convert" not in line and declared_at < 0:
+            findings.append(
+                Finding(
+                    path,
+                    index + 1,
+                    "undeclared-convert-alias",
+                    "Convert:: used without `using Convert = ReducedPrecision<T>;` "
+                    "in the enclosing function",
+                )
+            )
+
+    return findings
+
+
 def check_index_arithmetic_is_widened(path: Path, lines: list[str]) -> list[Finding]:
     """`blockIdx.x * blockDim.x` must be widened before the multiply.
 
@@ -320,6 +351,7 @@ CHECKS = (
     check_syncthreads_not_divergent,
     check_block_reductions_end_with_a_barrier,
     check_index_arithmetic_is_widened,
+    check_convert_alias_is_declared,
 )
 
 
