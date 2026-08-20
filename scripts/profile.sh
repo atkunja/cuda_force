@@ -18,8 +18,29 @@ if ! command -v nvidia-smi >/dev/null 2>&1; then
   exit 1
 fi
 
-BINARY="build-cuda/benchmarks/bench_kernels"
-if [[ ! -x "$BINARY" ]]; then
+# Located rather than hardcoded: the target is declared in cuda/CMakeLists.txt,
+# so it lands in build-cuda/cuda/. Naming build-cuda/benchmarks/ meant the check
+# below never found it, the rebuild ran every time, and the profilers were then
+# pointed at a path that still did not exist — which they reported as an error
+# and this script swallowed, exiting 0. The validation harness duly recorded a
+# PASS for a stage that profiled nothing.
+find_bench_kernels() {
+  local candidate
+  for candidate in \
+    build-cuda/cuda/bench_kernels \
+    build-cuda/benchmarks/bench_kernels \
+    build-cuda/bench_kernels
+  do
+    if [[ -x "$candidate" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  find build-cuda -name bench_kernels -type f -perm -u+x 2>/dev/null | head -1
+}
+
+BINARY="$(find_bench_kernels)"
+if [[ -z "$BINARY" ]]; then
   # Built with NVTX so the timeline is labelled by phase. Without it, a gap
   # between kernels cannot be attributed to formation, transfer or the host.
   echo "==> building CUDA benchmarks with NVTX"
@@ -28,6 +49,14 @@ if [[ ! -x "$BINARY" ]]; then
     -DCUDAFORGE_ENABLE_CUDA=ON \
     -DCUDAFORGE_ENABLE_NVTX=ON >/dev/null
   cmake --build build-cuda --parallel >/dev/null
+  BINARY="$(find_bench_kernels)"
+fi
+
+# A profile of a binary that does not exist is not a profile. Failing here is
+# the point: the alternative is a green stage and an empty report.
+if [[ -z "$BINARY" ]]; then
+  echo "error: bench_kernels not found under build-cuda after building" >&2
+  exit 1
 fi
 
 # --- Nsight Systems: timeline ----------------------------------------------
