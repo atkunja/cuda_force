@@ -334,3 +334,51 @@ def test_the_rule_is_not_fooled_by_a_grid_stride(tmp_path):
         }
         """,
     )
+
+
+# --- the reduced-precision alias -------------------------------------------
+
+
+def test_a_convert_alias_used_without_declaring_it_is_flagged(tmp_path):
+    # The shape a half-applied template conversion leaves behind: the body was
+    # converted, the signature was not. It fails to compile, but only where nvcc
+    # exists — which the development host is not.
+    assert "undeclared-convert-alias" in findings_for(
+        tmp_path,
+        """
+        __global__ void k(const __half* in, __half* out, int n) {
+            out[0] = Convert::from_float(Convert::to_float(in[0]));
+        }
+        """,
+    )
+
+
+def test_a_declared_convert_alias_is_accepted(tmp_path):
+    assert "undeclared-convert-alias" not in findings_for(
+        tmp_path,
+        """
+        template <typename T>
+        __global__ void k(const T* in, T* out, int n) {
+            using Convert = ReducedPrecision<T>;
+            out[0] = Convert::from_float(Convert::to_float(in[0]));
+        }
+        """,
+    )
+
+
+def test_the_alias_does_not_leak_across_functions(tmp_path):
+    # A declaration in one kernel must not vouch for a use in the next.
+    assert "undeclared-convert-alias" in findings_for(
+        tmp_path,
+        """
+        template <typename T>
+        __global__ void first(const T* in, T* out) {
+            using Convert = ReducedPrecision<T>;
+            out[0] = Convert::to_float(in[0]);
+        }
+
+        __global__ void second(const __half* in, float* out) {
+            out[0] = Convert::to_float(in[0]);
+        }
+        """,
+    )
