@@ -39,6 +39,10 @@ serve = [
   # belongs with the serving extra rather than in `dev`, since benchmarking a
   # deployment is a serving activity.
   "httpx>=0.27",
+  # The server resolves CUDAFORGE_CONFIG through EngineConfig.from_yaml, so
+  # serving genuinely needs a YAML parser. It stays a lazy import so the base
+  # install does not.
+  "pyyaml>=6.0",
 ]
 # bitsandbytes is Linux/CUDA only, which is why QLoRA is its own extra rather
 # than part of `train`: installing `train` must not fail on macOS.
@@ -53,6 +57,9 @@ dev = [
   # clang-format releases format this code differently, so an unpinned one makes
   # the formatting gate depend on who runs it.
   "clang-format==20.1.7",
+  # EngineConfig.from_yaml and TrainingConfig.from_yaml are exercised by the
+  # tests, so the development extra needs the parser even without `serve`.
+  "pyyaml>=6.0",
   # starlette.testclient needs this. Without it TestClient raises at import with
   # a RuntimeError rather than an ImportError, so `pytest.importorskip` does not
   # catch it and the HTTP tests error instead of skipping. Starlette also
