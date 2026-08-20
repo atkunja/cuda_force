@@ -358,3 +358,64 @@ def test_the_continuous_engine_falls_back_when_the_model_cannot_load(monkeypatch
         assert engine.generate("hello").ok
     finally:
         engine.shutdown()
+
+
+@pytest.fixture
+def continuous_client(monkeypatch):
+    """The server driven by the iteration-level scheduler.
+
+    Separate from `client` rather than parametrised over it: only a handful of
+    endpoints behave differently, and running the whole file twice to check
+    three of them would trade real time for little coverage.
+    """
+    from cudaforge.continuous_engine import ContinuousEngine
+    from cudaforge.stepwise import EchoStepwiseRunner
+
+    config = EngineConfig(
+        max_batch_size=8,
+        queue_capacity=64,
+        warmup_iterations=0,
+    )
+    monkeypatch.setattr(
+        server,
+        "build_engine",
+        lambda *_, **__: ContinuousEngine(config=config, runner=EchoStepwiseRunner()),
+    )
+    with fastapi_testclient.TestClient(server.app) as test_client:
+        yield test_client
+
+
+def test_the_continuous_engine_serves_generate(continuous_client):
+    """End to end through HTTP, not just that build_engine returned the type."""
+    response = continuous_client.post("/generate", json={"prompt": "hello"})
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["text"]
+    assert payload["generated_tokens"] > 0
+
+
+def test_the_continuous_engine_serves_health_and_metrics(continuous_client):
+    assert continuous_client.get("/health").json()["status"] == "ok"
+    assert continuous_client.get("/metrics").json()["requests_completed"] >= 0
+
+    prometheus = continuous_client.get("/metrics/prometheus")
+    assert prometheus.status_code == 200
+    # The scheduler is a label on the info metric, so a dashboard can tell the
+    # two apart when they are being compared on the same traffic.
+    assert "continuous" in prometheus.text
+
+
+def test_the_continuous_engine_handles_concurrent_requests(continuous_client):
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        responses = list(
+            pool.map(
+                lambda index: continuous_client.post("/generate", json={"prompt": f"p{index}"}),
+                range(16),
+            )
+        )
+
+    assert all(response.status_code == 200 for response in responses)
+    assert all(response.json()["generated_tokens"] > 0 for response in responses)

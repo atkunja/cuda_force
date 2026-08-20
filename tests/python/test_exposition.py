@@ -159,3 +159,17 @@ def test_every_line_still_parses_with_the_info_metric_present():
             continue
         _, _, value = line.rpartition(" ")
         float(value)
+
+
+def test_the_scheduler_appears_as_a_label():
+    """So a dashboard can separate the two schedulers on the same traffic.
+
+    The info metric renders an allowlist of keys, not everything in `extra`, so
+    a new one is invisible until it is added there.
+    """
+    snapshot = MetricsRegistry().snapshot()
+    snapshot.extra["scheduler"] = "continuous"
+
+    text = render_prometheus(snapshot)
+    info_line = next(line for line in text.splitlines() if line.startswith("cudaforge_build_info{"))
+    assert 'scheduler="continuous"' in info_line

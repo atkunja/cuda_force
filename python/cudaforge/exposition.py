@@ -79,7 +79,17 @@ def _render_info(snapshot: MetricsSnapshot) -> list[str]:
     """
     labels = {
         key: str(snapshot.extra.get(key, ""))
-        for key in ("model", "device", "runner", "max_batch_size", "max_wait_us")
+        # An allowlist rather than every key in `extra`: labels are a cardinality
+        # budget, and a dashboard that groups by an unbounded one is worse than
+        # no dashboard. A new key is added here deliberately.
+        for key in (
+            "model",
+            "device",
+            "runner",
+            "scheduler",
+            "max_batch_size",
+            "max_wait_us",
+        )
         if key in snapshot.extra
     }
     if not labels:
