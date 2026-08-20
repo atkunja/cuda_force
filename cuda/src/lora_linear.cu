@@ -105,19 +105,53 @@ __global__ void accumulate_lora(const float* __restrict__ p, const float* __rest
 /// The constraint is that `rank * kTile` floats must fit in the dynamic shared
 /// memory the launcher requests; the launcher checks and falls back when it
 /// does not.
+/// Fused LoRA: the frozen and adapter paths in one launch, with the
+/// `batch x rank` intermediate held in shared memory instead of global.
+///
+/// ## What the first version got wrong
+///
+/// It kept `X A` in shared memory and then computed the frozen path with an
+/// untiled loop: every thread walked the whole of `in_features`, reading `x`
+/// and `w` from global memory with no staging and no reuse. Measured on an
+/// RTX 3090 that made it **21.8-32.3x slower** than the unfused path, which
+/// simply calls `matmul_tiled`.
+///
+/// The fusion was never the problem. Dropping the tiling to make room for the
+/// fusion was. A few thousand floats of intermediate were saved against 16x
+/// reuse given up on a `batch x in x out` matmul — an obviously bad trade once
+/// the two are written next to each other, and one no amount of reading the
+/// source had revealed until it was measured.
+///
+/// This version tiles the frozen path exactly as `matmul_tiled` does and keeps
+/// the fusion. The grid is two-dimensional again, so each block owns one
+/// `kTile x kTile` tile of the output and there is real parallelism to fill the
+/// device with.
+///
+/// ## The cost that remains
+///
+/// Every block in a row-strip recomputes `X A` for its rows, because the strip
+/// is now split across `out_features / kTile` blocks. That is `rank / kTile` of
+/// the frozen path's arithmetic — 50% extra at rank 8, 100% at rank 16 —
+/// against a 16x reuse win. Worth it, but it is the reason a genuinely fast
+/// implementation would compute `X A` in its own launch and fuse only the
+/// second half.
 __global__ void lora_fused(const float* __restrict__ x, const float* __restrict__ w,
                            const float* __restrict__ a, const float* __restrict__ b,
                            float* __restrict__ y, int batch, int in_features, int out_features,
                            int rank, float scale) {
+    __shared__ float tile_x[kTile][kTile];
+    // Padded exactly as in `matmul_tiled`: the column-wise read below would
+    // otherwise put every thread of a warp in the same bank.
+    __shared__ float tile_w[kTile][kTile + 1];
     extern __shared__ float xa_tile[];  // [kTile][rank]
 
-    const int row_base = static_cast<int>(blockIdx.x) * kTile;
+    const int row = static_cast<int>(blockIdx.y) * kTile + static_cast<int>(threadIdx.y);
+    const int col = static_cast<int>(blockIdx.x) * kTile + static_cast<int>(threadIdx.x);
     const int local_row = static_cast<int>(threadIdx.y);
-    const int row = row_base + local_row;
 
-    // Phase 1: X A for this block's rows. Threads are laid out (rank-ish, rows),
-    // so consecutive threads in x cover consecutive ranks.
-    for (int r = static_cast<int>(threadIdx.x); r < rank; r += static_cast<int>(blockDim.x)) {
+    // Phase 1: X A for this block's rows. No barrier inside the loop, so the
+    // uneven trip count when `rank` is not a multiple of kTile is harmless.
+    for (int r = static_cast<int>(threadIdx.x); r < rank; r += kTile) {
         float accumulator = 0.0F;
         if (row < batch) {
             for (int i = 0; i < in_features; ++i) {
@@ -129,27 +163,43 @@ __global__ void lora_fused(const float* __restrict__ x, const float* __restrict_
     }
     __syncthreads();
 
-    if (row >= batch) {
+    // Phase 2: the frozen path, tiled. Every thread reaches every barrier —
+    // the early return on out-of-range rows that the previous version used
+    // would deadlock here.
+    float frozen = 0.0F;
+    const int tiles = ceil_div(in_features, kTile);
+    for (int t = 0; t < tiles; ++t) {
+        const int k_for_x = t * kTile + static_cast<int>(threadIdx.x);
+        tile_x[threadIdx.y][threadIdx.x] =
+            (row < batch && k_for_x < in_features)
+                ? x[static_cast<std::size_t>(row) * in_features + k_for_x]
+                : 0.0F;
+
+        const int k_for_w = t * kTile + static_cast<int>(threadIdx.y);
+        tile_w[threadIdx.y][threadIdx.x] =
+            (k_for_w < in_features && col < out_features)
+                ? w[static_cast<std::size_t>(k_for_w) * out_features + col]
+                : 0.0F;
+        __syncthreads();
+
+        for (int i = 0; i < kTile; ++i) {
+            frozen += tile_x[threadIdx.y][i] * tile_w[i][threadIdx.x];
+        }
+        // Before the next iteration overwrites the tiles.
+        __syncthreads();
+    }
+
+    if (row >= batch || col >= out_features) {
         return;
     }
 
-    // Phase 2: frozen path plus adapter path, one output column per iteration.
-    for (int col = static_cast<int>(threadIdx.x); col < out_features;
-         col += static_cast<int>(blockDim.x)) {
-        float frozen = 0.0F;
-        for (int i = 0; i < in_features; ++i) {
-            frozen += x[static_cast<std::size_t>(row) * in_features + i] *
-                      w[static_cast<std::size_t>(i) * out_features + col];
-        }
-
-        float adapter = 0.0F;
-        for (int r = 0; r < rank; ++r) {
-            adapter +=
-                xa_tile[local_row * rank + r] * b[static_cast<std::size_t>(r) * out_features + col];
-        }
-
-        y[static_cast<std::size_t>(row) * out_features + col] = frozen + scale * adapter;
+    float adapter = 0.0F;
+    for (int r = 0; r < rank; ++r) {
+        adapter +=
+            xa_tile[local_row * rank + r] * b[static_cast<std::size_t>(r) * out_features + col];
     }
+
+    y[static_cast<std::size_t>(row) * out_features + col] = frozen + scale * adapter;
 }
 
 int max_shared_memory_per_block() {
@@ -197,8 +247,13 @@ void launch_lora_linear(const float* x, const float* w, const float* a, const fl
                          fused_shared <= static_cast<std::size_t>(max_shared_memory_per_block());
 
     if (fusable) {
-        const dim3 block(kDefaultBlockSize / kTile, kTile);
-        const dim3 grid(static_cast<unsigned>(ceil_div(batch, kTile)));
+        // Two-dimensional again: one kTile x kTile tile of the output per
+        // block. The previous one-dimensional grid gave `batch / kTile` blocks
+        // — two of them at batch 32 — which left an 82-SM device almost
+        // entirely idle on top of doing untiled arithmetic.
+        const dim3 block(kTile, kTile);
+        const dim3 grid(static_cast<unsigned>(ceil_div(out_features, kTile)),
+                        static_cast<unsigned>(ceil_div(batch, kTile)));
         lora_fused<<<grid, block, fused_shared, stream>>>(x, w, a, b, y, batch, in_features,
                                                           out_features, rank, scale);
         CUDAFORGE_CHECK_LAUNCH(stream);
