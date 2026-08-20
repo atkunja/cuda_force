@@ -85,9 +85,15 @@ def test_star_import_is_safe():
 def test_the_declared_version_matches_pyproject():
     # Two sources of truth for a version drift silently and only surface when a
     # published wheel reports the wrong number.
+    # tomllib is stdlib only from 3.11, and this package supports 3.10, so the
+    # backport covers the floor. Testing on the newest interpreter alone is how
+    # a 3.10 incompatibility reaches a release.
     from pathlib import Path
 
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python 3.10
+        import tomli as tomllib
 
     pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
     declared = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]

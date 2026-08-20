@@ -95,11 +95,15 @@ __global__ void swiglu_vectorised(const float4* __restrict__ gate, const float4*
     output[index] = result;
 }
 
-/// FP16 storage, FP32 sigmoid. See the note in activations.cuh: `exp` of a
-/// moderately negative input underflows a 10-bit mantissa long before it
-/// underflows FP32, which would flatten the activation's negative tail.
-__global__ void swiglu_half_kernel(const __half* __restrict__ gate, const __half* __restrict__ up,
-                                   __half* __restrict__ output, int count) {
+/// Reduced-precision storage, FP32 sigmoid, templated over the format. See the
+/// note in activations.cuh: `exp` of a moderately negative input underflows a
+/// short mantissa long before it underflows FP32, which would flatten the
+/// activation's negative tail. BF16's mantissa is shorter still, so the
+/// argument applies with more force there, not less.
+template<typename T>
+__global__ void swiglu_reduced(const T* __restrict__ gate, const T* __restrict__ up,
+                               T* __restrict__ output, int count) {
+    using Convert = ReducedPrecision<T>;
     // Computed in size_t: the product overflows a 32-bit signed index at counts
     // near INT_MAX, and the result would be a wrong element rather than a fault.
     const std::size_t index = blockIdx.x * static_cast<std::size_t>(blockDim.x) + threadIdx.x;
