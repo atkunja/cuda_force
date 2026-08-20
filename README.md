@@ -357,7 +357,7 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | Paged KV cache | **13.2× more concurrent sequences** than contiguous on chat-shaped traffic; waste 93% → 4.8% |
 | Continuous batching | **62% fewer decode steps** on long-tailed traffic; utilisation 30% → 78% (−2% when lengths are constant) |
 | C++ suite | 183 cases, 49,983 assertions, clean under TSan / ASan / UBSan |
-| Python suite | 486 tests, 92% statement coverage |
+| Python suite | 570 tests, 95% statement / 85% branch coverage |
 
 These measure the **scheduler**, not model throughput — execution is simulated
 so the variable under study is isolated and the benchmark runs without a GPU.

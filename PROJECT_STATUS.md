@@ -110,7 +110,7 @@ compose services, pre-commit config, a Makefile, and 17 documents.
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **486 tests — pass**, 92% statement / 88% branch coverage |
+| Python test suite | **570 tests — pass**, 95% statement / 85% branch coverage |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
