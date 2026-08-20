@@ -74,9 +74,10 @@ locally.
 - The CUDA stream scheduler's runtime behaviour and the device memory pool.
 - Every GPU benchmark number and every Nsight profile.
 
-CUDA sources are still checked structurally in CI (see
-[`.github/workflows/cpp.yml`](../.github/workflows/cpp.yml)) and are compiled on
-an NVIDIA runner or in the CUDA container.
+CUDA sources are checked structurally *and compiled* in CI — see
+[`.github/workflows/cpp.yml`](../.github/workflows/cpp.yml), whose `cuda compile`
+job builds every kernel with nvcc inside the official CUDA container on every
+push. Compilation is therefore verified continuously; only execution is not.
 
 **No GPU performance number in this repository was fabricated.** Benchmark
 result files are generated on the machine that runs them; the committed tree

@@ -14,10 +14,10 @@
 ---
 
 > **On measurement.** This project was developed on Apple Silicon, which has no
-> CUDA path. Every GPU-dependent component is implemented, structurally checked
-> and unit-tested against a reference — but **no GPU performance number appears
-> anywhere in this repository**, because none was measured. Host-side results
-> are labelled with the machine that produced them. See
+> CUDA path. The kernels **compile in CI** — nvcc 12.4, compute capability 8.0,
+> on every push — but nothing CUDA has ever *executed*, so **no GPU performance
+> number appears anywhere in this repository**. Host-side results are labelled
+> with the machine that produced them. See
 > [PROJECT_STATUS.md](PROJECT_STATUS.md) for the exact split.
 
 ## What this is

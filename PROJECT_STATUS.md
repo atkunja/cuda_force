@@ -212,15 +212,21 @@ Recorded because each was found by a test that was written to look for it:
 
 ---
 
-## Requires NVIDIA hardware — implemented, not executed
+## Compiled in CI, not executed
 
-Nothing below has run. It is written, reviewed, structurally checked, and unit
-tested against references that *did* run — but no line of it has been compiled
-by `nvcc` or executed on a GPU as part of this work.
+The CUDA sources **do compile**. The `cuda compile` job builds every kernel with
+nvcc 12.4 for compute capability 8.0, inside the official CUDA container, on
+every push — so syntax, types, template instantiation and the shared C++20
+headers are all verified. That job caught two real defects the development host
+could not: a half-applied template conversion, and the CUDA targets being built
+as C++17 while the headers they include are C++20.
+
+What remains unverified is **execution**. No GPU is involved anywhere, so no
+assertion in `tests/cuda` has ever run and no kernel has produced a number.
 
 | Component | What is unverified |
 | --- | --- |
-| All `.cu` kernels | compilation and execution |
+| All `.cu` kernels | execution and numerical correctness on hardware (they compile) |
 | `tests/cuda/*` (69 cases) | every assertion in them |
 | `GpuScheduler` | runtime stream overlap and event ordering |
 | `MemoryPool<DeviceAllocatorBackend>` | device allocation behaviour |
