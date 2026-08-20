@@ -4,9 +4,9 @@
 
 | Suite | Count | Needs | Runs on the dev host? |
 | --- | --- | --- | --- |
-| C++ (`tests/cpp`) | 164 cases, 49,876 assertions | C++20 compiler | yes |
-| C++ under TSan / ASan / UBSan | same 164 | clang | yes, all three clean |
-| Python (`tests/python`) | 450 | Python + PyTorch | yes |
+| C++ (`tests/cpp`) | 183 cases, 49,983 assertions | C++20 compiler | yes |
+| C++ under TSan / ASan / UBSan | same 183 | clang | yes, all three clean |
+| Python (`tests/python`) | 486 | Python + PyTorch | yes |
 | CUDA (`tests/cuda`) | 69 cases | NVIDIA GPU | **no** |
 | CUDA structural checks | 29 files | nothing | yes |
 
@@ -147,7 +147,7 @@ demands exact equality: any deviation there is a bug, not accumulated error.
 pytest tests/python -q --cov --cov-report=term-missing
 ```
 
-**91% of statements, 88% of branches.** There is deliberately no `fail_under`
+**92% of statements, 88% of branches.** There is deliberately no `fail_under`
 threshold: a number that must not drop invites tests written to raise it rather
 than to catch anything.
 

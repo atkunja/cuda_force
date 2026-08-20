@@ -341,8 +341,8 @@ What has been measured, on an Apple M5 Pro with a simulated executor:
 | HTTP end to end | 300 requests at concurrency 32: 420 req/s, client p99 279 ms vs server p99 1.03 ms |
 | Paged KV cache | **13.2× more concurrent sequences** than contiguous on chat-shaped traffic; waste 93% → 4.8% |
 | Continuous batching | **62% fewer decode steps** on long-tailed traffic; utilisation 30% → 78% (−2% when lengths are constant) |
-| C++ suite | 164 cases, 49,876 assertions, clean under TSan / ASan / UBSan |
-| Python suite | 450 tests, 91% statement coverage |
+| C++ suite | 183 cases, 49,983 assertions, clean under TSan / ASan / UBSan |
+| Python suite | 486 tests, 92% statement coverage |
 
 These measure the **scheduler**, not model throughput — execution is simulated
 so the variable under study is isolated and the benchmark runs without a GPU.

@@ -82,11 +82,11 @@ compose services, pre-commit config, a Makefile, and 17 documents.
 | Check | Result |
 | --- | --- |
 | C++ build (clang 21, C++20, `-Werror`) | **pass**, zero warnings |
-| C++ test suite | **164 cases, 49,876 assertions — pass** |
+| C++ test suite | **183 cases, 49,983 assertions — pass** |
 | C++ under ThreadSanitizer | **pass**, no races reported |
 | C++ under AddressSanitizer | **pass** |
 | C++ under UndefinedBehaviorSanitizer | **pass** |
-| Python test suite | **450 tests — pass**, 91% statement / 88% branch coverage |
+| Python test suite | **486 tests — pass**, 92% statement / 88% branch coverage |
 | PyTorch extension build (CPU-only) | **pass** — the extension compiles and loads |
 | C++ CPU operators vs Python references | **exact match** on rmsnorm, softmax, lora, sum, quantise |
 | INT8 round trip | max error 0.01104 against a bound of 0.01114 — **within `scale/2`** |
