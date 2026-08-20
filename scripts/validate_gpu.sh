@@ -95,6 +95,21 @@ if [[ -n "${CAPABILITY:-}" ]] && awk "BEGIN{exit !($CAPABILITY < 8.0)}"; then
     "$CAPABILITY" | tee -a "$LOG"
 fi
 
+# Torch's CUDA must match nvcc's, or the extension build fails after several
+# minutes with a message buried in a setuptools traceback. Checking it here
+# costs milliseconds. It is a warning rather than an error: the C++ CUDA tests
+# do not involve torch and are worth running either way.
+TORCH_CUDA="$("$PYTHON" -c 'import torch; print(torch.version.cuda or "none")' 2>/dev/null || echo "no-torch")"
+NVCC_SHORT="${NVCC_VERSION#release }"
+printf '    python     %s\n    torch cuda %s\n' "$PYTHON" "$TORCH_CUDA" | tee -a "$LOG"
+if [[ "$TORCH_CUDA" != "no-torch" && "$TORCH_CUDA" != "none" && "$TORCH_CUDA" != "$NVCC_SHORT" ]]; then
+  printf '    warning: torch was built against CUDA %s but nvcc is %s.\n' \
+    "$TORCH_CUDA" "$NVCC_SHORT" | tee -a "$LOG"
+  printf '             The extension build will fail. Point PYTHON at an\n' | tee -a "$LOG"
+  printf '             interpreter whose torch matches, e.g.\n' | tee -a "$LOG"
+  printf '             PYTHON=/venv/main/bin/python %s\n' "$0" | tee -a "$LOG"
+fi
+
 nvidia-smi >>"$LOG" 2>&1
 
 # --- build ------------------------------------------------------------------
