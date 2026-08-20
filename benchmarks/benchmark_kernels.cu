@@ -30,7 +30,10 @@
 #include "bench_common.hpp"
 #include "cudaforge/activations.cuh"
 #include "cudaforge/cuda_raii.cuh"
+// ceil_div and the launch-geometry helpers; the paged benchmark below sizes its
+// block tables with them.
 #include "cudaforge/fused_norm.cuh"
+#include "cudaforge/launch_config.hpp"
 #include "cudaforge/lora_linear.cuh"
 #include "cudaforge/paged_attention.cuh"
 #include "cudaforge/quantization.cuh"
