@@ -28,11 +28,28 @@ from cudaforge.metrics import MetricsRegistry
 from cudaforge.scheduler import Batch, DynamicBatcher, Request
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-HARNESS = REPO_ROOT / "build" / "tests" / "cpp" / "batcher_scenario"
+
+
+def _find_harness() -> Path | None:
+    """Locate the C++ scenario binary in whichever tree was configured.
+
+    `build.sh --cuda` configures into `build-cuda`, so a machine that only ever
+    built with CUDA has no `build/` at all — and hardcoding that path made this
+    entire suite skip silently on the GPU box, which is the one place a
+    cross-implementation check is most worth having.
+    """
+    for tree in ("build", "build-cuda"):
+        candidate = REPO_ROOT / tree / "tests" / "cpp" / "batcher_scenario"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+HARNESS = _find_harness()
 
 pytestmark = pytest.mark.skipif(
-    not HARNESS.is_file(),
-    reason=f"{HARNESS.relative_to(REPO_ROOT)} not built; run ./scripts/build.sh",
+    HARNESS is None,
+    reason="batcher_scenario not built in build/ or build-cuda/; run ./scripts/build.sh",
 )
 
 
