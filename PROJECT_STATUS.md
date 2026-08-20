@@ -344,10 +344,18 @@ bug in the byte model, never a fast kernel.
 ### Where the kernels lose
 
 The **fused LoRA kernel is 21.8-32.3x slower than the unfused path** across all
-three benchmark shapes. The fusion does what it claims — the `batch x rank`
-intermediate never reaches global memory — and it does not matter, because the
-hand-written matmul inside it surrenders an order of magnitude of compute to
-cuBLAS's tensor cores. Use the unfused path.
+three benchmark shapes.
+
+The first explanation written here was wrong: it blamed cuBLAS's tensor cores.
+Neither path touches cuBLAS. The unfused one calls this project's `matmul_tiled`,
+which reuses each element of a 16x16 shared-memory tile sixteen times; the fused
+kernel's second phase does no tiling at all, reading `x` and `w` from global
+memory once per thread per element. The measurement was right and the reason was
+not — reading the kernel settled it, the benchmark could not have.
+
+The fusion forced the untiling: shared memory was spent on the `batch x rank`
+intermediate, leaving none to tile the frozen path. A few thousand floats saved
+against 16x reuse given up on the main matmul.
 
 Two smaller corrections in the same direction. The warp-shuffle reduction beats
 the shared-memory one by **1%** at 16M elements, not the decisive margin the

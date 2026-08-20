@@ -451,12 +451,21 @@ separate pair. Both sit at the same GB/s; the fused kernel simply moves less.
 | 128x4096x4096 r16 | 2.0562 ms | 46.666 ms | **22.7x slower** |
 
 The fusion does what it claims — the `batch x rank` intermediate never reaches
-global memory — and it does not matter at all, because the hand-written matmul
-inside it gives up an order of magnitude of compute to cuBLAS's tensor cores.
-Saving bandwidth is worthless when you have surrendered the arithmetic.
+global memory. It still loses, and not for the reason it first appears.
 
-This is the kernel the documentation was most confident about before anything
-ran. Use the unfused path.
+Neither path uses cuBLAS. The unfused one calls this project's own
+`matmul_tiled`, which stages 16x16 tiles in shared memory and reuses every
+loaded element sixteen times. The fused kernel's second phase does **no tiling
+at all**: each thread walks the whole of `in_features`, reading `x` and `w`
+straight from global memory with no staging and no reuse.
+
+So the comparison is not fused against unfused. It is untiled against tiled, and
+the fusion is what forced the untiling — holding `X A` in shared memory left no
+room to tile the frozen path beside it. The intermediate saved is a few
+`batch x rank` floats; the reuse given up is 16x on a `batch x in x out` matmul.
+
+Use the unfused path. The fix is to tile the fused kernel's second phase, not to
+reach for tensor cores.
 
 ## Testing
 
