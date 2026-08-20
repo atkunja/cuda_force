@@ -47,6 +47,17 @@ echo "==> continuous vs static batching"
 "$PYTHON" benchmarks/benchmark_continuous.py \
   --output "$RESULTS/continuous-${STAMP}.json"
 
+# Needs transformers; skipped rather than failed so the suite still runs on an
+# install without the inference extra.
+if "$PYTHON" -c "import transformers" >/dev/null 2>&1; then
+  echo "==> continuous vs static batching, real transformer"
+  "$PYTHON" benchmarks/benchmark_continuous_model.py \
+    --requests 128 --batch 16 --layers 6 --heads 6 --width 384 \
+    --output "$RESULTS/continuous-model-${STAMP}.json"
+else
+  echo "==> continuous vs static batching, real transformer — skipped, no transformers"
+fi
+
 echo "==> batching sweep"
 "$PYTHON" benchmarks/benchmark_batching.py \
   --output "$RESULTS/batching-${STAMP}.json"
