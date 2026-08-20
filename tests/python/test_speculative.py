@@ -313,6 +313,47 @@ def test_only_one_prompt_at_a_time(pair):
         decoder.generate(torch.randint(1, 60, (5,)), GenerationConfig(max_new_tokens=4))
 
 
+def test_throughput_matches_the_closed_form():
+    """Validates the accept-and-bonus arithmetic against theory.
+
+    With acceptance probability `a` per token, the accepted count is geometric
+    capped at `k`, and every block emits one further token — the target's own on
+    rejection, or the free trailing one on a full accept. So
+
+        E[tokens per target call] = (1 - a^(k+1)) / (1 - a)
+
+    Checking against this catches off-by-one errors in the bonus token and in
+    the verification window that token-equality tests cannot see, because those
+    errors change *how many* tokens each call yields without making any
+    individual token wrong.
+    """
+    import benchmarks.benchmark_speculative as bench
+
+    prompt = torch.tensor([[3, 1, 4, 1, 5]])
+    settings = GenerationConfig(max_new_tokens=600, temperature=0.0)
+
+    for rate in (0.5, 0.7, 0.9):
+        for lookahead in (1, 2, 4):
+            _, stats = SpeculativeDecoder(
+                bench.ChainModel(), bench.ImperfectDraft(rate, seed=7), lookahead=lookahead
+            ).generate(prompt, settings)
+
+            predicted = bench.expected_tokens(rate, lookahead)
+            measured = stats.tokens_per_target_call
+            # 600 tokens is enough that sampling noise stays well under 8%.
+            assert abs(measured - predicted) / predicted < 0.08, (
+                f"a={rate} k={lookahead}: measured {measured:.3f}, expected {predicted:.3f}"
+            )
+
+
+def test_a_perfect_draft_reaches_the_ceiling():
+    """Acceptance 1.0 must give exactly lookahead + 1 tokens per call."""
+    import benchmarks.benchmark_speculative as bench
+
+    for lookahead in (1, 3, 5):
+        assert bench.expected_tokens(1.0, lookahead) == lookahead + 1
+
+
 # --- statistics and filtering ----------------------------------------------
 
 
