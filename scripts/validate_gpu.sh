@@ -124,6 +124,23 @@ fi
 RESULTS+=("PASS|CUDA build|-")
 echo "    [PASS] CUDA build" | tee -a "$LOG"
 
+# Reported because getting it wrong is otherwise invisible: the driver
+# JIT-compiles PTX for whatever device it finds, so kernels built for the wrong
+# architecture still run and still produce correct answers. What they cannot do
+# is use instructions newer than the architecture they were built for. This
+# project was built for sm_52 — Maxwell, 2014 — for months, and the only symptom
+# was one kernel silently writing zeros.
+BUILT_ARCHES="$(grep -m1 "CudaForge CUDA architectures" "$LOG" | sed 's/.*: //')"
+printf '    architectures %s\n' "${BUILT_ARCHES:-unknown}" | tee -a "$LOG"
+if [[ -n "$BUILT_ARCHES" && -n "${CAPABILITY:-}" ]]; then
+  # 8.6 -> 86, to compare against the list actually compiled.
+  DEVICE_ARCH="${CAPABILITY/./}"
+  if [[ "$BUILT_ARCHES" != *"$DEVICE_ARCH"* ]]; then
+    printf '    warning: no native code for sm_%s; the driver will JIT from PTX\n' \
+      "$DEVICE_ARCH" | tee -a "$LOG"
+  fi
+fi
+
 # --- correctness ------------------------------------------------------------
 # The stage that matters. If these pass, the kernels compute what they claim;
 # everything after this is performance.

@@ -1,19 +1,41 @@
 # Only reached when CUDAFORGE_ENABLE_CUDA is ON. Everything here needs nvcc and
 # an NVIDIA GPU to be useful; nothing in cpp/ depends on this target.
 
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  # 80 = Ampere, 86 = Ampere consumer, 89 = Ada, 90 = Hopper.
-  #
-  # Turing (75) is deliberately excluded from the default. The BF16 paths need
-  # compute capability 8.0: bfloat16 is emulated below it, so a Turing build
-  # either fails or produces something markedly slower than the FP16 path it
-  # would silently be worse than. Anyone targeting Turing should set this
-  # explicitly and use the FP16 entry points.
-  #
-  # Wide by default so a clone builds on whatever modern card is available;
-  # narrow it to the target for faster builds and smaller binaries.
-  set(CMAKE_CUDA_ARCHITECTURES 80 86 89 90)
-endif()
+# 80 = Ampere, 86 = Ampere consumer, 89 = Ada, 90 = Hopper.
+#
+# Turing (75) is deliberately excluded. The BF16 paths need compute capability
+# 8.0: bfloat16 is emulated below it, so a Turing build either fails or produces
+# something markedly slower than the FP16 path it would silently be worse than.
+# Anyone targeting Turing should set this explicitly and use the FP16 entry
+# points.
+#
+# Wide by default so a clone builds on whatever modern card is available; narrow
+# it with -DCUDAFORGE_CUDA_ARCHITECTURES=86 for faster builds and smaller
+# binaries.
+set(CUDAFORGE_CUDA_ARCHITECTURES "80;86;89;90"
+    CACHE STRING "CUDA architectures to build the kernels for")
+
+# Assigned unconditionally, and through a project-owned variable.
+#
+# This was previously `if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)`, which never
+# fired: CMake 3.24 and later *initialise* CMAKE_CUDA_ARCHITECTURES themselves
+# when the CUDA language is enabled, to whatever nvcc defaults to. So the
+# variable was always defined, the list below was always skipped, and every
+# kernel in this project was compiled for **sm_52** — Maxwell, 2014.
+#
+# It went unnoticed for a long time because it mostly works: the driver
+# JIT-compiles compute_52 PTX for the actual device at load time, so the kernels
+# ran and produced correct answers on an RTX 3090. What it cannot do is give
+# access to instructions that did not exist in 2014, which is why the TF32
+# tensor-core kernel compiled to nothing and silently wrote zeros.
+#
+# Two consequences worth stating plainly. Any performance number measured before
+# this was fixed came from JIT-compiled Maxwell PTX rather than native Ampere
+# code. And a guard that silently does nothing is worse than no guard: this one
+# read as deliberate for months.
+set(CMAKE_CUDA_ARCHITECTURES ${CUDAFORGE_CUDA_ARCHITECTURES})
+
+message(STATUS "CudaForge CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 
 if(CMAKE_CUDA_ARCHITECTURES MATCHES "7[0-5]")
   message(WARNING
