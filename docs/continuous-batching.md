@@ -173,6 +173,11 @@ The weights are random, so the generated text is meaningless. Nothing in the
 table depends on it: step counts, occupancy and timings come from real forward
 passes, and token *identity* never enters the measurement.
 
+The first three columns are deterministic — the schedule is a function of the
+arrival order and the generation lengths, so they reproduce exactly. Wall-clock
+does not: a repeat of the batch-32 row gave 1.48x against the 1.44x recorded
+here. Read the ratio as approximate and the step counts as exact.
+
 ### The step saving is not the whole story
 
 Continuous batching cuts decode steps by 47-70%, and that saving is a property
