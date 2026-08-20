@@ -230,6 +230,24 @@ Recorded because each was found by a test that was written to look for it:
     ThreadSanitizer build failed to link. The test target applied it and kept
     passing, which is why this only surfaced when `scripts/test.sh` was run
     end to end rather than stage by stage.
+27. **The speculative draft's KV cache fell out of step with its own
+    proposals.** The draft generates `k` tokens but only ever feeds back the
+    first `k - 1`, so when a whole block was accepted its history developed a
+    gap. Output stayed correct — the target verifies every token — but an
+    identical draft accepted 7% of its proposals where it must accept 100%, a
+    silent collapse in the only thing the technique is for. Invisible to every
+    transformer-based test, because a randomly initialised model's argmax barely
+    depends on its context; it appeared immediately against a fixture whose
+    output is a function of its whole history.
+28. **Two tests imported a benchmark module.** `scripts/test.sh` and CI run the
+    `pytest` console script rather than `python -m pytest`, so the checkout is
+    not on `sys.path`. The tests passed locally and failed in CI. A guard test
+    now rejects any import of `benchmarks/` or `examples/` from the suite.
+29. **Speculative tests errored instead of skipping without transformers.** The
+    history-dependent fixture borrowed `DynamicCache`, so the CI job that
+    installs no inference extra failed rather than skipping. Replacing it with a
+    six-line cache double removed the dependency entirely — those tests check
+    the algorithm, not the library, and now run everywhere.
 
 ---
 
