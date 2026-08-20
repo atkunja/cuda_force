@@ -44,6 +44,30 @@ def greedy_reference(target, input_ids: torch.Tensor, tokens: int) -> list[int]:
     return produced
 
 
+class ListCache:
+    """The whole cache interface `SpeculativeDecoder` requires: `crop`.
+
+    Everything else about a KV cache is the model's business — the decoder only
+    ever rolls one back, and by a count rather than to an absolute length. Two
+    things follow from writing it out. These tests stop depending on
+    transformers, so the algorithm is checked even where it is not installed.
+    And the contract is pinned: if the decoder starts calling something else,
+    this fails loudly instead of silently binding to a library type.
+    """
+
+    def __init__(self) -> None:
+        self.tokens: list[int] = []
+
+    def extend(self, ids: list[int]) -> None:
+        self.tokens.extend(ids)
+
+    def crop(self, amount: int) -> None:
+        # Negative-only, matching the non-deprecated transformers signature.
+        # `crop(0)` would mean "keep nothing", so the decoder must never send it.
+        assert amount < 0, f"crop expects a negative count, got {amount}"
+        del self.tokens[amount:]
+
+
 class ChainModel:
     """A causal model whose next token depends on its entire history.
 
@@ -53,10 +77,9 @@ class ChainModel:
     a real desynchronisation between the draft's cache and its own proposals,
     which only surfaced once the fixture actually depended on history.
 
-    Here the history lives in the cache tensors themselves, so any mis-rollback
-    changes the prediction. `stumble` makes the model disagree with an otherwise
-    identical one every nth call, which is how a partially-accurate draft is
-    simulated deterministically.
+    Here the history *is* the cache, so any mis-rollback changes the prediction.
+    `stumble` makes the model disagree with an otherwise identical one every nth
+    call, which simulates a partially accurate draft deterministically.
     """
 
     def __init__(self, vocab: int = 31, stumble: int = 0) -> None:
@@ -65,23 +88,18 @@ class ChainModel:
         self.calls = 0
 
     def __call__(self, input_ids, past_key_values=None, use_cache=True):
-        from transformers import DynamicCache
-
-        cache = past_key_values if past_key_values is not None else DynamicCache()
-        fresh = input_ids.view(1, 1, -1, 1).float()
-        cache.update(fresh, fresh, 0)
-
-        history = cache.layers[0].keys.view(-1)
-        added = input_ids.shape[1]
-        before = history.numel() - added
+        cache = past_key_values if past_key_values is not None else ListCache()
+        added = input_ids[0].tolist()
+        before = list(cache.tokens)
+        cache.extend(added)
 
         self.calls += 1
         drift = 1 if self.stumble and self.calls % self.stumble == 0 else 0
 
         rows = []
-        for offset in range(added):
-            prefix = history[: before + offset + 1]
-            value = int(prefix.sum().item() * 5 + prefix.numel() * 13 + drift) % self.vocab
+        for offset in range(len(added)):
+            prefix = before + added[: offset + 1]
+            value = int(sum(prefix) * 5 + len(prefix) * 13 + drift) % self.vocab
             row = torch.full((self.vocab,), -8.0)
             row[value] = 8.0
             rows.append(row)
@@ -302,16 +320,16 @@ def test_sampling_is_reproducible_from_a_seed(pair):
     assert first == again
 
 
-def test_lookahead_must_be_positive(pair):
-    target, draft = pair
+def test_lookahead_must_be_positive():
+    # ChainModel rather than the transformer fixture: argument validation has
+    # nothing to do with the model, and should not be skipped without one.
     with pytest.raises(ValueError, match="lookahead"):
-        SpeculativeDecoder(target, draft, lookahead=0)
+        SpeculativeDecoder(ChainModel(), ChainModel(), lookahead=0)
 
 
-def test_only_one_prompt_at_a_time(pair):
+def test_only_one_prompt_at_a_time():
     """Batched speculation is out of scope; the refusal must be explicit."""
-    target, draft = pair
-    decoder = SpeculativeDecoder(target, draft)
+    decoder = SpeculativeDecoder(ChainModel(), ChainModel())
     with pytest.raises(ValueError, match="single prompt"):
         decoder.generate(torch.randint(1, 60, (2, 5)), GenerationConfig(max_new_tokens=4))
     with pytest.raises(ValueError, match="single prompt"):
