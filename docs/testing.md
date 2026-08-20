@@ -159,6 +159,7 @@ What remains uncovered is uncovered for a stated reason:
 | `dataset.load_texts` with a named dataset | downloads a dataset |
 | CUDA branches in `ops.py` | need a GPU; the reference branches beside them are covered |
 | `TransformersRunner`'s loading path | downloads weights — its *logic* is covered through injection |
+| `TransformersStepwiseRunner`'s loading path | same: the cache surgery is covered by injecting a locally built model |
 
 The two refactors that made the difference were injection points: `train()` and
 `TransformersRunner` both accept a model and a loader, so the parts most likely

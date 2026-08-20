@@ -122,6 +122,9 @@ Ordered by the question someone would actually ask.
 | bf16 vs fp16? | `EngineConfig.resolve_dtype` | [fine-tuning.md](fine-tuning.md#mixed-precision) |
 | What is gradient checkpointing? | `gradient_checkpointing_enable` | [fine-tuning.md](fine-tuning.md#qlora) |
 | Why left padding for batched generation? | `TransformersRunner.__init__` | class comment |
+| Why the KV cache is left-padded, not right | `stepwise_transformers.py` | module docstring |
+| Why position ids come from the mask | `TransformersStepwiseRunner._positions` | method comment |
+| Why continuous batching fragments prefill | [continuous-batching.md](continuous-batching.md#the-step-saving-is-not-the-whole-story) | prose |
 | How is data packed for causal LM? | [`dataset.py`](../training/dataset.py) | [fine-tuning.md](fine-tuning.md#data-packing) |
 | What is DDP, and what does AllReduce do? | [`distributed_train.py`](../examples/distributed_train.py) | module docstring |
 | Why AllReduce over a parameter server? | same | same |
