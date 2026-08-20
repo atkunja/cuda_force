@@ -64,14 +64,20 @@ capped at `k` and every block emits one further token, so
 
 | acceptance | k=1  | k=2  | k=4  | k=8  |
 | ---------: | :--- | :--- | :--- | :--- |
-|        0.3 | 1.30 | 1.39 | 1.50 | 1.47 |
-|        0.5 | 1.50 | 1.75 | 1.94 | 2.01 |
-|        0.7 | 1.72 | 2.17 | 2.76 | 3.01 |
-|        0.9 | 1.91 | 2.70 | 4.12 | 5.88 |
+|        0.3 | 1.31 | 1.40 | 1.45 | 1.48 |
+|        0.5 | 1.50 | 1.75 | 1.94 | 1.99 |
+|        0.7 | 1.73 | 2.18 | 2.79 | 3.06 |
+|        0.9 | 1.91 | 2.67 | 4.23 | 6.00 |
 
 Measured, against closed-form 1.30 / 1.39 / 1.43 / 1.43, 1.50 / 1.75 / 1.94 /
 2.00, 1.70 / 2.19 / 2.77 / 3.20, 1.90 / 2.71 / 4.10 / 6.13. The agreement is
 evidence the implementation is correct — it is not itself a performance claim.
+
+These are the default run's figures — the command above, with no flags. Unlike
+the closed form beside them they are Monte-Carlo estimates: acceptance is drawn
+per token, so they move with `--tokens` and would not reproduce digit for digit
+from a shorter run. The estimate tightens as the sample grows; the closed form
+is what it converges toward.
 
 ### Reading the table
 
