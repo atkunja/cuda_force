@@ -28,10 +28,12 @@ from fastapi import Response as FastAPIResponse
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from cudaforge.config import EngineConfig, GenerationConfig
-from cudaforge.engine import EngineClosedError, InferenceEngine
+from cudaforge.continuous_engine import ContinuousEngine
+from cudaforge.engine import EngineClosedError, InferenceEngine, ServingEngine
 from cudaforge.exposition import PROMETHEUS_CONTENT_TYPE, render_prometheus
 from cudaforge.ops import backend_report
 from cudaforge.runners import EchoRunner, TransformersRunner
+from cudaforge.stepwise import EchoStepwiseRunner
 from inference.schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -44,7 +46,7 @@ _LOG = logging.getLogger(__name__)
 
 # Populated by the lifespan handler. A module-level slot rather than app.state
 # so the type is visible to mypy.
-_engine: InferenceEngine | None = None
+_engine: ServingEngine | None = None
 
 
 def config_from_environment() -> EngineConfig:
@@ -83,20 +85,33 @@ def config_from_environment() -> EngineConfig:
     return config
 
 
-def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
+def build_engine(config: EngineConfig | None = None) -> ServingEngine:
     """Construct the engine, falling back to the deterministic runner.
 
     A missing `transformers` install or an unavailable model should not prevent
     the server from starting: the concurrency machinery is worth exercising on
     its own, and a startup crash gives no signal about which part failed.
+
+    `CUDAFORGE_CONTINUOUS` selects iteration-level scheduling. It is a different
+    engine class rather than a flag on one, because the two need incompatible
+    runners — see `ServingEngine`.
     """
     config = config or config_from_environment()
+    continuous = bool(os.environ.get("CUDAFORGE_CONTINUOUS"))
 
     if os.environ.get("CUDAFORGE_ECHO_RUNNER"):
         _LOG.info("CUDAFORGE_ECHO_RUNNER set; using the deterministic runner")
+        if continuous:
+            return ContinuousEngine(config=config, runner=EchoStepwiseRunner())
         return InferenceEngine(config=config, runner=EchoRunner())
 
     try:
+        if continuous:
+            from cudaforge.stepwise_transformers import (  # imported lazily
+                TransformersStepwiseRunner,
+            )
+
+            return ContinuousEngine(config=config, runner=TransformersStepwiseRunner(config))
         return InferenceEngine(config=config, runner=TransformersRunner(config))
     except Exception as error:  # noqa: BLE001
         # Any model-loading failure should degrade to the deterministic runner
@@ -107,6 +122,8 @@ def build_engine(config: EngineConfig | None = None) -> InferenceEngine:
             config.model_name,
             error,
         )
+        if continuous:
+            return ContinuousEngine(config=config, runner=EchoStepwiseRunner())
         return InferenceEngine(config=config, runner=EchoRunner())
 
 
@@ -131,7 +148,7 @@ app = FastAPI(
 )
 
 
-def _require_engine() -> InferenceEngine:
+def _require_engine() -> ServingEngine:
     if _engine is None:
         raise HTTPException(status_code=503, detail="engine is not ready")
     return _engine

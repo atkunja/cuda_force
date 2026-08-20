@@ -20,9 +20,11 @@ import time
 from dataclasses import dataclass
 
 from cudaforge.config import EngineConfig, GenerationConfig
-from cudaforge.engine import EngineClosedError, InferenceEngine
+from cudaforge.continuous_engine import ContinuousEngine
+from cudaforge.engine import EngineClosedError, InferenceEngine, ServingEngine
 from cudaforge.ops import backend_report
 from cudaforge.runners import EchoRunner, ModelRunner, TransformersRunner
+from cudaforge.stepwise import EchoStepwiseRunner
 
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
@@ -46,6 +48,12 @@ def _add_engine_arguments(parser: argparse.ArgumentParser) -> None:
         "--echo-runner",
         action="store_true",
         help="use the deterministic runner instead of loading a model",
+    )
+    parser.add_argument(
+        "--continuous",
+        action="store_true",
+        help="schedule at iteration level: refill rows as sequences finish, "
+        "rather than running each batch to completion",
     )
 
 
@@ -99,6 +107,25 @@ def _build(args: argparse.Namespace) -> tuple[EngineConfig, ModelRunner]:
     return config, runner
 
 
+def _build_engine(args: argparse.Namespace) -> tuple[EngineConfig, ServingEngine]:
+    """Build whichever engine the flags ask for.
+
+    The two take different runner protocols, so the runner is chosen alongside
+    the engine rather than passed into either.
+    """
+    config = _config_from(args)
+    if not getattr(args, "continuous", False):
+        runner: ModelRunner = EchoRunner() if args.echo_runner else TransformersRunner(config)
+        return config, InferenceEngine(config=config, runner=runner)
+
+    if args.echo_runner:
+        return config, ContinuousEngine(config=config, runner=EchoStepwiseRunner())
+
+    from cudaforge.stepwise_transformers import TransformersStepwiseRunner  # imported lazily
+
+    return config, ContinuousEngine(config=config, runner=TransformersStepwiseRunner(config))
+
+
 def serve(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="cudaforge-serve", description="Start the HTTP server")
     _add_common_arguments(parser)
@@ -124,6 +151,8 @@ def serve(argv: list[str] | None = None) -> int:
     os.environ["CUDAFORGE_WORKER_THREADS"] = str(config.worker_threads)
     if args.echo_runner:
         os.environ["CUDAFORGE_ECHO_RUNNER"] = "1"
+    if args.continuous:
+        os.environ["CUDAFORGE_CONTINUOUS"] = "1"
 
     uvicorn.run("inference.server:app", host=args.host, port=args.port, log_level="info")
     return 0
@@ -137,7 +166,7 @@ class LoadResult:
     wall_seconds: float
 
 
-def _drive(engine: InferenceEngine, clients: int, per_client: int, tokens: int) -> LoadResult:
+def _drive(engine: ServingEngine, clients: int, per_client: int, tokens: int) -> LoadResult:
     """Run `clients` threads each issuing `per_client` requests.
 
     Threads submit independently rather than through ``generate_many`` so the
@@ -189,12 +218,15 @@ def bench(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = parser.parse_args(argv)
 
-    config, runner = _build(args)
+    config, built = _build_engine(args)
     report = backend_report()
 
-    with InferenceEngine(config=config, runner=runner) as engine:
+    with built as engine:
         result = _drive(engine, args.clients, args.requests_per_client, args.max_new_tokens)
         snapshot = engine.snapshot()
+        # Only the continuous engine has these; the static one reports batch
+        # formation instead.
+        scheduling = engine.stats() if isinstance(engine, ContinuousEngine) else None
 
     payload = {
         "backend": str(report),
@@ -205,6 +237,7 @@ def bench(argv: list[str] | None = None) -> int:
             "max_batch_size": config.max_batch_size,
             "max_wait_us": config.max_wait_us,
             "worker_threads": config.worker_threads,
+            "scheduler": "continuous" if scheduling is not None else "static",
         },
         "load": {
             "clients": args.clients,
@@ -218,6 +251,15 @@ def bench(argv: list[str] | None = None) -> int:
         "metrics": snapshot.to_dict(),
     }
 
+    if scheduling is not None:
+        payload["scheduling"] = {
+            "decode_steps": scheduling.decode_steps,
+            "admissions": scheduling.admissions,
+            "completions": scheduling.completions,
+            "utilisation": scheduling.utilisation,
+            "max_observed_batch": scheduling.max_observed_batch,
+        }
+
     if args.json:
         json.dump(payload, sys.stdout, indent=2, default=str)
         sys.stdout.write("\n")
@@ -225,6 +267,7 @@ def bench(argv: list[str] | None = None) -> int:
 
     print(payload["backend"])
     print(f"  model            {config.model_name}  device={config.resolve_device()}")
+    print(f"  scheduler        {'continuous' if scheduling is not None else 'static'}")
     print(
         f"  batching         max_batch_size={config.max_batch_size} "
         f"max_wait_us={config.max_wait_us}"
@@ -237,12 +280,20 @@ def bench(argv: list[str] | None = None) -> int:
     print(f"  wall time        {result.wall_seconds:.3f} s")
     print(f"  throughput       {snapshot.requests_per_second:.1f} req/s")
     print(f"  tokens/s         {snapshot.tokens_per_second:.1f}")
-    print(f"  avg batch size   {snapshot.average_batch_size:.2f}")
-    print(
-        f"  batches          {snapshot.batches_processed} "
-        f"(size={snapshot.batches_closed_by_size}, "
-        f"timeout={snapshot.batches_closed_by_timeout})"
-    )
+    if scheduling is None:
+        print(f"  avg batch size   {snapshot.average_batch_size:.2f}")
+        print(
+            f"  batches          {snapshot.batches_processed} "
+            f"(size={snapshot.batches_closed_by_size}, "
+            f"timeout={snapshot.batches_closed_by_timeout})"
+        )
+    else:
+        # Batch-formation counters are meaningless here — an iteration-level
+        # scheduler never forms a batch. Printing them would read as "nothing
+        # was batched" rather than "this scheduler does not work that way".
+        print(f"  decode steps     {scheduling.decode_steps}")
+        print(f"  row occupancy    {scheduling.utilisation:.1%}")
+        print(f"  peak batch       {scheduling.max_observed_batch}")
     print(f"  queue delay p99  {snapshot.queue_delay_p99_ms:.2f} ms")
     print(
         f"  latency p50/p95/p99  {snapshot.latency_p50_ms:.2f} / "

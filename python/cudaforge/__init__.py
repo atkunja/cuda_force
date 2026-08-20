@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from cudaforge.config import EngineConfig, GenerationConfig
 from cudaforge.continuous import ContinuousBatcher, ContinuousStats
-from cudaforge.engine import EngineClosedError, InferenceEngine, Response
+from cudaforge.continuous_engine import ContinuousEngine
+from cudaforge.engine import EngineClosedError, InferenceEngine, Response, ServingEngine
 from cudaforge.metrics import LatencyHistogram, MetricsRegistry, MetricsSnapshot
 from cudaforge.ops import (
     CUDA_KERNELS_AVAILABLE,
@@ -45,6 +46,7 @@ __all__ = [
     "Batch",
     "BatchTrigger",
     "ContinuousBatcher",
+    "ContinuousEngine",
     "ContinuousStats",
     "DynamicBatcher",
     "EchoRunner",
@@ -61,6 +63,7 @@ __all__ = [
     "Request",
     "Response",
     "SequenceState",
+    "ServingEngine",
     "SpeculativeDecoder",
     "SpeculativeStats",
     "StepwiseRunner",

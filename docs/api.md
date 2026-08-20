@@ -327,6 +327,33 @@ Implementations must return results **in the same order** they were given, and
 one per prompt. The engine pairs them positionally and fails the whole batch
 with a clear error if the count disagrees.
 
+## Serving engines
+
+`ServingEngine` is the protocol both schedulers satisfy: `submit`, `generate`,
+`generate_many`, `snapshot`, `shutdown`, `config`, `metrics`, `queue_depth`, and
+the context-manager methods. Callers should type against it; the server and the
+load driver do, so both work with either.
+
+* `InferenceEngine(config, runner)` — forms a batch, runs it to completion, then
+  forms the next. Takes a `ModelRunner`.
+* `ContinuousEngine(config, runner)` — schedules at iteration level: a row freed
+  by a finished sequence is refilled at the next decode step. Takes a
+  `StepwiseRunner`, and exposes `stats()` for the scheduling counters.
+
+They are separate classes rather than one class with a mode flag because they
+require incompatible runners. A single constructor accepting either would have
+to reject most combinations at runtime, and the type checker could not help.
+
+Two fields behave differently under continuous batching.
+`Response.batch_size` is always 0: a request shares a changing set of rows for
+its whole life, so reporting one number would mean picking a moment
+arbitrarily — occupancy belongs to the schedule, and `stats()` reports it.
+`Response.prompt_tokens` is 0 for runners that do not tokenise, which includes
+`EchoStepwiseRunner`.
+
+Select the scheduler from the CLI with `--continuous`, on both
+`cudaforge-serve` and `cudaforge-bench`. The server reads `CUDAFORGE_CONTINUOUS`.
+
 ## Metrics
 
 `LatencyHistogram` holds the samples — a recency window with exact percentiles,

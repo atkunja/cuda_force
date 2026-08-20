@@ -113,6 +113,13 @@ class ServingEngine(Protocol):
 
     def shutdown(self, timeout: float = 30.0) -> None: ...
 
+    # Both engines are context managers, and the server and CLI use them that
+    # way; without these the protocol would not actually describe how they are
+    # used.
+    def __enter__(self) -> ServingEngine: ...
+
+    def __exit__(self, *args: object) -> None: ...
+
 
 class InferenceEngine:
     """Concurrent, dynamically batched inference.
