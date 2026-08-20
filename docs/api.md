@@ -186,6 +186,44 @@ no request waits longer than `max_wait_seconds` plus its batch's service time.
 | `submit(request, timeout=None)` | blocks |
 | `try_submit(request)` | returns `False` |
 
+### `ContinuousBatcher(runner, on_complete, max_batch_size=16, queue_capacity=1024, ...)`
+
+Iteration-level scheduling: rows freed by finished sequences are refilled at the
+next decode step instead of at the end of the batch. Takes a `StepwiseRunner`
+rather than a `ModelRunner`, because the scheduler has to see between steps.
+
+| Method | Behaviour |
+| --- | --- |
+| `submit(request, timeout=None)` | blocks while the queue is full |
+| `try_submit(request)` | rejects instead of blocking |
+| `stats()` | a `ContinuousStats` snapshot |
+| `shutdown(timeout=30.0)` | stops accepting, drains what is queued, joins |
+
+Shutdown drains rather than abandoning: work already accepted is finished, the
+same guarantee `DynamicBatcher` makes.
+
+### `ContinuousStats`
+
+`decode_steps`, `occupied_rows`, `available_rows`, `admissions`, `completions`,
+`expired`, `max_observed_batch`, and `utilisation` — occupied over available,
+the fraction of the batch that held a live sequence. That is the number static
+batching loses and this recovers.
+
+### `StepwiseRunner`, `SequenceState`, `EchoStepwiseRunner`
+
+The protocol continuous batching needs: `prefill`, `decode_step` and `evict`.
+`decode_step` advances **every** active sequence by exactly one token, because a
+decode step is one forward pass whose cost barely moves with batch width —
+advancing sequences individually would forfeit the amortisation batching exists
+for.
+
+`SequenceState` carries the tokens generated so far and distinguishes
+`stopped_early` (the model emitted end-of-sequence) from exhausting the token
+budget. `EchoStepwiseRunner` is the deterministic implementation, with optional
+per-step cost and forced early stops so scheduling can be tested without a model.
+
+See [continuous-batching.md](continuous-batching.md).
+
 ### `Request` and `Batch`
 
 `Request` carries the prompt, its `GenerationConfig`, timestamps, and an

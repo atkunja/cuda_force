@@ -30,8 +30,7 @@ from dataclasses import asdict, dataclass
 from cudaforge.config import GenerationConfig
 from cudaforge.continuous import ContinuousBatcher, ContinuousStats, run_static
 from cudaforge.scheduler import Request
-from cudaforge.stepwise import SequenceState
-from cudaforge.stepwise import EchoStepwiseRunner
+from cudaforge.stepwise import EchoStepwiseRunner, SequenceState
 
 #: A decode step must cost something, or the producer becomes the bottleneck and
 #: the comparison measures submission speed instead of scheduling. On real
