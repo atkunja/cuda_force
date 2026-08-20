@@ -31,6 +31,7 @@ add_library(cudaforge_kernels
   src/quantization.cu
   src/gpu_scheduler.cu
   src/paged_attention.cu
+  src/tensor_core_matmul.cu
 )
 add_library(cudaforge::kernels ALIAS cudaforge_kernels)
 

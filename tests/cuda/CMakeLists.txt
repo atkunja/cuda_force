@@ -12,6 +12,7 @@ add_executable(cudaforge_cuda_tests
   test_quantization.cu
   test_scheduler.cu
   test_paged_attention.cu
+  test_tensor_core_matmul.cu
 )
 
 target_link_libraries(cudaforge_cuda_tests
