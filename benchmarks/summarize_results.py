@@ -427,6 +427,14 @@ SUMMARIES = {
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", help="result JSON files or a directory")
+    # Callers that append several summaries to one document need distinct
+    # headings, or every one of them slugifies to the same anchor and the link
+    # checker reports the document as ambiguous.
+    parser.add_argument(
+        "--title",
+        default="Benchmark results",
+        help="heading for this summary; use a distinct one per invocation",
+    )
     args = parser.parse_args(argv)
 
     targets: list[Path] = []
@@ -444,7 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    print("# Benchmark results\n")
+    print(f"# {args.title}\n")
     for target in targets:
         try:
             payload = read(target)

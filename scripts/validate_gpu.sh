@@ -239,18 +239,16 @@ collect_results() {
     echo "**$FAILED stage(s) failed.** See \`full.log\`."
   fi
   echo
-  echo "## Benchmark results"
-  echo
 } > "$REPORT"
 
 if [[ -d benchmarks/results ]]; then
   # shellcheck disable=SC2046
   "$PYTHON" benchmarks/summarize_results.py benchmarks/results \
-    >> "$REPORT" 2>>"$LOG" || true
+    --title "Host benchmark results" >> "$REPORT" 2>>"$LOG" || true
 fi
 if [[ -f "$OUT/cuda-kernels.json" ]]; then
   "$PYTHON" benchmarks/summarize_results.py "$OUT/cuda-kernels.json" \
-    >> "$REPORT" 2>>"$LOG" || true
+    --title "CUDA kernel benchmark results" >> "$REPORT" 2>>"$LOG" || true
 fi
 
 say "summary"

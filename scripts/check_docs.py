@@ -133,7 +133,11 @@ def main(argv: list[str] | None = None) -> int:
                 p
                 for p in sorted(path.rglob("*.md"))
                 if not any(part in {".venv", "build", "node_modules"} for part in p.parts)
-                and not any(part.startswith("build-") for part in p.parts)
+                # `validation-*` holds run artefacts, not repository
+                # documentation: `validate_gpu.sh` writes a report there, and
+                # scanning it made the next run of the suite fail on output the
+                # previous run had produced.
+                and not any(part.startswith(("build-", "validation-")) for part in p.parts)
             )
         elif path.suffix == ".md":
             targets.append(path)
