@@ -565,8 +565,11 @@ yet executed on a GPU**, `[ ]` not started.
       fewer decode steps and 1.44x wall-clock** — and at batch 4 into a net
       loss, because refilling rows one at a time fragments prefill. Both are in
       [continuous-batching.md](docs/continuous-batching.md#measured-on-a-real-model).
-- [ ] **Tensor-core matmul.** The tiled kernel is a teaching implementation and
-      is not competitive with cuBLAS, by design.
+- [~] **Tensor-core matmul.** Written and compiling: `launch_matmul_tensor_core`
+      uses TF32 WMMA fragments, keeping the FP32 interface and full-precision
+      accumulation while the multiply drops to 10 mantissa bits. It refuses
+      shapes it cannot tile exactly rather than padding, so the caller sees the
+      cliff instead of hitting it silently. **Not yet run on a GPU.**
 - [ ] **FP8.** Hopper and later. The `ReducedPrecision` traits are the seam a
       third format would slot into.
 - [~] **Stream-ordered allocation.** Written and compiling:
@@ -579,8 +582,13 @@ yet executed on a GPU**, `[ ]` not started.
       residual draw, checked against the target's own distribution. Throughput
       tracks the closed form `(1 - a^(k+1))/(1 - a)`; batch size 1 only. See
       [speculative-decoding.md](docs/speculative-decoding.md).
-- [ ] **Multi-GPU inference.** Training has a DDP example; serving is
-      single-device.
+- [x] **Multi-GPU inference.** `ReplicatedEngine` runs one engine per device
+      and routes each request to the shallowest queue, ties broken by rotation.
+      Data parallelism, so throughput multiplies but the model must still fit on
+      one GPU — tensor parallelism is not implemented and the limit is stated
+      rather than worked around. Routing and lifecycle are host-side and fully
+      tested; a 2-GPU box additionally exercises the device path through
+      `examples/replicated_serving.py`.
 - [x] **GPU-measured benchmarks.** Run on an RTX 3090 on 2026-08-20: every
       stage passed, 19,511 CUDA assertions, and real kernel numbers are in
       [GPU kernel measurements](#gpu-kernel-measurements). Only hardware was

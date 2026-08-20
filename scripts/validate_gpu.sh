@@ -209,6 +209,15 @@ else
   skip "distributed training" "needs more than one GPU (found $GPU_COUNT)"
 fi
 
+# Replicated serving runs on any number of devices, but only proves anything
+# about parallelism with more than one.
+if [[ "$GPU_COUNT" -gt 1 ]]; then
+  stage "replicated serving ($GPU_COUNT GPUs)" \
+    "$PYTHON" examples/replicated_serving.py --requests 64
+else
+  skip "replicated serving" "needs more than one GPU to show parallelism (found $GPU_COUNT)"
+fi
+
 # --- report -----------------------------------------------------------------
 
 collect_results() {

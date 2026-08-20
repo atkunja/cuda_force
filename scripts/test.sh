@@ -92,6 +92,7 @@ run_stage "Example: single request" "$PYTHON" examples/simple_inference.py --ech
 # example exits non-zero if the two sequences differ, so this is a correctness
 # stage wearing a documentation disguise.
 run_stage "Example: speculative decoding" "$PYTHON" examples/speculative_decoding.py --tokens 32
+run_stage "Example: replicated serving" "$PYTHON" examples/replicated_serving.py --requests 16
 
 if "$PYTHON" -c "import ruff" >/dev/null 2>&1 || command -v ruff >/dev/null 2>&1; then
   run_stage "ruff check" "$PYTHON" -m ruff check .
