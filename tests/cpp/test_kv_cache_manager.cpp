@@ -15,8 +15,7 @@ namespace {
 constexpr std::size_t kBlockSize = 16;
 
 /// Fills the cache with `count` sequences of `tokens` each, returning their ids.
-std::vector<SequenceId> fill(KVCacheManager& manager, std::size_t count,
-                             std::size_t tokens) {
+std::vector<SequenceId> fill(KVCacheManager& manager, std::size_t count, std::size_t tokens) {
     std::vector<SequenceId> admitted;
     for (std::size_t i = 0; i < count; ++i) {
         const auto sequence = static_cast<SequenceId>(i + 1);
@@ -102,9 +101,9 @@ TEST_CASE("largest-first evicts the biggest holder", "[kvmanager][preemption]") 
     // Frees the most per eviction, so fewer sequences are disturbed to satisfy
     // a given demand — at the cost of recomputing the most work.
     KVCacheManager manager(8, kBlockSize, PreemptionPolicy::Largest);
-    REQUIRE(manager.admit(1, kBlockSize).ok());        // 1 block
-    REQUIRE(manager.admit(2, kBlockSize * 4).ok());    // 4 blocks
-    REQUIRE(manager.admit(3, kBlockSize).ok());        // 1 block
+    REQUIRE(manager.admit(1, kBlockSize).ok());      // 1 block
+    REQUIRE(manager.admit(2, kBlockSize * 4).ok());  // 4 blocks
+    REQUIRE(manager.admit(3, kBlockSize).ok());      // 1 block
 
     const auto outcome = manager.admit(4, kBlockSize * 3);
     REQUIRE(outcome.result == AdmissionResult::PreemptedOthers);
@@ -114,8 +113,7 @@ TEST_CASE("largest-first evicts the biggest holder", "[kvmanager][preemption]") 
     REQUIRE(manager.is_admitted(3));
 }
 
-TEST_CASE("a sequence is never evicted to satisfy its own request",
-          "[kvmanager][preemption]") {
+TEST_CASE("a sequence is never evicted to satisfy its own request", "[kvmanager][preemption]") {
     // Otherwise admission can livelock: the requester is the newest, so
     // newest-first would evict it to make room for itself, forever.
     KVCacheManager manager(4, kBlockSize, PreemptionPolicy::Newest);
@@ -124,8 +122,8 @@ TEST_CASE("a sequence is never evicted to satisfy its own request",
 
     const auto outcome = manager.extend(4, kBlockSize);
     REQUIRE(outcome.ok());
-    REQUIRE(std::find(outcome.preempted.begin(), outcome.preempted.end(),
-                      SequenceId{4}) == outcome.preempted.end());
+    REQUIRE(std::find(outcome.preempted.begin(), outcome.preempted.end(), SequenceId{4}) ==
+            outcome.preempted.end());
     REQUIRE(manager.tokens_held(4) == kBlockSize * 2);
 }
 
@@ -138,8 +136,8 @@ TEST_CASE("a preempted sequence keeps its identity and can be re-admitted",
     REQUIRE(manager.admit(2, kBlockSize).ok());
 
     REQUIRE(manager.admit(3, kBlockSize * 2).ok());
-    REQUIRE(manager.is_admitted(2));        // still known
-    REQUIRE(manager.tokens_held(2) == 0);   // but holds nothing
+    REQUIRE(manager.is_admitted(2));       // still known
+    REQUIRE(manager.tokens_held(2) == 0);  // but holds nothing
 
     manager.release(3);
     REQUIRE(manager.extend(2, kBlockSize).ok());
@@ -249,8 +247,7 @@ TEST_CASE("a zero-token request changes nothing", "[kvmanager]") {
     REQUIRE(manager.free_blocks() == 4);
 }
 
-TEST_CASE("sustained load under preemption keeps completing sequences",
-          "[kvmanager][preemption]") {
+TEST_CASE("sustained load under preemption keeps completing sequences", "[kvmanager][preemption]") {
     // The end-to-end property. With newest-first, a steady stream of arrivals
     // against a cache that cannot hold them all must still let the oldest
     // sequences run to completion — that is what distinguishes preemption from
