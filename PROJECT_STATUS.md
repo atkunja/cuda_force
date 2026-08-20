@@ -251,7 +251,19 @@ Recorded because each was found by a test that was written to look for it:
     `pytest` console script rather than `python -m pytest`, so the checkout is
     not on `sys.path`. The tests passed locally and failed in CI. A guard test
     now rejects any import of `benchmarks/` or `examples/` from the suite.
-29. **Speculative tests errored instead of skipping without transformers.** The
+29. **`InferenceEngine.shutdown(timeout=...)` does not bound the call.** The
+    timeout reaches the batcher, but `ThreadPoolExecutor.shutdown(wait=True)`
+    takes no timeout and waits for every dispatched batch: a
+    `shutdown(timeout=0.01)` against a runner taking two seconds a batch
+    returned in **7.96 s**. The behaviour is defensible — a running batch cannot
+    be interrupted — but the parameter implied otherwise, and
+    `ContinuousEngine.shutdown` with the same signature *does* bound itself and
+    abandons what is left. Both are now documented and pinned by tests, since
+    `ServingEngine` would otherwise imply they are interchangeable here.
+    Found by mutation testing: deleting the abandonment branch outright left
+    every static-engine test green, because the executor had already settled
+    the futures — so the test named for that branch was not reaching it.
+30. **Speculative tests errored instead of skipping without transformers.** The
     history-dependent fixture borrowed `DynamicCache`, so the CI job that
     installs no inference extra failed rather than skipping. Replacing it with a
     six-line cache double removed the dependency entirely — those tests check
