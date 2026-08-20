@@ -559,7 +559,9 @@ Honest about what is not here:
       [speculative-decoding.md](docs/speculative-decoding.md).
 - [ ] **Multi-GPU inference.** Training has a DDP example; serving is
       single-device.
-- [ ] **GPU-measured benchmarks.** Everything is in place; only hardware is
+- [x] **GPU-measured benchmarks.** Run on an RTX 3090 on 2026-08-20: every
+      stage passed, 19,511 CUDA assertions, and real kernel numbers are in
+      [GPU kernel measurements](#gpu-kernel-measurements). Only hardware was
       missing.
 
 ## Contributing

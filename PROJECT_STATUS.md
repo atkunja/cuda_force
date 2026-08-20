@@ -444,8 +444,8 @@ Ordered by expected value:
    express. Blocked on 1.
 6. **Tensor-parallel inference** across GPUs.
 7. **Persistent kernels** for the small elementwise ops.
-8. **GPU-measured benchmarks** — the harness is complete; only hardware is
-   missing.
+8. **QLoRA and multi-GPU on hardware** — the only stages the RTX 3090 run
+   could not cover: bitsandbytes was not installed, and DDP needs a second GPU.
 
 Continuous batching and speculative decoding were on this list and are now
 implemented; both are recorded above with what they measured.
