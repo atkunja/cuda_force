@@ -11,6 +11,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+#: The values PEFT accepts for `LoraConfig.bias`. Mirrored here so an invalid
+#: setting fails when the config is built rather than when the model is.
+LORA_BIAS_CHOICES = frozenset({"none", "all", "lora_only"})
+
 
 @dataclass
 class LoRAConfig:
@@ -35,6 +39,9 @@ class LoRAConfig:
     # Adding the MLP projections helps on harder tasks at roughly triple the
     # adapter size.
     target_modules: list[str] = field(default_factory=lambda: ["c_attn", "c_proj"])
+    #: Which bias terms PEFT should train alongside the adapters. Validated
+    #: here rather than left to PEFT, which reports an invalid value from deep
+    #: inside model construction, long after the config was read.
     bias: str = "none"
 
     def __post_init__(self) -> None:
@@ -44,6 +51,8 @@ class LoRAConfig:
             raise ValueError(f"alpha must be positive, got {self.alpha}")
         if not 0.0 <= self.dropout < 1.0:
             raise ValueError(f"dropout must be in [0, 1), got {self.dropout}")
+        if self.bias not in LORA_BIAS_CHOICES:
+            raise ValueError(f"bias must be one of {sorted(LORA_BIAS_CHOICES)}, got {self.bias!r}")
         if not self.target_modules:
             raise ValueError("target_modules must not be empty")
 

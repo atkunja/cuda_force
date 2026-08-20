@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import math
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -150,14 +151,22 @@ def attach_lora(model: nn.Module, config: LoRAConfig) -> nn.Module:
     """
     from peft import LoraConfig, TaskType, get_peft_model  # imported lazily: optional dependency
 
+    # `LoRAConfig.__post_init__` has already checked this against the same set
+    # PEFT accepts, so the narrowing is justified rather than assumed.
+    bias = cast('Literal["none", "all", "lora_only"]', config.bias)
+
     peft_config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
         r=config.rank,
         lora_alpha=config.alpha,
         lora_dropout=config.dropout,
         target_modules=config.target_modules,
-        bias=config.bias,
+        bias=bias,
     )
-    adapted = get_peft_model(model, peft_config)
+    # PEFT annotates this as `PreTrainedModel`, but it accepts any module whose
+    # submodules match `target_modules` — which is what the tests exercise with
+    # a plain `nn.Module`. Casting rather than narrowing the signature, so
+    # callers are not forced to hold a transformers model they do not need.
+    adapted = get_peft_model(cast("Any", model), peft_config)
     _LOG.info("attached LoRA: %s", describe_parameters(adapted))
     return adapted

@@ -240,7 +240,9 @@ async def metrics_prometheus() -> PlainTextResponse:
     response_model=GenerateResponse,
     responses={503: {"description": "queue full, shutting down, or past its deadline"}},
 )
-async def generate(request: GenerateRequest, response: FastAPIResponse) -> GenerateResponse:
+async def generate(
+    request: GenerateRequest, response: FastAPIResponse
+) -> GenerateResponse | JSONResponse:
     engine = _require_engine()
 
     # Omitted fields fall back to the engine's configured defaults, so a

@@ -73,6 +73,35 @@ def test_invalid_training_config_is_rejected(kwargs, message):
         TrainingConfig(**kwargs)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"rank": 0}, "rank"),
+        ({"alpha": 0}, "alpha"),
+        ({"dropout": 1.0}, "dropout"),
+        ({"bias": "sometimes"}, "bias must be one of"),
+        ({"bias": "None"}, "bias must be one of"),
+    ],
+)
+def test_invalid_lora_config_is_rejected(kwargs, message):
+    """`bias` is checked here rather than left to PEFT.
+
+    PEFT reports an invalid value from inside model construction, long after the
+    YAML was read, and the message does not name the file it came from.
+    """
+    from training.config import LoRAConfig
+
+    with pytest.raises(ValueError, match=message):
+        LoRAConfig(**kwargs)
+
+
+def test_every_accepted_bias_setting_is_allowed():
+    from training.config import LORA_BIAS_CHOICES, LoRAConfig
+
+    for choice in LORA_BIAS_CHOICES:
+        assert LoRAConfig(bias=choice).bias == choice
+
+
 def test_config_round_trips_through_a_dict():
     config = TrainingConfig.from_dict(
         {"model_name": "x", "batch_size": 2, "lora": {"rank": 16, "alpha": 32}}

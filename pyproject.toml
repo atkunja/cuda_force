@@ -95,8 +95,13 @@ training = "training"
 # The YAML configs are referenced by path from the docs and by the serve entry
 # point, so they ship with the package rather than only existing in a checkout.
 [tool.setuptools.package-data]
-inference = ["configs/*.yaml"]
-training = ["configs/*.yaml"]
+# `py.typed` is what makes the annotations visible to anything importing these
+# packages from an installed wheel. Without it a consumer's type checker treats
+# every symbol as `Any` — the annotations exist but are invisible, which is the
+# worst of both worlds.
+cudaforge = ["py.typed"]
+inference = ["configs/*.yaml", "py.typed"]
+training = ["configs/*.yaml", "py.typed"]
 
 [tool.ruff]
 line-length = 100
@@ -137,7 +142,14 @@ warn_unused_ignores = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
-files = ["python/cudaforge"]
+# All three packages, not just `cudaforge`. They ship together and import each
+# other, so checking one of them proves less than it appears to: `inference`
+# consumes the engine's types, and a signature change that breaks it should
+# fail here rather than at import time.
+files = ["python/cudaforge", "inference", "training"]
+# So `cudaforge.*` resolves from a checkout regardless of how — or whether —
+# the package is installed.
+mypy_path = "python"
 
 [[tool.mypy.overrides]]
 # These ship without type information, or with stubs too incomplete to be
