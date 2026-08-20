@@ -273,34 +273,72 @@ Recorded because each was found by a test that was written to look for it:
 
 ---
 
-## Compiled in CI, not executed
+## Executed on a GPU — 2026-08-20
 
-The CUDA sources **do compile**. The `cuda compile` job builds every kernel with
-nvcc 12.4 for compute capability 8.0, inside the official CUDA container, on
-every push — so syntax, types, template instantiation and the shared C++20
-headers are all verified. That job caught two real defects the development host
-could not: a half-applied template conversion, and the CUDA targets being built
-as C++17 while the headers they include are C++20.
+For most of this project's life the CUDA sources compiled in CI and had never
+run. On 2026-08-20 the whole suite executed on a rented **NVIDIA RTX 3090**
+(compute capability 8.6, 82 SMs, driver 580.126.09, CUDA 12.8) via
+`./scripts/validate_gpu.sh`.
 
-What remains unverified is **execution**. No GPU is involved anywhere, so no
-assertion in `tests/cuda` has ever run and no kernel has produced a number.
+**Every stage passed.** 69 CUDA test cases, **19,511 assertions**, zero failures.
+The extension built and dispatched to the real kernels, and operator and
+transformer-block parity were re-checked against PyTorch with those kernels
+live rather than against the reference fallback.
 
-| Component | What is unverified |
+| Component | Status |
 | --- | --- |
-| All `.cu` kernels | execution and numerical correctness on hardware (they compile) |
-| `tests/cuda/*` (69 cases) | every assertion in them |
-| `GpuScheduler` | runtime stream overlap and event ordering |
-| `MemoryPool<DeviceAllocatorBackend>` | device allocation behaviour |
-| `PinnedBuffer` | page-locked allocation and DMA overlap |
-| PyTorch CUDA extension | the `CUDAExtension` build path |
-| `benchmarks/benchmark_kernels.cu` | every number it would produce |
-| Nsight profiles | all of them |
-| QLoRA / bitsandbytes | the 4-bit path |
-| `examples/distributed_train.py` | DDP and NCCL |
-| Dockerfile and compose services | image build and GPU passthrough |
+| All `.cu` kernels | **executed, numerically correct** |
+| `tests/cuda/*` (69 cases) | **19,511 assertions pass** |
+| `GpuScheduler` | **exercised** |
+| `MemoryPool<DeviceAllocatorBackend>` | **exercised** |
+| `PinnedBuffer` | **exercised** |
+| PyTorch CUDA extension | **builds in 30 s, dispatches to CUDA** |
+| `benchmarks/benchmark_kernels.cu` | **measured** — see the README |
+| Nsight profiles | ncu ran; see the caveat below |
+| QLoRA / bitsandbytes | still unverified — bitsandbytes was not installed |
+| `examples/distributed_train.py` | still unverified — needs two GPUs |
+| Dockerfile and compose services | still unverified — ran outside the image |
 
-**No GPU performance number was fabricated.** Where one would normally appear,
-this repository states that it was not measured.
+### What the first execution actually found
+
+Five defects, **none of them in the kernels**. Every one was in the harness
+around them:
+
+1. `validate_gpu.sh` ran `./build/tests/cpp/...` while `build.sh --cuda`
+   configures into `build-cuda/`, so the portable C++ stage failed instantly on
+   a missing binary.
+2. The bf16 softmax test fed it logits of 100,000 and 99,999. Bf16 has 8
+   mantissa bits, so near 100,000 the representable values are 512 apart and
+   both round to the *same* number. They tied, softmax correctly returned 0.5
+   each, and the test demanded `> 0.5`. The kernel was right; the test inputs
+   could not survive the format the test was about.
+3. `bench_kernels` was looked for at one guessed path, so the CUDA benchmark
+   stage skipped with "was not built" when it had built fine.
+4. `scripts/profile.sh` had the same wrong path *and* swallowed the profiler's
+   error, so the Nsight stage reported **PASS while profiling nothing**. A false
+   pass is worse than a failure: the 0-second duration was the only clue.
+5. The doc-link checker scanned `validation-*/report.md` — output
+   `validate_gpu.sh` had itself just written. Run one passed, run two failed,
+   and nothing about the code changed in between.
+
+A sixth was found by reading the numbers rather than the logs: the kernel
+benchmark counted a cache-resident re-read as DRAM traffic and reported RMSNorm
+at **131% of theoretical bandwidth**. A figure above 100% of peak is always a
+bug in the byte model, never a fast kernel.
+
+### Where the kernels lose
+
+The **fused LoRA kernel is 21.8-32.3x slower than the unfused path** across all
+three benchmark shapes. The fusion does what it claims — the `batch x rank`
+intermediate never reaches global memory — and it does not matter, because the
+hand-written matmul inside it surrenders an order of magnitude of compute to
+cuBLAS's tensor cores. Use the unfused path.
+
+Two smaller corrections in the same direction. The warp-shuffle reduction beats
+the shared-memory one by **1%** at 16M elements, not the decisive margin the
+technique's reputation suggests — both are bandwidth-bound. And `float4`
+vectorisation in RMSNorm is worth 2.07x at 4096x1024 and **exactly nothing** at
+2048x4096, where scalar access already saturates.
 
 ## Known limitations
 
