@@ -125,16 +125,6 @@ implicit.
 Swapping is not implemented. Saying so is more useful than implying eviction is
 free.
 
-## What is still missing
-
-* **The two halves are not wired together.** `KVCacheManager` implements
-  admission and preemption in the C++ runtime; `ContinuousBatcher` schedules in
-  Python. The Python path has no KV cache to page, so admission is bounded by
-  `max_batch_size` alone. Connecting them needs the attention gather that reads
-  through the block table, which needs a GPU.
-* **No attention kernel reads the block table.** See
-  [kv-cache.md](kv-cache.md#what-is-not-implemented).
-
 ## Measured on a real model
 
 `EchoStepwiseRunner` sleeps instead of computing, so the numbers above describe
@@ -192,6 +182,13 @@ directions are stated because neither has been measured on a GPU.
 
 ## What is still missing
 
+* **The two halves are not wired together.** `KVCacheManager` implements
+  admission and preemption in the C++ runtime; `ContinuousBatcher` schedules in
+  Python. The Python path has no KV cache to page, so admission is bounded by
+  `max_batch_size` alone. Connecting them needs the attention gather that reads
+  through the block table, which needs a GPU.
+* **No attention kernel reads the block table.** See
+  [kv-cache.md](kv-cache.md#what-is-not-implemented).
 * **The runner's cache is contiguous, not paged.** Ragged rows are left-padded
   to a common length, and that padding is wasted memory. Admission also copies
   the whole cache to concatenate a row, where a paged implementation would
