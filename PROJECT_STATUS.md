@@ -24,7 +24,6 @@ Apple clang 21, Python 3.12.14, PyTorch 2.13.0.
 | `Metrics` | Counters plus queue-delay and latency percentiles, JSON serialisation. |
 | `KVCacheManager` | Admission, extension and recompute-based preemption over the block allocator. Newest-first and largest-first policies, livelock-free (never evicts the requester), and feasibility decided before anything is destroyed. |
 | `ContinuousBatcher` | Iteration-level scheduling over a step-wise runner: rows freed by finished sequences are refilled at the next decode step, with deadline-aware admission and a drain on shutdown. |
-| `TransformersStepwiseRunner` | Drives a real causal model one token at a time, owning the KV cache. Rows are added on admission and removed on eviction, ragged lengths handled by left-padding so every row's newest token stays at the position a decode step reads. Verified against an uncached greedy loop. |
 | `BlockAllocator` / `SequenceBlockTable` | Paged KV cache bookkeeping: reference-counted blocks, per-sequence block tables, copy-on-write for shared prefixes, exhaustion as a value rather than an exception. |
 | `RuntimeConfig` | Validation at construction, including the queue-smaller-than-batch trap. |
 
@@ -68,6 +67,14 @@ dropping checked both at dequeue and before execution, warmup, and a graceful
 shutdown that settles every outstanding future. FastAPI server with `/health`,
 `/metrics`, `/generate`, boundary validation, and an event loop that stays free
 during generation.
+
+`ContinuousBatcher` schedules at iteration level over a step-wise runner.
+`TransformersStepwiseRunner` implements that protocol against a real causal
+model, driving it one token at a time and owning the KV cache: rows are added on
+admission and removed on eviction, and ragged lengths are left-padded so every
+row's newest token sits at the position a decode step reads. Checked against an
+uncached greedy loop, so the batch bookkeeping is known not to have changed what
+the model would have said.
 
 ### Supporting
 
