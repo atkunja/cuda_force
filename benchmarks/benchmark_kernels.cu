@@ -40,6 +40,7 @@
 #include "cudaforge/reduction.cuh"
 #include "cudaforge/rmsnorm.cuh"
 #include "cudaforge/softmax.cuh"
+#include "cudaforge/tensor_core_matmul.cuh"
 
 using namespace cudaforge;
 using namespace cudaforge::bench;
@@ -440,6 +441,59 @@ void benchmark_paged_attention(JsonWriter& writer, cudaStream_t stream) {
     }
 }
 
+/// The tiled FP32 matmul against the TF32 tensor-core one.
+///
+/// `matmul_tiled` fixed the memory problem — 16x reuse out of shared memory —
+/// and left the arithmetic one: every product is a scalar FMA on the CUDA cores
+/// while the tensor cores idle. This is the size of that gap, measured rather
+/// than asserted.
+///
+/// No bandwidth figure: a matmul at these shapes is compute-bound, so GB/s
+/// would describe the wrong resource. FLOP/s is the number, and it is derived
+/// below from the shape and the time.
+void benchmark_tensor_core_matmul(JsonWriter& writer, cudaStream_t stream) {
+    struct Shape {
+        int m;
+        int n;
+        int k;
+    };
+    // Every dimension a multiple of the 16x16x8 fragment, since the tensor-core
+    // kernel refuses anything else and this is a like-for-like comparison.
+    const Shape shapes[] = {
+        {256, 256, 256},
+        {1024, 1024, 512},
+        {2048, 2048, 1024},
+    };
+
+    for (const Shape& shape : shapes) {
+        DeviceBuffer<float> a(static_cast<std::size_t>(shape.m) * shape.k);
+        DeviceBuffer<float> b(static_cast<std::size_t>(shape.k) * shape.n);
+        DeviceBuffer<float> c(static_cast<std::size_t>(shape.m) * shape.n);
+        for (DeviceBuffer<float>* buffer : {&a, &b, &c}) {
+            buffer->fill_zero(stream);
+        }
+
+        const std::string label =
+            std::to_string(shape.m) + "x" + std::to_string(shape.n) + "x" + std::to_string(shape.k);
+
+        const Timing tiled = time_kernel(stream, [&] {
+            launch_matmul(a.data(), b.data(), c.data(), shape.m, shape.n, shape.k, stream);
+        });
+        emit(writer, "matmul", "tiled_fp32", label, tiled, 0.0);
+
+        if (!tensor_core_shape_supported(shape.m, shape.n, shape.k) || !tensor_cores_available()) {
+            // Reported rather than omitted: a missing row reads as a kernel
+            // that was not run, not as one the device cannot run.
+            continue;
+        }
+        const Timing tensor = time_kernel(stream, [&] {
+            static_cast<void>(launch_matmul_tensor_core(a.data(), b.data(), c.data(), shape.m,
+                                                        shape.n, shape.k, stream));
+        });
+        emit(writer, "matmul", "tensor_core_tf32", label, tensor, 0.0);
+    }
+}
+
 int main() {
     try {
         CudaStream stream;
@@ -460,6 +514,7 @@ int main() {
         benchmark_fused_norm(writer, stream);
         benchmark_quantization(writer, stream);
         benchmark_paged_attention(writer, stream);
+        benchmark_tensor_core_matmul(writer, stream);
 
         writer.end_array();
         writer.end_object();
