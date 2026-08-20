@@ -124,22 +124,19 @@ PagedFixture make_fixture(int sequences, int heads, int kv_heads, int head_dim, 
     }
     fixture.max_blocks = 0;
     for (int length : context) {
-        fixture.max_blocks =
-            std::max(fixture.max_blocks, (length + block_size - 1) / block_size);
+        fixture.max_blocks = std::max(fixture.max_blocks, (length + block_size - 1) / block_size);
     }
     fixture.max_blocks = std::max(fixture.max_blocks, 1);
 
     // More physical blocks than any sequence needs, handed out in reverse so a
     // sequence's logical order never matches its physical order.
     const int total_blocks = needed + 3;
-    fixture.k_cache = random_vector(static_cast<std::size_t>(total_blocks) * block_size * kv_heads *
-                                        head_dim,
-                                    seed);
-    fixture.v_cache = random_vector(static_cast<std::size_t>(total_blocks) * block_size * kv_heads *
-                                        head_dim,
-                                    seed + 17);
-    fixture.query = random_vector(
-        static_cast<std::size_t>(sequences) * heads * head_dim, seed + 91);
+    fixture.k_cache = random_vector(
+        static_cast<std::size_t>(total_blocks) * block_size * kv_heads * head_dim, seed);
+    fixture.v_cache = random_vector(
+        static_cast<std::size_t>(total_blocks) * block_size * kv_heads * head_dim, seed + 17);
+    fixture.query =
+        random_vector(static_cast<std::size_t>(sequences) * heads * head_dim, seed + 91);
 
     fixture.tables.assign(static_cast<std::size_t>(sequences) * fixture.max_blocks, 0);
     DeviceBlockId next = static_cast<DeviceBlockId>(total_blocks - 1);
@@ -197,11 +194,8 @@ TEST_CASE("paged attention matches a host reference", "[cuda][paged]") {
     // Context lengths deliberately include a partial final block, a length that
     // is an exact multiple of the block size, and a single token.
     const std::vector<Case> cases = {
-        {1, 1, 1, 32, 4, {1}},
-        {1, 2, 2, 64, 8, {8}},
-        {3, 2, 2, 32, 4, {5, 12, 1}},
-        {2, 4, 2, 64, 16, {33, 7}},
-        {2, 8, 2, 128, 8, {17, 64}},
+        {1, 1, 1, 32, 4, {1}},      {1, 2, 2, 64, 8, {8}},       {3, 2, 2, 32, 4, {5, 12, 1}},
+        {2, 4, 2, 64, 16, {33, 7}}, {2, 8, 2, 128, 8, {17, 64}},
     };
 
     for (const Case& item : cases) {
@@ -215,7 +209,8 @@ TEST_CASE("paged attention matches a host reference", "[cuda][paged]") {
 
         REQUIRE(actual.size() == expected.size());
         for (std::size_t i = 0; i < expected.size(); ++i) {
-            INFO("head_dim " << item.head_dim << " block_size " << item.block_size << " index " << i);
+            INFO("head_dim " << item.head_dim << " block_size " << item.block_size << " index "
+                             << i);
             REQUIRE(actual[i] == Catch::Approx(expected[i]).margin(2e-5));
         }
     }

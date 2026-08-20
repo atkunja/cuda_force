@@ -18,14 +18,11 @@ namespace {
 /// kernel would tile the context and keep several keys in flight. This one is
 /// here to be correct and to show the block-table indirection plainly; it is
 /// not competitive with a tiled implementation and is not claimed to be.
-__global__ void paged_attention_kernel(const float* __restrict__ query,
-                                       const float* __restrict__ k_cache,
-                                       const float* __restrict__ v_cache,
-                                       const DeviceBlockId* __restrict__ block_tables,
-                                       const int* __restrict__ context_lens,
-                                       float* __restrict__ out, int num_heads, int num_kv_heads,
-                                       int head_dim, int block_size, int max_blocks_per_sequence,
-                                       float scale) {
+__global__ void paged_attention_kernel(
+    const float* __restrict__ query, const float* __restrict__ k_cache,
+    const float* __restrict__ v_cache, const DeviceBlockId* __restrict__ block_tables,
+    const int* __restrict__ context_lens, float* __restrict__ out, int num_heads, int num_kv_heads,
+    int head_dim, int block_size, int max_blocks_per_sequence, float scale) {
     extern __shared__ float reduction[];
 
     const int head = static_cast<int>(blockIdx.x);
@@ -84,7 +81,8 @@ __global__ void paged_attention_kernel(const float* __restrict__ query,
         const float score = block_reduce_sum(q * k, reduction) * scale;
 
         const float updated_max = fmaxf(running_max, score);
-        const float correction = (running_max == -FLT_MAX) ? 0.0F : __expf(running_max - updated_max);
+        const float correction =
+            (running_max == -FLT_MAX) ? 0.0F : __expf(running_max - updated_max);
         const float weight = __expf(score - updated_max);
 
         const float v = (tid < head_dim) ? v_cache[slot + static_cast<std::size_t>(tid)] : 0.0F;
