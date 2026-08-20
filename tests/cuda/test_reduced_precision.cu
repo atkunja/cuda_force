@@ -137,11 +137,23 @@ TEST_CASE("bf16 softmax survives logits fp16 cannot represent", "[cuda][bf16]") 
     constexpr int kCols = 4;
 
     std::vector<__nv_bfloat16> host_in(kCols);
-    const float logits[kCols] = {100000.0F, 99999.0F, -100000.0F, 0.0F};
+    // 90,000 rather than 99,999. BF16 keeps float32's exponent but only 8
+    // mantissa bits, so near 100,000 consecutive representable values are 512
+    // apart: 99,999 rounds to the *same* bf16 as 100,000. The two logits then
+    // tie, softmax correctly gives each exactly half the mass, and the
+    // assertion at the end of this test fails on a kernel that did nothing
+    // wrong. That is precisely what happened the first time these kernels ran
+    // on real hardware.
+    const float logits[kCols] = {100000.0F, 90000.0F, -100000.0F, 0.0F};
     for (int i = 0; i < kCols; ++i) {
         host_in[static_cast<std::size_t>(i)] = __float2bfloat16(logits[i]);
         REQUIRE(std::isfinite(__bfloat162float(host_in[static_cast<std::size_t>(i)])));
     }
+
+    // Guards the choice above rather than trusting it: if the top two logits
+    // ever collide in bf16 again, they tie and the mass assertion below fails
+    // for a reason that has nothing to do with the kernel.
+    REQUIRE(__bfloat162float(host_in[0]) > __bfloat162float(host_in[1]));
 
     CudaStream stream;
     DeviceBuffer<__nv_bfloat16> device_in(host_in.size());
