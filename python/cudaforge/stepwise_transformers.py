@@ -206,13 +206,18 @@ class TransformersStepwiseRunner:
             self._cache, self._mask, self._last, self._rows = None, None, None, []
             return
 
+        # Rows, cache, mask and last-token are populated and cleared together;
+        # a non-empty `keep` implies all four exist. Asserted rather than guarded
+        # per-field, so a violation surfaces here instead of silently skipping
+        # one structure and leaving the batch dimensions inconsistent.
+        assert self._cache is not None
+        assert self._mask is not None
+        assert self._last is not None
+
         index = torch.tensor(keep, device=self._device)
-        if self._cache is not None:
-            self._cache.batch_select_indices(index)
-        if self._mask is not None:
-            self._mask = self._mask.index_select(0, index)
-        if self._last is not None:
-            self._last = self._last.index_select(0, index)
+        self._cache.batch_select_indices(index)
+        self._mask = self._mask.index_select(0, index)
+        self._last = self._last.index_select(0, index)
         self._rows = [self._rows[position] for position in keep]
 
     # -- the protocol -------------------------------------------------------
@@ -248,7 +253,7 @@ class TransformersStepwiseRunner:
             if self._last is None
             else torch.cat([self._last, first.unsqueeze(1)], dim=0)
         )
-        self._record(states, first, prefilled=True)
+        self._record(states, first)
 
     @staticmethod
     def _positions(mask: torch.Tensor) -> torch.Tensor:
@@ -292,9 +297,9 @@ class TransformersStepwiseRunner:
         ordered = [by_id[row] for row in self._rows]
         tokens = _sample(output.logits[:, -1, :], [state.generation for state in ordered])
         self._last = tokens.unsqueeze(1)
-        self._record(ordered, tokens, prefilled=False)
+        self._record(ordered, tokens)
 
-    def _record(self, states: list[SequenceState], tokens: torch.Tensor, prefilled: bool) -> None:
+    def _record(self, states: list[SequenceState], tokens: torch.Tensor) -> None:
         eos = self._tokenizer.eos_token_id
         for state, token in zip(states, tokens.tolist(), strict=True):
             if eos is not None and token == eos:
@@ -302,8 +307,6 @@ class TransformersStepwiseRunner:
                 # token, which is distinct from exhausting the budget and is
                 # exactly the row continuous batching reclaims early.
                 state.stopped_early = True
-                continue
-            if state.finished and not prefilled:
                 continue
             state.tokens.append(self._tokenizer.decode([token], skip_special_tokens=True))
 

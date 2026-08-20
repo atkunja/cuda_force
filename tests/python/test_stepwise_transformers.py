@@ -332,6 +332,37 @@ def test_prefilling_nothing_is_harmless():
     assert runner.cache_length == 0
 
 
+def test_a_tokenizer_without_a_pad_token_borrows_the_end_of_sequence_one():
+    """Batching needs a pad id, and many causal tokenizers ship without one."""
+
+    class Unpadded(StubTokenizer):
+        pad_token_id = None
+        eos_token = "<end>"
+
+    tokenizer = Unpadded()
+    make_runner(tiny_lm(), tokenizer)
+    assert tokenizer.pad_token == "<end>"
+    assert tokenizer.padding_side == "left"
+
+
+def test_stepping_sequences_the_runner_never_saw_does_nothing():
+    """The scheduler and the cache can disagree; the runner must not guess.
+
+    Reached when every state handed to a step belongs to some other runner, so
+    reconciliation empties the row list. Returning is right — inventing rows for
+    them would generate from a cache that holds nobody's history.
+    """
+    runner = make_runner()
+    known = [greedy("aa")]
+    runner.prefill(known)
+
+    stranger = [SequenceState(99, "zz", greedy("x").generation)]
+    runner.decode_step(stranger)
+
+    assert runner.active_rows == 0
+    assert stranger[0].generated == 0
+
+
 def test_the_description_names_the_model_and_device():
     runner = make_runner()
     assert "TransformersStepwiseRunner" in runner.description
