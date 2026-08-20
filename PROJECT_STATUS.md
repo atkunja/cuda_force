@@ -77,6 +77,14 @@ row's newest token sits at the position a decode step reads. Checked against an
 uncached greedy loop, so the batch bookkeeping is known not to have changed what
 the model would have said.
 
+`ContinuousEngine` is the serving engine around it, presenting the same
+`ServingEngine` protocol as `InferenceEngine` so the HTTP server and the load
+driver accept either. Selected with `cudaforge-serve --continuous` or
+`cudaforge-bench --continuous`. Two engine classes rather than one with a mode
+flag: the schedulers require incompatible runner protocols, so a single
+constructor would reject most combinations at runtime instead of at type-check
+time.
+
 `SpeculativeDecoder` runs a cheap draft model ahead of an expensive one: the
 draft proposes `k` tokens and the target verifies all of them in one pass. It is
 lossless rather than approximate — greedy keeps a proposal only when it matches
