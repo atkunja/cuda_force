@@ -294,10 +294,25 @@ live rather than against the reference fallback.
 | `PinnedBuffer` | **exercised** |
 | PyTorch CUDA extension | **builds in 30 s, dispatches to CUDA** |
 | `benchmarks/benchmark_kernels.cu` | **measured** — see the README |
-| Nsight profiles | ncu ran; see the caveat below |
+| Nsight profiles | **not obtainable on a rented container** — see below |
 | QLoRA / bitsandbytes | still unverified — bitsandbytes was not installed |
 | `examples/distributed_train.py` | still unverified — needs two GPUs |
 | Dockerfile and compose services | still unverified — ran outside the image |
+
+### Why there are still no Nsight profiles
+
+`ncu` connects and runs the binary, then reports `ERR_NVGPUCTRPERM`: NVIDIA
+restricts GPU performance counters to admin users, and lifting that needs a
+host kernel-module flag (`NVreg_RestrictProfilingToAdminUsers=0`). A container
+tenant cannot set it — the host operator would have to.
+
+So per-kernel occupancy and warp-efficiency numbers are still unmeasured, and
+the `% of peak` column in the kernel table rests on the effective-bandwidth
+calculation rather than on hardware counters. `scripts/profile.sh` now names
+this failure explicitly instead of leaving a cryptic error in the log.
+
+Worth recording separately: `ncu` timings are ~3x the uninstrumented run, so
+nothing produced under the profiler is a benchmark number.
 
 ### What the first execution actually found
 
