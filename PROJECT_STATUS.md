@@ -77,6 +77,13 @@ row's newest token sits at the position a decode step reads. Checked against an
 uncached greedy loop, so the batch bookkeeping is known not to have changed what
 the model would have said.
 
+`SpeculativeDecoder` runs a cheap draft model ahead of an expensive one: the
+draft proposes `k` tokens and the target verifies all of them in one pass. It is
+lossless rather than approximate — greedy keeps a proposal only when it matches
+the target's argmax, and sampling uses the `min(1, p/q)` rule with a residual
+draw on rejection, which composes back to exactly the target's distribution.
+Batch size 1.
+
 ### Supporting
 
 Ten benchmark harnesses (C++, Python and CUDA) plus a Markdown result
@@ -126,6 +133,7 @@ throughput.
 | Paged KV cache occupancy | 13.2× more sequences than contiguous on chat-shaped traffic (25.8× on short prompts, 1.0× when every sequence hits the limit) |
 | Continuous vs static batching | 62% fewer decode steps on long-tailed traffic, 76% on bimodal, 42% on uniform, −2% on constant lengths |
 | Continuous vs static batching, **real transformer** | 6-layer GPT-2, 128 requests: 70% fewer decode steps and **1.44× wall-clock** at batch 32, falling to 0.83× at batch 4 — refilling rows one at a time fragments prefill (4 → 33 calls at batch 32, 32 → 126 at batch 4) |
+| Speculative decoding throughput | Tokens per target call tracks the closed form `(1 - a^(k+1))/(1 - a)` across acceptance 0.3-0.9 and lookahead 1-8: e.g. 4.12 measured against 4.10 predicted at a=0.9, k=4. Acceptance is an imposed input, not a measured property of real models |
 | Block allocator throughput | 163–180M operations/second |
 | Bounded queue scaling | 2.39M items/s at 1×1, falling to 774k at 8×8 — where the single mutex becomes the bottleneck |
 | Latency histogram (C++) | worst error **4.95%** against a documented 6.25% bound, over four distributions |
