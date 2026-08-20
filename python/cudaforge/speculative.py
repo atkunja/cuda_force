@@ -206,6 +206,11 @@ class SpeculativeDecoder:
             stats.proposed += span
             stats.accepted += taken
 
+            # A block yields taken + 1 tokens, which can overshoot the budget.
+            # Clipping only ever bites on the final block — producing `remaining`
+            # tokens ends the loop — so the caches below are left describing
+            # slightly more history than `context` holds, and nothing reads them
+            # again.
             settled = [*proposals[0, :taken].tolist(), replacement][:remaining]
             context.extend(settled)
             stats.generated += len(settled)
