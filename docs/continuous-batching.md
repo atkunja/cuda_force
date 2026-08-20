@@ -193,13 +193,43 @@ The cause is visible in the benchmark's own output: the prefill call count.
 
 Static batching prefills a full batch at once. Continuous batching refills rows
 as they free, and rows free in ones and twos — so the same prompts arrive as
-many narrow prefills instead of a few wide ones. Each carries a fixed
-framework cost that no amount of scheduling removes.
+many narrow prefills instead of a few wide ones.
 
-That tax is roughly constant while the decode saving grows with batch size,
-which is why the two cross over around batch 8 on this hardware. Production
-systems attack it directly — chunked prefill, or separating prefill from decode
-entirely — and this implementation does neither.
+The cost of that is **not** a fixed per-call overhead, which was the first
+explanation here and was wrong. It is that a narrow prefill underuses the
+hardware. Timing the same 6-token prompt at increasing widths on the 6-layer
+model:
+
+| prompts per prefill |   1   |   2   |   4   |   8   |  16   |  32   |
+| ------------------: | :---- | :---- | :---- | :---- | :---- | :---- |
+|         ms / prompt | 1.863 | 0.964 | 0.839 | 0.471 | 0.339 | 0.235 |
+
+A prompt costs **7.9x less** to prefill in a batch of 32 than alone. Static
+batching prefills at width ~32 and continuous at width ~4, and that ratio
+predicts the measured times: 128 prompts at 0.235 ms is 0.030 s against 0.037 s
+measured, and at 0.839 ms is 0.107 s against 0.133 s.
+
+### The obvious fix does not work
+
+If narrow prefills are the problem, hold admission until enough rows are free to
+prefill wide. Tried, at thresholds of 2, 4 and 8 free rows before admitting:
+
+| threshold | prefills | prefill time | decode time | total | occupancy |
+| --------: | -------: | -----------: | ----------: | ----: | --------: |
+|     1     |       33 |      0.133 s |     0.325 s | 0.511 | 49.6%     |
+|     8     |       24 |      0.117 s |     0.333 s | 0.502 | 48.3%     |
+
+A 27% cut in prefill calls buys 1.8% of wall-clock, and decode gets *slower*
+because occupancy drops. The reason is structural rather than tunable: prefilling
+at width 32 requires 32 free rows, and 32 free rows means the batch has drained —
+which is the exact state continuous batching exists to avoid. Wide prefill wants
+an empty batch; continuous batching wants a full one.
+
+So the tax is close to irreducible by scheduling alone, while the decode saving
+grows with batch size — which is why the two cross over around batch 8 here.
+Production systems attack it from the other side, with chunked prefill or by
+separating prefill from decode onto different workers. This implementation does
+neither.
 
 Two honest limits on the table. The model is small enough that fixed per-call
 overhead is a large share of every forward pass, which inflates the prefill tax
