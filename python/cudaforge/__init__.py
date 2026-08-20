@@ -30,7 +30,11 @@ from cudaforge.ops import (
 )
 from cudaforge.runners import EchoRunner, GenerationResult, ModelRunner
 from cudaforge.scheduler import Batch, BatchTrigger, DynamicBatcher, Request
-from cudaforge.speculative import SpeculativeDecoder, SpeculativeStats
+from cudaforge.speculative import (
+    SpeculativeDecoder,
+    SpeculativeStats,
+    expected_tokens_per_call,
+)
 from cudaforge.stepwise import EchoStepwiseRunner, SequenceState, StepwiseRunner
 
 __version__ = "0.1.0"
@@ -63,6 +67,7 @@ __all__ = [
     "__version__",
     "backend_report",
     "dequantize_int8",
+    "expected_tokens_per_call",
     "fused_residual_rmsnorm",
     "gelu",
     "kernel_supports",

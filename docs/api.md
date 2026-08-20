@@ -262,9 +262,17 @@ every target call yields at least one token. When every proposal is accepted the
 trailing logits yield a free bonus token, for `lookahead + 1` tokens from one
 call.
 
-`SpeculativeStats` reports `acceptance_rate` (how well the draft tracks the
-target) and `tokens_per_target_call` (the speed signal — exactly 1.0 without
-speculation).
+`SpeculativeStats` reports `tokens_per_target_call` — the speed signal, exactly
+1.0 without speculation — and `acceptance_rate`, which is accepted over
+proposals *made*. The latter is not the per-token agreement probability: a block
+stops at its first rejection while the draft has already produced the whole
+lookahead, so it falls as `lookahead` rises even for an equally good draft. Use
+it for "how much draft work was wasted", not for comparing lookaheads.
+
+`expected_tokens_per_call(acceptance, lookahead)` gives the closed form
+`(1 - a^(k+1)) / (1 - a)`, so a lookahead can be chosen without running
+anything. Returns saturate toward `1 / (1 - a)`: at `a = 0.5` a lookahead of 4
+already captures 97% of what an infinite one would.
 
 ### `Request` and `Batch`
 
