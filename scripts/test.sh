@@ -41,6 +41,13 @@ if command -v cmake >/dev/null 2>&1; then
   run_stage "C++ build" ./scripts/build.sh
   run_stage "C++ tests" ./build/tests/cpp/cudaforge_tests
 
+  # CI builds with -Werror, and Linux compilers warn about things Apple clang
+  # does not — an unused object with a non-trivial constructor, for one. Not
+  # reproducing that locally is how a green local run and a red CI happen.
+  run_stage "C++ build (warnings as errors)" bash -c \
+    "cmake -S . -B build-werror -G Ninja -DCUDAFORGE_WARNINGS_AS_ERRORS=ON >/dev/null &&
+     cmake --build build-werror"
+
 # The batcher conformance tests need this harness; they skip without it, so
 # building it here is what makes them actually run.
 run_stage "C++ scenario harness" test -x ./build/tests/cpp/batcher_scenario
@@ -69,7 +76,12 @@ else
 fi
 
 # --- Python ----------------------------------------------------------------
-run_stage "Python tests" "$PYTHON" -m pytest tests/python -q --cov --cov-report=term:skip-covered
+# Invoked as a bare `pytest`, the way CI does. `python -m pytest` puts the
+# current directory on sys.path and hides an import that only works from a
+# checkout — which is exactly the failure this missed once.
+PYTEST="pytest"
+[[ -x .venv/bin/pytest ]] && PYTEST=".venv/bin/pytest"
+run_stage "Python tests" "$PYTEST" tests/python -q --cov --cov-report=term:skip-covered
 
 # Runs the examples as smoke tests. An example that no longer works is a
 # documentation bug with a working-code disguise.
