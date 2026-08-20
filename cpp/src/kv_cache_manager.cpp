@@ -9,8 +9,7 @@ KVCacheManager::KVCacheManager(std::size_t block_count, std::size_t block_size,
                                PreemptionPolicy policy)
     : allocator_(block_count, block_size), block_size_(block_size), policy_(policy) {}
 
-std::size_t KVCacheManager::additional_blocks_for(SequenceId sequence,
-                                                  std::size_t tokens) const {
+std::size_t KVCacheManager::additional_blocks_for(SequenceId sequence, std::size_t tokens) const {
     const auto entry = tables_.find(sequence);
     if (entry == tables_.end()) {
         return (tokens + block_size_ - 1) / block_size_;
@@ -70,17 +69,33 @@ std::optional<SequenceId> KVCacheManager::choose_victim(SequenceId requester) co
     return victim;
 }
 
-std::vector<SequenceId> KVCacheManager::evict_until(std::size_t needed,
-                                                    SequenceId requester) {
+std::size_t KVCacheManager::reclaimable_blocks(SequenceId requester) const {
+    std::size_t total = 0;
+    for (const auto& [sequence, table] : tables_) {
+        if (sequence != requester) {
+            total += table.blocks().size();
+        }
+    }
+    return total;
+}
+
+std::vector<SequenceId> KVCacheManager::evict_until(std::size_t needed, SequenceId requester) {
     std::vector<SequenceId> evicted;
+
+    // Feasibility is decided before anything is evicted. Discovering halfway
+    // through that the demand cannot be met would leave sequences destroyed for
+    // an admission that then fails anyway — the worst of both, and unrecoverable
+    // once their blocks are back in the pool.
+    if (allocator_.free_blocks() + reclaimable_blocks(requester) < needed) {
+        return {};
+    }
 
     while (allocator_.free_blocks() < needed) {
         const auto victim = choose_victim(requester);
         if (!victim) {
-            // Nothing left to take. The caller rolls back rather than leaving
-            // sequences evicted for an admission that then failed anyway —
-            // that would be pure waste.
-            return {};
+            // Unreachable given the feasibility check above, which counted the
+            // same sequences this scan walks.
+            return evicted;
         }
 
         SequenceBlockTable& table = tables_.at(*victim);
@@ -99,8 +114,7 @@ std::vector<SequenceId> KVCacheManager::evict_until(std::size_t needed,
     return evicted;
 }
 
-AdmissionOutcome KVCacheManager::reserve(SequenceId sequence, std::size_t tokens,
-                                         bool creating) {
+AdmissionOutcome KVCacheManager::reserve(SequenceId sequence, std::size_t tokens, bool creating) {
     AdmissionOutcome outcome;
     if (tokens == 0) {
         return outcome;
@@ -190,9 +204,8 @@ void KVCacheManager::release(SequenceId sequence) {
         allocator_.release(block);
     }
     tables_.erase(entry);
-    admission_order_.erase(
-        std::remove(admission_order_.begin(), admission_order_.end(), sequence),
-        admission_order_.end());
+    admission_order_.erase(std::remove(admission_order_.begin(), admission_order_.end(), sequence),
+                           admission_order_.end());
 }
 
 bool KVCacheManager::is_admitted(SequenceId sequence) const {

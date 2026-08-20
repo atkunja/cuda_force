@@ -50,9 +50,7 @@ struct AdmissionOutcome {
     /// Sequences evicted to make room, in the order they were chosen.
     std::vector<SequenceId> preempted;
 
-    [[nodiscard]] bool ok() const noexcept {
-        return result != AdmissionResult::InsufficientCache;
-    }
+    [[nodiscard]] bool ok() const noexcept { return result != AdmissionResult::InsufficientCache; }
 };
 
 /// Ties the block allocator, the per-sequence tables and an eviction policy
@@ -127,11 +125,17 @@ public:
 
 private:
     /// Blocks a sequence would need to hold `tokens`, given what it holds now.
-    [[nodiscard]] std::size_t additional_blocks_for(SequenceId sequence,
-                                                    std::size_t tokens) const;
+    [[nodiscard]] std::size_t additional_blocks_for(SequenceId sequence, std::size_t tokens) const;
+
+    /// Blocks that could be reclaimed by evicting everything except `requester`.
+    [[nodiscard]] std::size_t reclaimable_blocks(SequenceId requester) const;
 
     /// Chooses victims until `needed` blocks are free, never picking `requester`.
-    /// Returns the sequences evicted, or an empty vector if it cannot get there.
+    ///
+    /// Evicts nothing at all if the demand cannot be met, rather than
+    /// discovering that partway through: a half-finished eviction destroys
+    /// sequences for an admission that then fails anyway, and their blocks
+    /// cannot be given back once they are in the pool.
     std::vector<SequenceId> evict_until(std::size_t needed, SequenceId requester);
 
     [[nodiscard]] std::optional<SequenceId> choose_victim(SequenceId requester) const;
