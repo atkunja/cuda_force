@@ -91,20 +91,23 @@ jobs:
     # Compiles the kernels with a real nvcc. No GPU is present, so nothing is
     # executed — this proves the CUDA sources build, which is the part a
     # GPU-less developer cannot verify locally.
+    #
+    # Runs inside the official CUDA image rather than installing the toolkit on
+    # the runner. Installing it from NVIDIA's apt repository ties the job to
+    # whichever Ubuntu the `ubuntu-latest` label currently points at, and broke
+    # when that moved and the 12.4 packages stopped being published for it. The
+    # container pins the toolkit to the image tag instead.
     name: cuda compile
     runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.4.1-devel-ubuntu22.04
     steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build git ca-certificates
+
       - uses: actions/checkout@v7
-
-      - name: Install CUDA toolkit
-        uses: Jimver/cuda-toolkit@v0.2.36
-        with:
-          cuda: "12.4.1"
-          method: network
-          sub-packages: '["nvcc", "cudart-dev"]'
-
-      - name: Install ninja
-        uses: seanmiddleditch/gha-setup-ninja@v6
 
       - name: Configure and build
         run: |
@@ -113,7 +116,9 @@ jobs:
             -DCUDAFORGE_ENABLE_CUDA=ON \
             -DCUDAFORGE_BUILD_TESTS=ON \
             -DCMAKE_CUDA_ARCHITECTURES=80
-          cmake --build build-cuda --parallel
+
+      - name: Build
+        run: cmake --build build-cuda --parallel
 
   cuda-run:
     # Requires a self-hosted runner with an NVIDIA GPU. Skipped unless the
