@@ -56,7 +56,7 @@ dev = [
   # Pinned exactly, and installed rather than taken from the system. Different
   # clang-format releases format this code differently, so an unpinned one makes
   # the formatting gate depend on who runs it.
-  "clang-format==20.1.7",
+  "clang-format==23.1.0",
   # EngineConfig.from_yaml and TrainingConfig.from_yaml are exercised by the
   # tests, so the development extra needs the parser even without `serve`.
   "pyyaml>=6.0",
