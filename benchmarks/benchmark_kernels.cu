@@ -345,13 +345,17 @@ void write_device_info(JsonWriter& writer) {
     cudaDeviceProp properties{};
     CUDAFORGE_CHECK(cudaGetDeviceProperties(&properties, device));
 
+    int memory_clock_khz = 0;
+    CUDAFORGE_CHECK(cudaDeviceGetAttribute(
+        &memory_clock_khz, cudaDevAttrMemoryClockRate, device));
+
     writer.field("device", std::string(properties.name));
     writer.field("compute_capability",
                  std::to_string(properties.major) + "." + std::to_string(properties.minor));
     writer.field("multiprocessors", static_cast<std::uint64_t>(properties.multiProcessorCount));
     // The figure every bandwidth number below should be read against.
     writer.field("theoretical_bandwidth_gb_s",
-                 2.0 * properties.memoryClockRate * (properties.memoryBusWidth / 8) / 1.0e6);
+                 2.0 * memory_clock_khz * (properties.memoryBusWidth / 8) / 1.0e6);
 }
 
 }  // namespace
